@@ -1,6 +1,13 @@
 import { Footer, Header, PageHero } from "../site-chrome";
 import { services } from "../site-data";
 
+const standards = [
+  ["01", "Consultation first", "Your concerns, history and suitability are considered before treatment."],
+  ["02", "Individual planning", "Recommendations are matched to your goals rather than a one-size-fits-all menu."],
+  ["03", "Clear information", "Expected benefits, limitations, relevant risks and recovery are discussed before you proceed."],
+  ["04", "Aftercare guidance", "Relevant preparation, home care and follow-up information supports your treatment journey."],
+] as const;
+
 const brands = [
   { name: "DMK", label: "Skin revision & enzyme therapy", description: "Professional protocols selected for structured skin revision plans and DMK Enzyme Therapy." },
   { name: "SkinCeuticals", label: "修丽可 · Corrective skin care", description: "Professional skincare incorporated into corrective facials and considered home-care recommendations." },
@@ -25,6 +32,11 @@ const faqs = [
 export default function Treatments() {
   return <main><Header />
     <PageHero kicker="Our treatment approach" title="Care designed" italic="around you." intro="Explore VenuX skin, body and aesthetic care by category or treatment method. Every recommendation begins with your history, concerns and goals." />
+
+    <section className="standards-strip" aria-label="VenuX professional care standards">
+      {standards.map(([number, title, description]) => <article key={number}><span>{number}</span><h3>{title}</h3><p>{description}</p></article>)}
+    </section>
+
     <section className="service-grid inner-grid treatment-category-grid">
       {services.map((service, index) => <article className="service-card" id={service.id} key={service.category}>
         <div className="service-number">0{index + 1}</div><p className="eyebrow">{service.eyebrow}</p>
