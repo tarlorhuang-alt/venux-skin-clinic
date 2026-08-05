@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import "./posters.css";
 import "./footer.css";
+import "./paypal.css";
 
 export const metadata: Metadata = {
   title: "VenuX Skin Clinic | Personalised Skin Care",
