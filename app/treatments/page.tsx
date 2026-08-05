@@ -1,6 +1,12 @@
 import { Footer, Header, PageHero } from "../site-chrome";
 import { services } from "../site-data";
 
+const brands = [
+  ["DMK", "Professional skin revision protocols selected to suit individual skin needs."],
+  ["SkinCeuticals", "修丽可 · Advanced professional skincare selected as part of considered treatment plans."],
+  ["Sothys Paris", "French professional skincare used across personalised facial experiences."],
+] as const;
+
 const faqs = [
   ["How do I know which treatment is right for me?", "Start with a consultation. We review your concerns, history, current routine and goals before recommending an appropriate option."],
   ["What is the difference between the regular and member price?", "Member pricing is available to eligible VenuX members. You can view current inclusions on the Membership page or ask our team before booking."],
@@ -22,6 +28,21 @@ export default function Treatments() {
           {service.id === "skin" ? "View treatment prices" : "Request a consultation"} <span>↘</span>
         </a>
       </article>)}
+    </section>
+
+    <section className="brand-proof" id="brands">
+      <div className="brand-proof-visual"><img src="/scientific-hero.png" alt="Scientific skincare concept in VenuX aqua tones" /></div>
+      <div className="brand-proof-copy">
+        <p className="kicker">Professional brands we use</p>
+        <h2>Selected with<br /><i>purpose.</i></h2>
+        <p className="brand-intro">We work with established professional skincare brands and select products according to your skin assessment, treatment and home-care needs.</p>
+        <div className="brand-list">
+          {brands.map(([name, description], index) => <article key={name}>
+            <span>0{index + 1}</span><h3>{name}</h3><p>{description}</p>
+          </article>)}
+        </div>
+        <small>Product selection and suitability vary by individual. Brand availability may change.</small>
+      </div>
     </section>
 
     <section className="split-cta compact-cta"><h2>Not sure where<br />to begin?</h2><div><p>Start with a consultation and receive a recommendation based on your concerns and goals.</p><a className="button light-button" href="/book">Book a consultation</a></div></section>
