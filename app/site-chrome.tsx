@@ -4,7 +4,7 @@ const navigation = [
     href: "/treatments#skin",
     items: [
       ["Facial Treatments", "/treatments/facial-treatments"],
-      ["Laser Facial", "/treatments/laser-facial"],
+      ["CO₂ Laser", "/treatments/laser-facial"],
       ["IPL", "/treatments/ipl"],
       ["HIFU / Ultherapy", "/treatments/hifu-ultherapy"],
       ["RF Microneedling", "/treatments/rf-microneedling"],
