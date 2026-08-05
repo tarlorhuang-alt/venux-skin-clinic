@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 type PayPalSession = {
-  start: (options: { presentationMode: "auto" }, orderId: Promise<string>) => Promise<void>;
+  start: (options: { presentationMode: "auto" }, orderId: string) => Promise<void>;
 };
 
 type PayPalInstance = {
@@ -95,7 +95,8 @@ export function PayPalCheckout() {
         paypalButton.addEventListener("click", async () => {
           setStatus("Opening secure PayPal checkout…");
           try {
-            await session.start({ presentationMode: "auto" }, createOrder());
+            const orderId = await createOrder();
+            await session.start({ presentationMode: "auto" }, orderId);
           } catch (error) {
             console.error("[paypal-checkout] unable to start", error);
             setStatus("PayPal could not start the payment. Please try again or contact the clinic.");
