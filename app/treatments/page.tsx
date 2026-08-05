@@ -29,6 +29,16 @@ const faqs = [
   ["Are results the same for everyone?", "No. Results, recovery and the number of sessions required vary between individuals. Your practitioner will discuss realistic expectations with you."],
 ] as const;
 
+const treatmentLinks: Record<string, string> = {
+  "Laser Facial": "/treatments/laser-facial",
+  "Laser & Light": "/treatments/ipl",
+  "DMK Skin Revision": "/treatments/dmk-enzyme-therapy",
+  "Enzyme Therapy": "/treatments/dmk-enzyme-therapy",
+  "LED Light Therapy": "/treatments/led-light-therapy",
+  "Ultrasound": "/treatments/hifu-ultherapy",
+  "Radiofrequency": "/treatments/rf-microneedling",
+};
+
 export default function Treatments() {
   return <main><Header />
     <PageHero kicker="Our treatment approach" title="Care designed" italic="around you." intro="Explore VenuX skin, body and aesthetic care by category or treatment method. Every recommendation begins with your history, concerns and goals." />
@@ -41,8 +51,8 @@ export default function Treatments() {
       {services.map((service, index) => <article className="service-card" id={service.id} key={service.category}>
         <div className="service-number">0{index + 1}</div><p className="eyebrow">{service.eyebrow}</p>
         <h3>{service.category}</h3><p>{service.description}</p>
-        <ul>{service.items.map(item => item === "Laser & Light"
-          ? <li key={item}><a className="service-item-detail" href="/treatments/ipl">IPL Skin Rejuvenation <span>↗</span></a></li>
+        <ul>{service.items.map(item => treatmentLinks[item]
+          ? <li key={item}><a className="service-item-detail" href={treatmentLinks[item]}>{item}<span>↗</span></a></li>
           : <li key={item}>{item}<span>＋</span></li>)}</ul>
         <a className="text-link category-link" href={service.id === "skin" ? "/pricing" : "/book"}>
           {service.id === "skin" ? "View treatment prices" : "Request a consultation"} <span>↘</span>
