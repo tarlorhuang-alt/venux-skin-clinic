@@ -261,3 +261,14 @@ footer small { grid-column:1/-1; border-top:1px solid var(--line); padding-top:2
   .price-row.detailed>small { grid-column:1; grid-row:2; font-size:8px; }
   .price-row.detailed>strong { grid-row:1 / span 2; font-size:11px; }
 }
+
+
+/* Treatment-category navigation */
+.mega-overview { display:grid; align-content:start; gap:24px; }
+.mega-overview .mega-main { display:block; }
+@media(min-width:801px) {
+  .mega-nav { grid-template-columns:.55fr 1fr 1fr; row-gap:42px; }
+}
+@media(max-width:800px) {
+  .mega-overview { gap:18px; }
+}
