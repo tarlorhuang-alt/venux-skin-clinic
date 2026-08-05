@@ -213,3 +213,51 @@ footer small { grid-column:1/-1; border-top:1px solid var(--line); padding-top:2
   .menu-bottom { font-size:10px; }
   .menu-bottom a { font-size:12px; }
 }
+
+
+/* Categorised treatment price list */
+.pricing-key {
+  display:grid;
+  grid-template-columns:minmax(260px,1fr) 130px 150px 150px;
+  gap:20px;
+  padding:0 0 14px;
+  border-bottom:1px solid var(--ink);
+  text-transform:uppercase;
+  letter-spacing:.16em;
+  font-size:8px;
+  color:#66756e;
+}
+.price-groups { display:grid; }
+.price-group { padding:42px 0; border-bottom:1px solid var(--ink); }
+.price-group-heading { display:flex; align-items:baseline; gap:20px; margin-bottom:18px; }
+.price-group-heading>span { font:700 18px var(--font-sans); letter-spacing:.04em; }
+.price-group-heading h2 { font:600 34px/1.1 var(--font-sans); letter-spacing:-.03em; }
+.price-group .price-table { border-top:1px solid var(--line); }
+.price-row.detailed {
+  grid-template-columns:minmax(260px,1fr) 130px 150px 150px;
+  gap:20px;
+  min-height:58px;
+}
+.price-row.detailed>span:first-child { font:18px/1.3 var(--font-sans); }
+.price-row.detailed>small {
+  margin:0;
+  font:10px var(--font-sans);
+  letter-spacing:.08em;
+  color:#68756f;
+}
+.price-row.detailed>strong { font-size:13px; }
+.add-on-group { padding-top:46px; }
+.pricing>.price-note { margin-top:20px; }
+
+@media(max-width:800px) {
+  .pricing-key { grid-template-columns:1fr 78px 78px; gap:8px; }
+  .pricing-key span:nth-child(2) { display:none; }
+  .price-group { padding:34px 0; }
+  .price-group-heading { gap:12px; align-items:flex-start; }
+  .price-group-heading>span { font-size:14px; padding-top:4px; }
+  .price-group-heading h2 { font-size:25px; }
+  .price-row.detailed { grid-template-columns:1fr 78px 78px; gap:8px; padding:12px 0; }
+  .price-row.detailed>span:first-child { font-size:15px; }
+  .price-row.detailed>small { grid-column:1; grid-row:2; font-size:8px; }
+  .price-row.detailed>strong { grid-row:1 / span 2; font-size:11px; }
+}
