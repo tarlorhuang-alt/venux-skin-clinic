@@ -2,9 +2,15 @@ import { Footer, Header, PageHero } from "../site-chrome";
 import { services } from "../site-data";
 
 const brands = [
-  ["DMK", "Professional skin revision protocols selected to suit individual skin needs."],
-  ["SkinCeuticals", "修丽可 · Advanced professional skincare selected as part of considered treatment plans."],
-  ["Sothys Paris", "French professional skincare used across personalised facial experiences."],
+  { name: "DMK", label: "Skin revision & enzyme therapy", description: "Professional protocols selected for structured skin revision plans and DMK Enzyme Therapy." },
+  { name: "SkinCeuticals", label: "修丽可 · Corrective skin care", description: "Professional skincare incorporated into corrective facials and considered home-care recommendations." },
+  { name: "Sothys Paris", label: "Hydration & barrier support", description: "French professional skincare used across hydrating, signature and barrier-support facial experiences." },
+] as const;
+
+const carePath = [
+  ["Assess", "We begin with your concerns, skin history and current routine."],
+  ["Treat", "Professional products and methods are selected for your individual treatment."],
+  ["Maintain", "Where appropriate, we discuss a practical home-care plan to support your routine between visits."],
 ] as const;
 
 const faqs = [
@@ -31,17 +37,28 @@ export default function Treatments() {
     </section>
 
     <section className="brand-proof" id="brands">
-      <div className="brand-proof-visual"><img src="/scientific-hero.png" alt="Scientific skincare concept in VenuX aqua tones" /></div>
+      <div className="brand-proof-visual">
+        <img src="/scientific-hero.png" alt="Scientific skincare concept in VenuX aqua tones" />
+        <div className="visual-trust-note"><span>Professional care</span><strong>Selected for your skin</strong></div>
+      </div>
       <div className="brand-proof-copy">
         <p className="kicker">Professional brands we use</p>
         <h2>Selected with<br /><i>purpose.</i></h2>
-        <p className="brand-intro">We work with established professional skincare brands and select products according to your skin assessment, treatment and home-care needs.</p>
+        <p className="brand-intro">We do not choose products simply because they are popular. Each professional product is considered in the context of your assessment, treatment and realistic home-care needs.</p>
         <div className="brand-list">
-          {brands.map(([name, description], index) => <article key={name}>
-            <span>0{index + 1}</span><h3>{name}</h3><p>{description}</p>
+          {brands.map((brand, index) => <article key={brand.name}>
+            <span>0{index + 1}</span><div><h3>{brand.name}</h3><em>{brand.label}</em></div><p>{brand.description}</p>
           </article>)}
         </div>
+        <a className="button dark brand-book" href="/book">Book a skin consultation</a>
         <small>Product selection and suitability vary by individual. Brand availability may change.</small>
+      </div>
+    </section>
+
+    <section className="care-path" aria-label="VenuX skin care pathway">
+      <div><p className="kicker">Our approach</p><h2>Clinic care,<br /><i>connected.</i></h2></div>
+      <div className="care-path-steps">
+        {carePath.map(([title, description], index) => <article key={title}><span>0{index + 1}</span><h3>{title}</h3><p>{description}</p></article>)}
       </div>
     </section>
 
