@@ -367,3 +367,26 @@ footer small { grid-column:1/-1; border-top:1px solid var(--line); padding-top:2
   .care-path-steps article+article { padding-left:0; border-left:0; }
   .care-path-steps h3 { margin:18px 0 10px; }
 }
+
+
+/* Homepage clinic locations */
+.locations-section { padding:115px 7vw; background:linear-gradient(135deg,#edf8f8,#dceeed); }
+.locations-heading { display:grid; grid-template-columns:1.15fr .85fr; gap:7vw; align-items:end; margin-bottom:58px; }
+.locations-heading .kicker { grid-column:1/-1; margin-bottom:0; }
+.locations-heading>p:last-child { max-width:430px; color:#63716a; line-height:1.8; }
+.location-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:20px; }
+.location-card { min-height:390px; padding:36px; border:1px solid rgba(7,61,60,.18); border-radius:26px; background:rgba(255,255,255,.55); display:flex; flex-direction:column; }
+.location-card>span { color:var(--gold); font-size:9px; }
+.location-card>p { margin:34px 0 9px; text-transform:uppercase; letter-spacing:.16em; font-size:8px; color:#68766f; }
+.location-card h3 { font-size:46px; }
+.location-card address { margin:24px 0 auto; font-style:normal; color:#56645e; font-size:13px; line-height:1.8; }
+.location-card>div { display:flex; justify-content:space-between; align-items:center; gap:18px; margin-top:30px; }
+.location-card>div>a:first-child { padding:10px 0; border-bottom:1px solid var(--line); text-transform:uppercase; letter-spacing:.1em; font-size:9px; font-weight:700; }
+@media(max-width:800px) {
+  .locations-section { padding:82px 24px; }
+  .locations-heading { grid-template-columns:1fr; gap:24px; }
+  .locations-heading .kicker { grid-column:1; }
+  .location-grid { grid-template-columns:1fr; }
+  .location-card { min-height:350px; padding:28px; }
+  .location-card h3 { font-size:40px; }
+}
