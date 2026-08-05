@@ -3,7 +3,7 @@ const navigation = [
     label: "Skin",
     href: "/treatments#skin",
     items: [
-      ["Facial Treatments", "/pricing"],
+      ["Facial Treatments", "/treatments/facial-treatments"],
       ["Laser Facial", "/treatments/laser-facial"],
       ["IPL", "/treatments/ipl"],
       ["HIFU / Ultherapy", "/treatments/hifu-ultherapy"],
