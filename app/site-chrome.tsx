@@ -7,9 +7,11 @@ export function Header() {
       </a>
 
       <nav className="desktop-nav" aria-label="Primary navigation">
-        <a href="/treatments">Treatments</a>
+        <a href="/treatments#skin">Skin</a>
+        <a href="/treatments#body">Body</a>
+        <a href="/treatments#aesthetics">Aesthetics</a>
+        <a href="/treatments#methods">Methods</a>
         <a href="/pricing">Pricing</a>
-        <a href="/membership">Membership</a>
       </nav>
 
       <div className="header-actions">
@@ -23,37 +25,56 @@ export function Header() {
           <div className="menu-panel">
             <div className="menu-top">
               <a className="menu-brand" href="/">VenuX <span>Skin Clinic</span></a>
-              <span className="menu-hint">Select a page</span>
+              <span className="menu-hint">Explore our clinic</span>
             </div>
 
             <nav className="mega-nav" aria-label="Expanded navigation">
-              <a className="mega-main" href="/">Home</a>
-              <a className="mega-main" href="/#about">About</a>
+              <div className="mega-overview">
+                <a className="mega-main" href="/">Home</a>
+                <a className="mega-main" href="/#about">About</a>
+                <a className="mega-main" href="/pricing">Pricing</a>
+                <a className="mega-main" href="/membership">Membership</a>
+              </div>
 
-              <section className="mega-group">
-                <a className="mega-main" href="/treatments">Treatments <span>↓</span></a>
+              <section className="mega-group" id="menu-skin">
+                <a className="mega-main" href="/treatments#skin">Skin Treatments <span>↓</span></a>
                 <ul>
-                  <li><a href="/treatments">Skin Treatments</a></li>
-                  <li><a href="/treatments#consultation">Cosmetic Injectables</a></li>
-                  <li><a href="/treatments">Laser &amp; Light</a></li>
-                  <li><a href="/treatments">Facial Treatments</a></li>
-                  <li><a href="/pricing">Treatment Pricing</a></li>
+                  <li><a href="/treatments#skin">Facial Treatments</a></li>
+                  <li><a href="/treatments#skin">Laser Facial</a></li>
+                  <li><a href="/treatments#skin">DMK Skin Revision</a></li>
+                  <li><a href="/treatments#skin">LED Light Therapy</a></li>
+                  <li><a href="/pricing">Skin Treatment Pricing</a></li>
                 </ul>
               </section>
 
-              <section className="mega-group">
-                <a className="mega-main" href="/treatments">Skin Concerns <span>↓</span></a>
+              <section className="mega-group" id="menu-body">
+                <a className="mega-main" href="/treatments#body">Body Treatments <span>↓</span></a>
                 <ul>
-                  <li><a href="/treatments">Acne &amp; Congestion</a></li>
-                  <li><a href="/treatments">Pigmentation</a></li>
-                  <li><a href="/treatments">Fine Lines &amp; Texture</a></li>
-                  <li><a href="/treatments">Redness &amp; Sensitivity</a></li>
-                  <li><a href="/treatments">Dehydration &amp; Barrier</a></li>
+                  <li><a href="/treatments#body">Body Consultation</a></li>
+                  <li><a href="/treatments#body">Personalised Body Plan</a></li>
+                  <li><a href="/book">Request an Assessment</a></li>
                 </ul>
               </section>
 
-              <a className="mega-main" href="/membership">Membership</a>
-              <a className="mega-main" href="/pricing">Pricing &amp; Promotions</a>
+              <section className="mega-group" id="menu-aesthetics">
+                <a className="mega-main" href="/treatments#aesthetics">Aesthetics <span>↓</span></a>
+                <ul>
+                  <li><a href="/treatments#aesthetics">Aesthetic Consultation</a></li>
+                  <li><a href="/treatments#aesthetics">Suitability Assessment</a></li>
+                  <li><a href="/treatments#aesthetics">Individual Treatment Plan</a></li>
+                  <li><a href="/book">Book a Consultation</a></li>
+                </ul>
+              </section>
+
+              <section className="mega-group" id="menu-methods">
+                <a className="mega-main" href="/treatments#methods">Treatment Methods <span>↓</span></a>
+                <ul>
+                  <li><a href="/treatments#methods">Laser &amp; Light</a></li>
+                  <li><a href="/treatments#methods">Facial Therapy</a></li>
+                  <li><a href="/treatments#methods">Enzyme Therapy</a></li>
+                  <li><a href="/treatments#methods">Consultation-led Care</a></li>
+                </ul>
+              </section>
             </nav>
 
             <div className="menu-bottom">
