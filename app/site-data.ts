@@ -9,7 +9,7 @@ export const services = [
     category: "Advanced Skin",
     eyebrow: "进阶护理",
     description: "Considered options for texture, hydration and visible skin renewal.",
-    items: ["LED Light Therapy", "DMK Enzyme Therapy", "Carbon Laser Facial", "Skin Consultation"],
+    items: ["LED Light Therapy", "DMK Enzyme Therapy", "Carbon Laser Rejuvenation", "Skin Consultation"],
   },
   {
     category: "Clinical Consultation",
@@ -19,26 +19,65 @@ export const services = [
   },
 ];
 
-export const facialPrices = [
-  ["Sothys Hydra Revitalizing Facial", "70 min", 155, 125],
-  ["LED Light Therapy", "20 min", 49, 39],
-  ["Glass Skin Facial", "90 min", 299, 259],
-  ["Acne Clarifying Facial", "90 min", 229, 180],
-  ["Salicylic Peel Facial", "70 min", 170, 129],
-  ["Mini Express + Hydra Peel Deep Clean", "70 min", 155, 129],
-  ["Collagen Boost Facial", "75 min", 229, 183],
-  ["Sothys Barrier Repair Facial + LED", "75 min", 165, 129],
-  ["Sensitive Skin Soothing Facial", "90 min", 299, 180],
-  ["DMK Enzyme Therapy", "90 min", 259, 220],
-  ["Sothys Professional Facial", "90 min", 229, 180],
-  ["SkinCeuticals Corrective Facial", "90 min", 229, 180],
-  ["Hydrating Eye Treatment", "30 min", 109, 89],
-  ["Carbon Laser Facial (collagen boosting)", "60 min", 249, 199],
+export const facialPriceGroups = [
+  {
+    number: "01",
+    category: "Express & Maintenance",
+    items: [
+      ["Express Hydra Peel Facial", "70 min", 155, 129],
+      ["LED Light Therapy", "20 min", 49, 39],
+    ],
+  },
+  {
+    number: "02",
+    category: "Hydration & Glow",
+    items: [
+      ["Sothys Hydra Revitalizing Facial", "70 min", 155, 125],
+      ["Glass Skin Facial", "90 min", 299, 259],
+      ["SkinCeuticals Corrective Facial", "90 min", 229, 180],
+    ],
+  },
+  {
+    number: "03",
+    category: "Acne & Oily Skin",
+    items: [
+      ["Acne Clarifying Facial", "90 min", 229, 180],
+      ["Salicylic Peel Facial", "70 min", 170, 129],
+    ],
+  },
+  {
+    number: "04",
+    category: "DMK Skin Revision",
+    items: [
+      ["DMK Enzyme Therapy Level 1", "90 min", 210, 168],
+      ["DMK Enzyme Therapy Level 2", "90 min", 235, 188],
+      ["DMK Enzyme Therapy Level 3", "90 min", 280, 224],
+      ["DMK Enzyme Therapy Level 4", "90 min", 310, 248],
+    ],
+  },
+  {
+    number: "05",
+    category: "Sensitive & Barrier Repair",
+    items: [
+      ["Calming Recovery Facial", "90 min", 299, 239],
+      ["Sothys Barrier Repair Facial + LED", "75 min", 165, 129],
+    ],
+  },
+  {
+    number: "06",
+    category: "Anti-Ageing & Rejuvenation",
+    items: [
+      ["Collagen Boost Facial", "75 min", 229, 183],
+      ["Sothys Signature Facial", "90 min", 229, 180],
+      ["Carbon Laser Rejuvenation", "60 min", 249, 199],
+      ["Hydrating Eye Treatment", "30 min", 109, 89],
+    ],
+  },
 ] as const;
 
 export const addOnPrices = [
   ["Chemical Peel", 59, 49],
-  ["Polar", 139, 99],
+  ["Ampoule Infusion", 49, 39],
   ["LED Light Therapy", 49, 39],
-  ["Ampule Infusion", 49, 39],
+  ["Polar RF", 139, 99],
 ] as const;
