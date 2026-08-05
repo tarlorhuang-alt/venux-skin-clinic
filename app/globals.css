@@ -283,3 +283,38 @@ footer small { grid-column:1/-1; border-top:1px solid var(--line); padding-top:2
   .treatment-category-grid { grid-template-columns:1fr; }
   .treatment-category-grid .service-card+.service-card { border-top:1px solid var(--line); }
 }
+
+
+/* Premium emphasis, direct booking and treatment Q&A */
+.premium-kicker { font-size:13px; letter-spacing:.19em; color:#53655f; }
+.premium-kicker strong { color:var(--gold); font-size:18px; font-weight:800; letter-spacing:.12em; }
+.popular-actions { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:22px; }
+.popular-actions a { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; }
+.popular-actions>a:first-child { border-bottom:1px solid var(--line); padding:10px 0; }
+.popular-book { display:inline-flex; align-items:center; justify-content:center; min-height:42px; padding:0 18px; border-radius:99px; background:var(--ink); color:white; }
+.compact-cta { padding-top:58px; padding-bottom:58px; }
+.compact-cta h2 { font-size:clamp(42px,5vw,66px); }
+.compact-cta>div { display:flex; align-items:center; justify-content:space-between; gap:24px; }
+.compact-cta>div>p { margin:0; max-width:390px; }
+.faq-section { padding:110px 7vw; display:grid; grid-template-columns:.7fr 1.3fr; gap:9vw; background:#f8fcfc; }
+.faq-intro>p:last-child { max-width:390px; color:#66736d; font-size:13px; line-height:1.8; margin-top:28px; }
+.faq-list { border-top:1px solid var(--ink); }
+.faq-list details { border-bottom:1px solid var(--line); }
+.faq-list summary { list-style:none; cursor:pointer; display:grid; grid-template-columns:42px 1fr auto; align-items:center; gap:14px; min-height:78px; }
+.faq-list summary::-webkit-details-marker { display:none; }
+.faq-list summary span { color:var(--gold); font-size:9px; }
+.faq-list summary strong { font:400 22px/1.25 var(--font-display); }
+.faq-list summary i { font-style:normal; transition:transform .2s ease; }
+.faq-list details[open] summary i { transform:rotate(45deg); }
+.faq-list details>p { margin:0; padding:0 44px 24px 56px; color:#627069; font-size:12px; line-height:1.8; max-width:720px; }
+@media(max-width:800px) {
+  .premium-kicker { font-size:10px; }
+  .premium-kicker strong { display:block; font-size:16px; margin-bottom:7px; }
+  .popular-actions { align-items:stretch; }
+  .compact-cta { padding:48px 24px; }
+  .compact-cta>div { display:block; }
+  .compact-cta>div>p { margin-bottom:24px; }
+  .faq-section { grid-template-columns:1fr; gap:48px; padding:82px 24px; }
+  .faq-list summary strong { font-size:19px; }
+  .faq-list details>p { padding-left:56px; }
+}
