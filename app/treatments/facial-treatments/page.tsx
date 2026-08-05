@@ -1,6 +1,7 @@
 import { Footer, Header } from "../../site-chrome";
 import { addOnPrices, facialPriceGroups } from "../../site-data";
 import "./facial-treatments.css";
+import "./brand-logos.css";
 
 const concerns = [
   ["01", "Hydration & Glow", "Dullness, dehydration and an event-ready glow.", "hydration-glow"],
@@ -49,5 +50,8 @@ export default function FacialTreatments(){ return <main><Header />
   <section className="facial-journey"><div className="facial-section-title"><p className="kicker">Your appointment</p><h2>Professional care,<br/><i>step by step.</i></h2></div><div>{steps.map(([number,title,text])=><article key={number}><span>{number}</span><h3>{title}</h3><p>{text}</p></article>)}</div></section>
 
   <section className="facial-faq" id="questions"><div className="facial-section-title"><p className="kicker">Question & answer</p><h2>Before you<br/><i>book.</i></h2></div><div className="faq-list">{faqs.map(([q,a],index)=><details key={q}><summary><span>0{index+1}</span><strong>{q}</strong><i>＋</i></summary><p>{a}</p></details>)}</div></section>
+
+  <section className="facial-logo-strip" aria-label="Professional brands used at VenuX"><p>Professional brands we use</p><div className="facial-logo-wall"><a href="/products" aria-label="DMK products"><span className="logo-dmk">DMK</span></a><a href="/products" aria-label="SkinCeuticals products"><span className="logo-skinceuticals">SkinCeuticals</span></a><a href="/products" aria-label="Sothys Paris products"><span className="logo-sothys">SOTHYS<small>PARIS</small></span></a></div></section>
+
   <section className="split-cta"><h2>Ready for your<br/>skin consultation?</h2><div><p>Start with a professional recommendation based on your concerns and goals.</p><a className="button light-button" href="/book">Book now</a></div></section><Footer />
 </main>;}
