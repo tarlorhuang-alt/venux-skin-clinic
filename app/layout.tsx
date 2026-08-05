@@ -3,6 +3,7 @@ import "./globals.css";
 import "./posters.css";
 import "./footer.css";
 import "./paypal.css";
+import "./readability.css";
 
 export const metadata: Metadata = {
   title: "VenuX Skin Clinic | Personalised Skin Care",
