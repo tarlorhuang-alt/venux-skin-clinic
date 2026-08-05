@@ -18,7 +18,7 @@ type PayPalInstance = {
 declare global {
   interface Window {
     paypal?: {
-      createInstance: (options: { clientToken: string; components: string[]; pageType: "checkout" }) => Promise<PayPalInstance>;
+      createInstance: (options: { clientId: string; components: string[]; pageType: "checkout" }) => Promise<PayPalInstance>;
     };
   }
 }
@@ -42,9 +42,9 @@ export function PayPalCheckout() {
 
     async function start() {
       try {
-        const tokenResponse = await fetch("/api/paypal/client-token", { cache: "no-store" });
-        const tokenData = await tokenResponse.json();
-        if (!tokenResponse.ok || !tokenData.clientToken) throw new Error(tokenData.error || "PayPal client token is unavailable");
+        const configResponse = await fetch("/api/paypal/config", { cache: "no-store" });
+        const config = await configResponse.json();
+        if (!configResponse.ok || !config.clientId) throw new Error(config.error || "PayPal configuration is unavailable");
 
         if (!window.paypal?.createInstance) {
           await new Promise<void>((resolve, reject) => {
@@ -66,7 +66,7 @@ export function PayPalCheckout() {
         if (cancelled || rendered.current || !container.current || !window.paypal?.createInstance) return;
 
         const sdk = await window.paypal.createInstance({
-          clientToken: tokenData.clientToken,
+          clientId: config.clientId,
           components: ["paypal-payments"],
           pageType: "checkout",
         });
