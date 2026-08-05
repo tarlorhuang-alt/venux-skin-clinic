@@ -1,0 +1,11 @@
+.paypal-card { padding:30px; border-radius:22px; background:#f8fcfc; box-shadow:0 18px 50px rgba(7,61,60,.07); }
+.deposit-line { display:flex; align-items:end; justify-content:space-between; gap:20px; padding:20px 0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+.deposit-line strong { font:500 38px/1 var(--font-display); }
+.deposit-line small { color:#718079; font-size:8px; letter-spacing:.12em; text-transform:uppercase; }
+.paypal-checkout { margin-top:22px; min-height:55px; }
+.paypal-checkout>p { margin:12px 0 0; color:#68766f; font-size:9px; line-height:1.6; text-transform:none; letter-spacing:0; }
+.deposit-note { color:#718079; font-size:8px; line-height:1.6; text-transform:none; letter-spacing:0; }
+.paypal-success { padding:22px; border-radius:16px; background:#dfeeed; }
+.paypal-success strong { font:500 25px var(--font-display); }
+.paypal-success p { color:#51625b; font-size:10px; line-height:1.7; text-transform:none; letter-spacing:0; }
+.paypal-success a { display:inline-block; margin-top:6px; font-size:9px; font-weight:700; }
