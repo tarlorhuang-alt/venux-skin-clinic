@@ -1,0 +1,46 @@
+/* Branded treatment posters */
+.poster-card { padding:0; overflow:hidden; min-height:0; }
+.treatment-poster { position:relative; min-height:330px; padding:28px; overflow:hidden; color:white; display:flex; flex-direction:column; isolation:isolate; }
+.treatment-poster:before,.treatment-poster:after { content:""; position:absolute; border-radius:50%; z-index:-1; }
+.treatment-poster:before { width:270px; height:270px; right:-80px; top:30px; border:1px solid rgba(255,255,255,.42); box-shadow:0 0 0 28px rgba(255,255,255,.05),0 0 0 65px rgba(255,255,255,.035); }
+.treatment-poster:after { width:115px; height:115px; right:32px; top:108px; background:radial-gradient(circle at 30% 25%,rgba(255,255,255,.95),rgba(198,227,224,.32) 38%,rgba(7,61,60,.05) 70%); backdrop-filter:blur(5px); }
+.treatment-poster.ultherapy { background:linear-gradient(145deg,#0b4e4c,#75aaa6); }
+.treatment-poster.booster { background:linear-gradient(145deg,#a78048,#e6d6bb 76%); }
+.treatment-poster.rf { background:linear-gradient(145deg,#132f36,#65878b); }
+.treatment-poster>span { text-transform:uppercase; letter-spacing:.18em; font-size:7px; }
+.treatment-poster>b { position:absolute; right:25px; top:22px; font:400 42px/1 var(--font-display); color:rgba(255,255,255,.32); }
+.treatment-poster>strong { margin-top:auto; max-width:72%; font:500 47px/.92 var(--font-display); letter-spacing:-.035em; }
+.treatment-poster>small { margin-top:18px; text-transform:uppercase; letter-spacing:.18em; font-size:7px; }
+.popular-card-copy { padding:30px 34px 34px; display:flex; flex-direction:column; flex:1; }
+.popular-card-copy>span { color:#748079; text-transform:uppercase; letter-spacing:.15em; font-size:8px; }
+.popular-card-copy h3 { font-size:35px; margin:26px 0 20px; }
+.popular-card-copy>em { font-style:normal; font-size:8px; margin:0 0 16px; text-transform:uppercase; letter-spacing:.12em; color:#69766f; }
+.popular-card-copy>p { display:flex; justify-content:space-between; margin:0; padding:11px 0; border-top:1px solid var(--line); font-size:9px; text-transform:uppercase; letter-spacing:.1em; }
+.popular-card-copy>p strong { font-size:13px; }
+.popular-card-copy .popular-actions { margin-top:18px; }
+
+/* Clinic environment gallery — intentionally marked until real clinic images are supplied */
+.environment-grid { align-items:stretch; }
+.environment-card { padding:0; overflow:hidden; min-height:0; }
+.location-visual { min-height:310px; padding:28px; color:white; position:relative; overflow:hidden; display:flex; flex-direction:column; background:linear-gradient(145deg,#0b4e4c,#9bc4c0); isolation:isolate; }
+.location-visual.kent-street { background:linear-gradient(145deg,#6f583b,#d6c3a4); }
+.location-visual:before { content:""; position:absolute; inset:18% -10% -42% 28%; z-index:-1; border:1px solid rgba(255,255,255,.45); border-radius:180px 180px 0 0; box-shadow:inset 0 0 70px rgba(255,255,255,.12); }
+.location-visual:after { content:""; position:absolute; width:210px; height:210px; border-radius:50%; top:30px; right:-46px; background:radial-gradient(circle at 32% 25%,rgba(255,255,255,.8),rgba(255,255,255,.08) 55%,transparent 70%); z-index:-1; }
+.location-visual>span { text-transform:uppercase; letter-spacing:.2em; font-size:7px; }
+.location-visual>strong { margin-top:auto; font:500 48px/.95 var(--font-display); }
+.location-visual>small { margin-top:14px; font-size:8px; text-transform:uppercase; letter-spacing:.14em; opacity:.82; }
+.location-copy { padding:32px 36px 36px; display:flex; flex-direction:column; flex:1; }
+.location-copy>span { color:var(--gold); font-size:9px; }
+.location-copy>p { margin:25px 0 9px; text-transform:uppercase; letter-spacing:.16em; font-size:8px; color:#68766f; }
+.location-copy h3 { font-size:42px; }
+.location-copy address { margin:20px 0 auto; font-style:normal; color:#56645e; font-size:12px; line-height:1.8; }
+.location-copy>div { display:flex; justify-content:space-between; align-items:center; gap:18px; margin-top:28px; }
+.location-copy>div>a:first-child { padding:10px 0; border-bottom:1px solid var(--line); text-transform:uppercase; letter-spacing:.1em; font-size:9px; font-weight:700; }
+
+@media(max-width:800px) {
+  .treatment-poster { min-height:300px; }
+  .treatment-poster>strong { font-size:43px; }
+  .popular-card-copy { padding:27px; }
+  .location-visual { min-height:275px; }
+  .location-copy { padding:27px; }
+}
