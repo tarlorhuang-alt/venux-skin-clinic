@@ -4,14 +4,13 @@ import "./ipl.css";
 
 export const metadata: Metadata = {
   title: "IPL Skin Rejuvenation | VenuX Skin Clinic",
-  description: "Learn how IPL works, which skin concerns it may address, treatment areas, pricing and what to expect.",
+  description: "Explore IPL science, illustrative examples, confirmed area pricing and common questions in one page.",
 };
 
-const concerns = [
-  ["Pigmentation", "Freckles, sun spots and selected superficial pigmentation."],
-  ["Visible redness", "Selected facial vessels, diffuse redness and rosacea-prone appearance."],
-  ["Uneven tone", "Photo-damaged skin and a patchy or uneven-looking complexion."],
-  ["Skin rejuvenation", "A brighter, more even appearance with minimal disruption to the skin surface."],
+const examples = [
+  ["Sun spots & freckles", "Selected superficial pigment may temporarily darken before gradually lifting from the skin.", "pigment"],
+  ["Diffuse facial redness", "Selected light wavelengths can be absorbed by haemoglobin to reduce the appearance of visible redness.", "redness"],
+  ["Uneven photo-damaged tone", "A considered treatment plan may help the complexion look clearer and more even over time.", "tone"],
 ] as const;
 
 const areas = [
@@ -23,22 +22,32 @@ const areas = [
   ["Spot treatment", "A small, practitioner-approved target area", "From $59", "From $49"],
 ] as const;
 
+const questions = [
+  ["Is IPL the same as laser?", "No. IPL delivers a spectrum of visible light, while a laser typically uses a specific wavelength. Filters and personalised parameters help direct IPL toward selected pigment or redness."],
+  ["Which concerns may be suitable?", "IPL may be considered for selected superficial pigmentation, freckles, sun spots, diffuse redness, visible vessels and uneven photo-damaged tone. Suitability must be assessed in person."],
+  ["How many sessions will I need?", "The number and timing of sessions varies with the concern, treatment area, skin response, settings, sun exposure and goals. Your practitioner will recommend a plan after assessment."],
+  ["Will pigment become darker afterwards?", "Selected pigmented areas can temporarily darken before gradually flaking or fading. Follow the personalised aftercare and sun-protection advice provided by the clinic."],
+  ["Who may not be suitable?", "Recent tanning, certain medications, active skin conditions, some skin tones and unexplained or changing pigmented lesions may make treatment unsuitable or require medical assessment first."],
+  ["Is a patch test required?", "A patch test may be recommended depending on your skin, treatment area, medical history and planned parameters."],
+] as const;
+
 export default function IplTreatmentPage() {
   return <main><Header />
     <section className="ipl-hero">
-      <div><a className="back-link" href="/treatments">← All treatments</a><p className="kicker">Light-based skin treatment · IPL</p><h1>Clearer tone.<br /><i>Considered care.</i></h1><p className="ipl-lead">Intense Pulsed Light uses carefully selected wavelengths of light to target visible pigment and redness. Every treatment begins with a skin assessment and personalised settings.</p><div className="hero-actions"><a className="button dark" href="/book">Book a consultation</a><a className="text-link" href="/treatments/ipl/examples">See illustrations & examples <span>↗</span></a></div></div>
+      <div><a className="back-link" href="/treatments">← All treatments</a><p className="kicker">Light-based skin treatment · IPL</p><h1>Clearer tone.<br /><i>Considered care.</i></h1><p className="ipl-lead">Intense Pulsed Light uses carefully selected wavelengths of light to target visible pigment and redness. Every treatment begins with a skin assessment and personalised settings.</p><div className="hero-actions"><a className="button dark" href="/book">Book a consultation</a><a className="text-link" href="#illustration">Explore IPL <span>↓</span></a></div></div>
       <div className="ipl-visual" aria-hidden="true"><div className="light-ring ring-one" /><div className="light-ring ring-two" /><span>IPL</span><small>Broad-spectrum light<br />Personalised parameters</small></div>
     </section>
 
-    <section className="ipl-explainer"><div><p className="kicker">01 · The science</p><h2>How IPL<br /><i>works.</i></h2></div><div className="ipl-copy"><p>IPL is different from a laser. Instead of emitting one wavelength, it delivers a spectrum of visible light. Filters and device settings allow the practitioner to direct light toward selected chromophores in the skin.</p><div className="science-steps"><article><span>01</span><h3>Light</h3><p>Controlled pulses pass through the skin surface.</p></article><article><span>02</span><h3>Target</h3><p>Melanin or haemoglobin absorbs selected light energy.</p></article><article><span>03</span><h3>Response</h3><p>The targeted pigment is heated and gradually processed by the body.</p></article></div></div></section>
+    <nav className="ipl-anchor-nav" aria-label="IPL page sections"><a href="#illustration"><span>01</span>How IPL works</a><a href="#examples"><span>02</span>Examples</a><a href="#pricing"><span>03</span>Price list</a><a href="#questions"><span>04</span>Questions</a></nav>
 
-    <section className="ipl-concerns"><div className="section-heading"><div><p className="kicker">02 · Suitable concerns</p><h2>What IPL may<br />help address.</h2></div><p>Suitability depends on your skin tone, medical history, medications, recent sun exposure and the type of pigmentation or redness present.</p></div><div className="concern-cards">{concerns.map(([title, description], index) => <article key={title}><span>0{index + 1}</span><h3>{title}</h3><p>{description}</p></article>)}</div></section>
+    <section className="ipl-explainer" id="illustration"><div><p className="kicker">01 · Principle & illustration</p><h2>How IPL<br /><i>works.</i></h2></div><div className="ipl-copy"><p>IPL delivers a spectrum of visible light. Filters and device settings allow the practitioner to direct selected wavelengths toward melanin or haemoglobin in the skin.</p><div className="science-steps"><article><span>01</span><div className="process-orb light-orb"/><h3>Filtered light</h3><p>Controlled pulses pass through the skin surface using personalised parameters.</p></article><article><span>02</span><div className="process-orb target-orb"/><h3>Selected target</h3><p>Melanin or haemoglobin absorbs selected light energy more strongly.</p></article><article><span>03</span><div className="process-orb response-orb"/><h3>Skin response</h3><p>The targeted pigment or redness may change gradually after treatment.</p></article></div><p className="price-note">This is an educational illustration and does not represent a guaranteed clinical result.</p></div></section>
 
-    <section className="ipl-pricing" id="pricing"><div className="section-heading"><div><p className="kicker">03 · Treatment areas</p><h2>Area-based<br /><i>pricing.</i></h2></div><p>Current VenuX IPL prices in AUD. Your practitioner will confirm suitability, the recommended area and expected number of sessions before treatment.</p></div><div className="ipl-area-table" role="table" aria-label="IPL treatment areas and prices"><div className="ipl-area-row area-head" role="row"><span>Area</span><span>Common focus</span><span>Regular</span><span>Member</span></div>{areas.map(([area, focus, regular, member]) => <div className="ipl-area-row" role="row" key={area}><strong>{area}</strong><span>{focus}</span><span>{regular}</span><span>{member}</span></div>)}</div><p className="price-note">A patch test may be recommended. Final suitability, preparation and aftercare are confirmed during consultation. Spot-treatment prices start from the amount shown and vary with treatment size.</p><div className="hero-actions"><a className="button dark" href="/treatments/ipl/pricing">Open full IPL price list</a></div></section>
+    <section className="example-section" id="examples"><div className="section-heading"><div><p className="kicker">02 · Illustrative examples</p><h2>Concerns we<br /><i>may assess.</i></h2></div><p>IPL is not suitable for every pigment type or every skin tone. Consultation helps distinguish an appropriate cosmetic concern from a lesion requiring medical assessment.</p></div><div className="example-grid">{examples.map(([title, description, type], index)=><article key={title}><div className={`example-swatch ${type}`}><span>Illustrative pattern</span></div><small>0{index+1}</small><h3>{title}</h3><p>{description}</p></article>)}</div><p className="price-note">Illustrations are not patient before-and-after photographs. Responses vary and outcomes are not guaranteed.</p></section>
 
-    <section className="ipl-expect"><div><p className="kicker">04 · Your appointment</p><h2>What to<br />expect.</h2></div><div className="expect-grid"><article><h3>Before</h3><p>Avoid tanning and disclose medications, active skin conditions and recent procedures. Do not treat an unexplained or changing pigmented lesion without medical assessment.</p></article><article><h3>During</h3><p>Protective eyewear is worn. A cooling gel may be applied and light pulses can feel warm or similar to a light elastic-band snap.</p></article><article><h3>After</h3><p>Temporary redness or warmth can occur. Pigmented areas may darken before gradually flaking. Follow the personalised aftercare and daily sun protection advice.</p></article></div></section>
+    <section className="ipl-pricing" id="pricing"><div className="section-heading"><div><p className="kicker">03 · Confirmed price list</p><h2>Area-based<br /><i>pricing.</i></h2></div><p>Current VenuX IPL prices in AUD. Your practitioner will confirm suitability, the correct treatment area and the recommended plan before treatment.</p></div><div className="ipl-area-table" role="table" aria-label="IPL treatment areas and prices"><div className="ipl-area-row area-head" role="row"><span>Area</span><span>Common focus</span><span>Regular</span><span>Member</span></div>{areas.map(([area, focus, regular, member]) => <div className="ipl-area-row" role="row" key={area}><strong>{area}</strong><span>{focus}</span><span>{regular}</span><span>{member}</span></div>)}</div><p className="price-note">All prices are in Australian dollars. Spot-treatment prices start from the amount shown and vary with treatment size. A patch test may be recommended.</p></section>
 
-    <section className="ipl-page-links"><a href="/treatments/ipl/examples"><span>01</span><strong>Illustrations & examples</strong><em>Visual treatment principles and example concerns ↗</em></a><a href="/treatments/ipl/pricing"><span>02</span><strong>IPL price list</strong><em>Regular and member pricing by area ↗</em></a></section>
+    <section className="ipl-faq" id="questions"><div className="faq-intro"><p className="kicker">Questions & answers</p><h2>Before you<br /><i>begin.</i></h2><p>These answers are general information. Your consultation and treatment plan will be personalised to your skin and medical history.</p></div><div className="faq-list">{questions.map(([question, answer], index)=><details key={question}><summary><span>0{index+1}</span><strong>{question}</strong><i>＋</i></summary><p>{answer}</p></details>)}</div></section>
+
     <section className="split-cta"><h2>Is IPL right<br />for your skin?</h2><div><p>Start with a professional assessment. We will review your concern, skin history and goals before recommending treatment.</p><a className="button light-button" href="/book">Book an IPL consultation</a></div></section><Footer />
   </main>;
 }
