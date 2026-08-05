@@ -1,21 +1,31 @@
 export const services = [
   {
-    category: "Facial Treatments",
+    id: "skin",
+    category: "Skin Treatments",
     eyebrow: "肌肤管理",
-    description: "Personalised facials designed around your skin, comfort and long-term goals.",
-    items: ["Hydration & Barrier Repair", "Glass Skin Facial", "Acne Clarifying Facial", "Professional Facial"],
+    description: "Personalised facials and skin therapies designed around your concerns, comfort and long-term goals.",
+    items: ["Facial Treatments", "Laser Facial", "DMK Skin Revision", "LED Light Therapy"],
   },
   {
-    category: "Advanced Skin",
-    eyebrow: "进阶护理",
-    description: "Considered options for texture, hydration and visible skin renewal.",
-    items: ["LED Light Therapy", "DMK Enzyme Therapy", "Carbon Laser Rejuvenation", "Skin Consultation"],
+    id: "body",
+    category: "Body Treatments",
+    eyebrow: "身体护理",
+    description: "Begin with an individual assessment so recommendations can be matched to your body concerns and suitability.",
+    items: ["Body Consultation", "Concern Assessment", "Suitability & Safety Review", "Personalised Body Plan"],
   },
   {
-    category: "Clinical Consultation",
-    eyebrow: "专业评估",
-    description: "Higher-risk cosmetic procedures require an individual assessment with an appropriately qualified practitioner.",
-    items: ["Suitability Assessment", "Individual Treatment Plan", "Risks & Recovery Discussion", "Personalised Quotation"],
+    id: "aesthetics",
+    category: "Aesthetics",
+    eyebrow: "美学咨询",
+    description: "Higher-risk aesthetic procedures require an individual assessment with an appropriately qualified practitioner.",
+    items: ["Aesthetic Consultation", "Suitability Assessment", "Risks & Recovery Discussion", "Personalised Quotation"],
+  },
+  {
+    id: "methods",
+    category: "Treatment Methods",
+    eyebrow: "治疗方式",
+    description: "Explore the considered methods used across VenuX skin care and consultation-led treatment planning.",
+    items: ["Laser & Light", "Facial Therapy", "Enzyme Therapy", "Consultation-led Care"],
   },
 ];
 
