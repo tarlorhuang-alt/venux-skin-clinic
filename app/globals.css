@@ -272,3 +272,14 @@ footer small { grid-column:1/-1; border-top:1px solid var(--line); padding-top:2
 @media(max-width:800px) {
   .mega-overview { gap:18px; }
 }
+
+
+/* Four treatment category landing sections */
+.treatment-category-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; }
+.treatment-category-grid .service-card { border:1px solid var(--line); border-radius:24px; }
+.treatment-category-grid .service-card+.service-card { border-left:1px solid var(--line); }
+.category-link { display:inline-flex; align-items:center; margin-top:26px; }
+@media(max-width:800px) {
+  .treatment-category-grid { grid-template-columns:1fr; }
+  .treatment-category-grid .service-card+.service-card { border-top:1px solid var(--line); }
+}
