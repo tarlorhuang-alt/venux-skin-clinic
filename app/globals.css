@@ -340,3 +340,30 @@ footer small { grid-column:1/-1; border-top:1px solid var(--line); padding-top:2
   .brand-list article { grid-template-columns:35px 1fr; }
   .brand-list article>p { grid-column:2; }
 }
+
+
+/* Consultation-led brand pathway */
+.brand-proof-visual { position:relative; }
+.visual-trust-note { position:absolute; left:34px; right:34px; bottom:34px; padding:20px 22px; border-radius:16px; background:rgba(244,251,251,.88); backdrop-filter:blur(12px); display:flex; justify-content:space-between; align-items:center; gap:18px; }
+.visual-trust-note span { text-transform:uppercase; letter-spacing:.15em; font-size:8px; color:#68766f; }
+.visual-trust-note strong { font:500 21px var(--font-display); }
+.brand-list article>div h3 { margin:0 0 6px; font:500 28px/1 var(--font-display); }
+.brand-list article>div em { display:block; font-style:normal; color:var(--gold); text-transform:uppercase; letter-spacing:.1em; font-size:7px; line-height:1.4; }
+.brand-book { margin-top:30px; }
+.care-path { padding:95px 7vw; display:grid; grid-template-columns:.65fr 1.35fr; gap:8vw; background:#f8fcfc; border-top:1px solid var(--line); }
+.care-path-steps { display:grid; grid-template-columns:repeat(3,1fr); border-top:1px solid var(--ink); }
+.care-path-steps article { padding:28px 24px 18px 0; }
+.care-path-steps article+article { padding-left:24px; border-left:1px solid var(--line); }
+.care-path-steps span { color:var(--gold); font-size:9px; }
+.care-path-steps h3 { margin:38px 0 18px; font-size:34px; }
+.care-path-steps p { margin:0; color:#627069; font-size:11px; line-height:1.75; }
+@media(max-width:800px) {
+  .visual-trust-note { left:18px; right:18px; bottom:18px; }
+  .visual-trust-note strong { font-size:17px; }
+  .brand-list article>div h3 { font-size:25px; }
+  .care-path { grid-template-columns:1fr; padding:78px 24px; }
+  .care-path-steps { grid-template-columns:1fr; }
+  .care-path-steps article { padding:24px 0; border-bottom:1px solid var(--line); }
+  .care-path-steps article+article { padding-left:0; border-left:0; }
+  .care-path-steps h3 { margin:18px 0 10px; }
+}
