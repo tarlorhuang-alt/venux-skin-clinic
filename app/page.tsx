@@ -1,9 +1,15 @@
 import { Footer, Header } from "./site-chrome";
 
 const popularTreatments = [
-  { number: "01", duration: "90 min", name: <>Glass Skin<br />Facial</>, standard: 299, member: 259, featured: false },
-  { number: "02", duration: "70 min", name: <>Sothys Hydra<br />Revitalizing</>, standard: 155, member: 125, featured: true },
-  { number: "03", duration: "60 min", name: <>Carbon Laser<br />Facial</>, standard: 249, member: 199, featured: false },
+  {
+    number: "01", label: "Ultrasound lifting", name: <>Ultherapy</>, detail: "Face & neck assessment", standard: "Consultation", member: "Personalised", featured: false,
+  },
+  {
+    number: "02", label: "Skin quality", name: <>Rejuran<br />Skin Booster</>, detail: "Selected treatments from", standard: "From $500", member: "From $450", featured: true,
+  },
+  {
+    number: "03", label: "Texture & renewal", name: <>RF<br />Microneedling</>, detail: "Face assessment", standard: "Consultation", member: "Personalised", featured: false,
+  },
 ];
 
 const locations = [
@@ -43,13 +49,13 @@ export default function Home() {
       <section className="popular">
         <div className="section-heading">
           <div><p className="kicker">Most requested</p><h2>Popular treatments.</h2></div>
-          <p>Three client favourites from the current VenuX menu, with verified standard and member pricing.</p>
+          <p>Three advanced VenuX treatment pathways. Confirmed prices are shown where available; other services receive an individual quotation after assessment.</p>
         </div>
         <div className="popular-grid">
           {popularTreatments.map((treatment) => <article className={`popular-card${treatment.featured ? " featured" : ""}`} key={treatment.number}>
-            <span>{treatment.number} · {treatment.duration}</span><h3>{treatment.name}</h3>
-            <p>Standard <strong>${treatment.standard}</strong></p><p>Member <strong>${treatment.member}</strong></p>
-            <div className="popular-actions"><a href="/pricing">View details</a><a className="popular-book" href={`/book?treatment=${treatment.number}`}>Book now ↗</a></div>
+            <span>{treatment.number} · {treatment.label}</span><h3>{treatment.name}</h3><em>{treatment.detail}</em>
+            <p>Standard <strong>{treatment.standard}</strong></p><p>Member <strong>{treatment.member}</strong></p>
+            <div className="popular-actions"><a href="/treatments">View details</a><a className="popular-book" href={`/book?treatment=${encodeURIComponent(treatment.label)}`}>Book assessment ↗</a></div>
           </article>)}
         </div>
       </section>
