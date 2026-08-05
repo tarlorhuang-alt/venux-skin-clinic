@@ -69,11 +69,39 @@ export function Header() {
 
 export function Footer() {
   return (
-    <footer>
-      <a className="brand footer-brand" href="/"><span className="brand-mark">V</span><span>VenuX <em>Skin Clinic</em></span></a>
-      <p>Personalised skin care in Australia.</p>
-      <div><a href="/treatments">Treatments</a><a href="/pricing">Pricing</a><a href="/book">Book</a></div>
-      <small>© 2026 VenuX Skin Clinic · Treatment suitability varies. Consultation required.</small>
+    <footer className="site-footer">
+      <div className="footer-identity">
+        <a className="footer-star-brand" href="/" aria-label="VenuX Skin Clinic home">
+          <span className="star-mark" aria-hidden="true"><i>✦</i><b>V</b><em>✦</em></span>
+          <span><strong>VenuX</strong><small>Skin Clinic</small></span>
+        </a>
+        <p>Personalised skin care and aesthetic treatments, thoughtfully delivered in Sydney.</p>
+      </div>
+
+      <div className="footer-column">
+        <span>Explore</span>
+        <a href="/treatments">Treatments ↗</a>
+        <a href="/pricing">Pricing ↗</a>
+        <a href="/membership">Membership ↗</a>
+        <a href="/book">Book a consultation ↗</a>
+      </div>
+
+      <div className="footer-column footer-social">
+        <span>Connect</span>
+        <div aria-label="Instagram account pending"><b>Instagram</b><small>Link to be connected</small></div>
+        <div aria-label="WhatsApp account pending"><b>WhatsApp</b><small>Number to be connected</small></div>
+      </div>
+
+      <div className="footer-column footer-visit">
+        <span>Visit</span>
+        <a href="/#locations"><b>Top Ryde</b><small>Shop 3002 · Ryde NSW 2112</small></a>
+        <a href="/#locations"><b>Sydney CBD</b><small>515 Kent Street · Sydney NSW 2000</small></a>
+      </div>
+
+      <div className="footer-bottom">
+        <small>© 2026 VenuX Skin Clinic</small>
+        <small>Treatment suitability varies · Consultation required</small>
+      </div>
     </footer>
   );
 }
