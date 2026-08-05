@@ -4,7 +4,7 @@ export const services = [
     category: "Skin Treatments",
     eyebrow: "肌肤管理",
     description: "Personalised facials and skin therapies designed around your concerns, comfort and long-term goals.",
-    items: ["Facial Treatments", "Laser Facial", "DMK Skin Revision", "LED Light Therapy"],
+    items: ["Facial Treatments", "CO₂ Laser", "DMK Skin Revision", "LED Light Therapy"],
   },
   {
     id: "body",
