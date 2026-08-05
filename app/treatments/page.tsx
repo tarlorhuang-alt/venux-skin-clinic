@@ -41,7 +41,9 @@ export default function Treatments() {
       {services.map((service, index) => <article className="service-card" id={service.id} key={service.category}>
         <div className="service-number">0{index + 1}</div><p className="eyebrow">{service.eyebrow}</p>
         <h3>{service.category}</h3><p>{service.description}</p>
-        <ul>{service.items.map(item => <li key={item}>{item}<span>＋</span></li>)}</ul>
+        <ul>{service.items.map(item => item === "Laser & Light"
+          ? <li key={item}><a className="service-item-detail" href="/treatments/ipl">IPL Skin Rejuvenation <span>↗</span></a></li>
+          : <li key={item}>{item}<span>＋</span></li>)}</ul>
         <a className="text-link category-link" href={service.id === "skin" ? "/pricing" : "/book"}>
           {service.id === "skin" ? "View treatment prices" : "Request a consultation"} <span>↘</span>
         </a>
