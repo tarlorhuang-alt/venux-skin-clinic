@@ -318,3 +318,25 @@ footer small { grid-column:1/-1; border-top:1px solid var(--line); padding-top:2
   .faq-list summary strong { font-size:19px; }
   .faq-list details>p { padding-left:56px; }
 }
+
+
+/* Professional skincare brand proof */
+.brand-proof { display:grid; grid-template-columns:.95fr 1.05fr; min-height:720px; background:#e6f3f3; }
+.brand-proof-visual { min-height:100%; overflow:hidden; }
+.brand-proof-visual img { width:100%; height:100%; object-fit:cover; display:block; filter:saturate(.82) contrast(.94); }
+.brand-proof-copy { padding:95px 7vw 80px 6vw; }
+.brand-proof-copy h2 { margin-bottom:28px; }
+.brand-intro { max-width:600px; color:#5e6d66; font-size:13px; line-height:1.85; margin-bottom:42px; }
+.brand-list { border-top:1px solid var(--ink); }
+.brand-list article { display:grid; grid-template-columns:44px 180px 1fr; gap:18px; align-items:center; padding:22px 0; border-bottom:1px solid var(--line); }
+.brand-list article>span { color:var(--gold); font-size:9px; }
+.brand-list h3 { font:500 28px/1 var(--font-display); }
+.brand-list p { margin:0; color:#637069; font-size:11px; line-height:1.65; }
+.brand-proof-copy>small { display:block; margin-top:22px; color:#748079; font-size:9px; line-height:1.6; }
+@media(max-width:800px) {
+  .brand-proof { grid-template-columns:1fr; }
+  .brand-proof-visual { min-height:420px; max-height:55vh; }
+  .brand-proof-copy { padding:78px 24px; }
+  .brand-list article { grid-template-columns:35px 1fr; }
+  .brand-list article>p { grid-column:2; }
+}
