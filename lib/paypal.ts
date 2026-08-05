@@ -25,6 +25,23 @@ async function accessToken() {
   return data.access_token as string;
 }
 
+export async function createBrowserSafeClientToken() {
+  const token = await accessToken();
+  const response = await fetch(`${PAYPAL_BASE_URL}/v1/identity/generate-token`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${token}`,
+      "Accept-Language": "en_AU",
+      "Content-Type": "application/json",
+    },
+    cache: "no-store",
+  });
+  const data = await response.json();
+  if (!response.ok || !data.client_token) throw new Error(data?.message || "Unable to generate PayPal client token");
+  return data.client_token as string;
+}
+
 async function paypalRequest(path: string, init: RequestInit) {
   const token = await accessToken();
   const response = await fetch(`${PAYPAL_BASE_URL}${path}`, {
