@@ -48,8 +48,6 @@ export default function FacialTreatments(){ return <main><Header />
 
   <section className="facial-journey"><div className="facial-section-title"><p className="kicker">Your appointment</p><h2>Professional care,<br/><i>step by step.</i></h2></div><div>{steps.map(([number,title,text])=><article key={number}><span>{number}</span><h3>{title}</h3><p>{text}</p></article>)}</div></section>
 
-  <section className="facial-brands"><div><p className="kicker">Professional brands</p><h2>Selected with<br/><i>purpose.</i></h2><p>Our practitioners work with professional products and protocols from DMK, SkinCeuticals 修丽可 and Sothys Paris, selected according to treatment and individual skin needs.</p><a className="button dark" href="/products">Explore products</a></div><div className="facial-brand-list"><span>DMK<small>Skin revision & enzyme therapy</small></span><span>SkinCeuticals<small>修丽可 · Corrective skin care</small></span><span>Sothys Paris<small>French professional skincare</small></span></div></section>
-
   <section className="facial-faq" id="questions"><div className="facial-section-title"><p className="kicker">Question & answer</p><h2>Before you<br/><i>book.</i></h2></div><div className="faq-list">{faqs.map(([q,a],index)=><details key={q}><summary><span>0{index+1}</span><strong>{q}</strong><i>＋</i></summary><p>{a}</p></details>)}</div></section>
   <section className="split-cta"><h2>Ready for your<br/>skin consultation?</h2><div><p>Start with a professional recommendation based on your concerns and goals.</p><a className="button light-button" href="/book">Book now</a></div></section><Footer />
 </main>;}
