@@ -2,13 +2,13 @@ import { Footer, Header } from "./site-chrome";
 
 const popularTreatments = [
   {
-    number: "01", label: "Ultrasound lifting", name: <>Ultherapy</>, detail: "Face & neck assessment", standard: "Consultation", member: "Personalised", featured: false,
+    number: "01", label: "Ultrasound lifting", name: <>Ultherapy</>, detail: "Lower face · pricing from", standard: "$2,200", member: "$1,980", featured: false,
   },
   {
-    number: "02", label: "Skin quality", name: <>Rejuran<br />Skin Booster</>, detail: "Selected treatments from", standard: "From $500", member: "From $450", featured: true,
+    number: "02", label: "Skin quality", name: <>Rejuran<br />Skin Booster</>, detail: "Rejuran Healer 2ml · pricing from", standard: "$750", member: "$650", featured: true,
   },
   {
-    number: "03", label: "Texture & renewal", name: <>RF<br />Microneedling</>, detail: "Face assessment", standard: "Consultation", member: "Personalised", featured: false,
+    number: "03", label: "Texture & renewal", name: <>RF<br />Microneedling</>, detail: "Full face · pricing from", standard: "$599", member: "$499", featured: false,
   },
 ];
 
@@ -46,10 +46,10 @@ export default function Home() {
         <span className="poster-caption">Personalised care · Professional standards · Considered results</span>
       </section>
       <section className="principles"><span>01 · Personalised plans</span><span>02 · Considered care</span><span>03 · Natural-looking results</span></section>
-      <section className="popular">
+      <section className="popular" id="popular">
         <div className="section-heading">
           <div><p className="kicker">Most requested</p><h2>Popular treatments.</h2></div>
-          <p>Three advanced VenuX treatment pathways. Confirmed prices are shown where available; other services receive an individual quotation after assessment.</p>
+          <p>Three advanced VenuX treatment pathways with market-referenced starting prices. Final treatment area, suitability and quotation are confirmed after assessment.</p>
         </div>
         <div className="popular-grid">
           {popularTreatments.map((treatment) => <article className={`popular-card${treatment.featured ? " featured" : ""}`} key={treatment.number}>
@@ -58,6 +58,7 @@ export default function Home() {
             <div className="popular-actions"><a href="/treatments">View details</a><a className="popular-book" href={`/book?treatment=${encodeURIComponent(treatment.label)}`}>Book assessment ↗</a></div>
           </article>)}
         </div>
+        <p className="popular-price-note">All prices are in AUD and are starting prices only. Final pricing depends on treatment area, practitioner assessment and individual suitability.</p>
       </section>
       <section className="concerns">
         <div className="concerns-heading"><p className="kicker light">Main concerns</p><h2>Start with what<br /><i>matters to you.</i></h2><p>Explore common skin concerns, then book a consultation for a personalised recommendation.</p></div>
