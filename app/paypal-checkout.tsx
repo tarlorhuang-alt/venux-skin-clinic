@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 type PayPalSession = {
-  start: (options: { presentationMode: "auto" }, orderId: string) => Promise<void>;
+  start: (options: { presentationMode: "auto" }, orderPromise: Promise<{ orderId: string }>) => Promise<void>;
 };
 
 type PayPalInstance = {
@@ -36,8 +36,8 @@ export function PayPalCheckout() {
     async function createOrder() {
       const response = await fetch("/api/paypal/orders", { method: "POST" });
       const order = await response.json();
-      if (!response.ok || !order.id) throw new Error(order.error || "Unable to create order");
-      return order.id as string;
+      if (!response.ok || typeof order.id !== "string") throw new Error(order.error || "Unable to create order");
+      return { orderId: order.id };
     }
 
     async function start() {
@@ -95,8 +95,7 @@ export function PayPalCheckout() {
         paypalButton.addEventListener("click", async () => {
           setStatus("Opening secure PayPal checkout…");
           try {
-            const orderId = await createOrder();
-            await session.start({ presentationMode: "auto" }, orderId);
+            await session.start({ presentationMode: "auto" }, createOrder());
           } catch (error) {
             console.error("[paypal-checkout] unable to start", error);
             setStatus("PayPal could not start the payment. Please try again or contact the clinic.");
