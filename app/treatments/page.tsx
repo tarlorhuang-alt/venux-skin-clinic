@@ -1,6 +1,15 @@
 import { Footer, Header, PageHero } from "../site-chrome";
 import { services } from "../site-data";
 
+const faqs = [
+  ["How do I know which treatment is right for me?", "Start with a consultation. We review your concerns, history, current routine and goals before recommending an appropriate option."],
+  ["What is the difference between the regular and member price?", "Member pricing is available to eligible VenuX members. You can view current inclusions on the Membership page or ask our team before booking."],
+  ["Can I book a popular treatment directly?", "Yes. You can select Book now from a popular treatment card. Suitability will still be confirmed before treatment."],
+  ["Do I need a consultation before laser or aesthetic care?", "A consultation may be required depending on the treatment and your individual circumstances. Higher-risk procedures always require an appropriate professional assessment."],
+  ["How should I prepare for my appointment?", "Preparation varies by treatment. After booking, the clinic will provide any relevant pre-care information for your selected service."],
+  ["Are results the same for everyone?", "No. Results, recovery and the number of sessions required vary between individuals. Your practitioner will discuss realistic expectations with you."],
+] as const;
+
 export default function Treatments() {
   return <main><Header />
     <PageHero kicker="Our treatment approach" title="Care designed" italic="around you." intro="Explore VenuX skin, body and aesthetic care by category or treatment method. Every recommendation begins with your history, concerns and goals." />
@@ -14,7 +23,18 @@ export default function Treatments() {
         </a>
       </article>)}
     </section>
-    <section className="split-cta"><h2>Not sure where<br />to begin?</h2><div><p>Start with a consultation. We will help you understand the appropriate options without pressure.</p><a className="button light-button" href="/book">Book a consultation</a></div></section>
+
+    <section className="split-cta compact-cta"><h2>Not sure where<br />to begin?</h2><div><p>Start with a consultation and receive a recommendation based on your concerns and goals.</p><a className="button light-button" href="/book">Book a consultation</a></div></section>
+
+    <section className="faq-section" id="questions">
+      <div className="faq-intro"><p className="kicker">Question &amp; Answer</p><h2>Before you<br /><i>book.</i></h2><p>Helpful answers about choosing, booking and preparing for your VenuX treatment.</p></div>
+      <div className="faq-list">
+        {faqs.map(([question, answer], index) => <details key={question}>
+          <summary><span>0{index + 1}</span><strong>{question}</strong><i>＋</i></summary>
+          <p>{answer}</p>
+        </details>)}
+      </div>
+    </section>
     <Footer />
   </main>;
 }
