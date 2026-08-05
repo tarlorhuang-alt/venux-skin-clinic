@@ -6,6 +6,23 @@ const popularTreatments = [
   { number: "03", duration: "60 min", name: <>Carbon Laser<br />Facial</>, standard: 249, member: 199, featured: false },
 ];
 
+const locations = [
+  {
+    number: "01",
+    name: "Top Ryde",
+    label: "VenuX Skin Clinic",
+    address: <>Shop 3002, Top Ryde City Shopping Centre<br />Devlin Street &amp; Blaxland Road<br />Ryde NSW 2112</>,
+    map: "https://www.google.com/maps/search/?api=1&query=Shop+3002+Top+Ryde+City+Shopping+Centre+Ryde+NSW+2112",
+  },
+  {
+    number: "02",
+    name: "Sydney CBD",
+    label: "VenuX Aesthetics",
+    address: <>515 Kent Street<br />Sydney NSW 2000</>,
+    map: "https://www.google.com/maps/search/?api=1&query=515+Kent+Street+Sydney+NSW+2000",
+  },
+];
+
 export default function Home() {
   return (
     <main>
@@ -43,12 +60,13 @@ export default function Home() {
             <a href="/treatments" key={item}><span>0{index+1}</span><strong>{item}</strong><em>↗</em></a>)}
         </div>
       </section>
-      <section className="intro">
-        <div><p className="kicker">Discover VenuX</p><h2>A clearer path<br />to your skin goals.</h2></div>
-        <div className="home-links">
-          <a href="/treatments"><span>01</span><strong>Treatments</strong><em>Explore skin, body, aesthetic and consultation-led care.</em></a>
-          <a href="/pricing"><span>02</span><strong>Pricing</strong><em>View verified standard and member pricing.</em></a>
-          <a href="/membership"><span>03</span><strong>Membership</strong><em>Make considered skin care part of your routine.</em></a>
+      <section className="locations-section" id="locations">
+        <div className="locations-heading"><p className="kicker">Visit VenuX</p><h2>Two locations.<br /><i>One standard of care.</i></h2><p>Choose the clinic that is most convenient for your consultation or treatment.</p></div>
+        <div className="location-grid">
+          {locations.map((location) => <article className="location-card" key={location.number}>
+            <span>{location.number}</span><p>{location.label}</p><h3>{location.name}</h3><address>{location.address}</address>
+            <div><a href={location.map} target="_blank" rel="noreferrer">Open in Maps ↗</a><a className="button dark" href="/book">Book here</a></div>
+          </article>)}
         </div>
       </section>
       <Footer />
