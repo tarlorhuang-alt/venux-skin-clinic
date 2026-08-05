@@ -12,9 +12,9 @@ const concerns = [
 ] as const;
 
 const featured = [
-  { name:"Glass Skin Facial", group:"Hydration & Glow", time:"90 min", regular:299, member:259, text:"A premium, multi-step facial selected for luminous-looking hydration and refined texture." },
+  { name:"Glass Skin Facial", group:"Hydration & Glow", time:"90 min", regular:299, member:259, text:"A premium, multi-step facial selected for luminous-looking hydration and refined texture.", from:false },
   { name:"DMK Enzyme Therapy", group:"Skin Revision", time:"90 min", regular:210, member:168, text:"A consultation-led professional enzyme protocol within a structured skin revision plan.", from:true },
-  { name:"Sothys Signature Facial", group:"Anti-Ageing", time:"90 min", regular:229, member:180, text:"A considered Sothys Paris experience combining professional technique and selected formulations." },
+  { name:"Sothys Signature Facial", group:"Anti-Ageing", time:"90 min", regular:229, member:180, text:"A considered Sothys Paris experience combining professional technique and selected formulations.", from:false },
 ] as const;
 
 const steps = [
