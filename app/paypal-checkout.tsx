@@ -2,8 +2,25 @@
 
 import { useEffect, useRef, useState } from "react";
 
+type PayPalSession = {
+  start: (options: { presentationMode: "auto" }, orderId: Promise<string>) => Promise<void>;
+};
+
+type PayPalInstance = {
+  findEligibleMethods: (options: { currencyCode: string }) => Promise<{ isEligible: (method: string) => boolean }>;
+  createPayPalOneTimePaymentSession: (options: {
+    onApprove: (data: { orderId: string }) => Promise<void>;
+    onCancel: () => void;
+    onError: (error: unknown) => void;
+  }) => PayPalSession;
+};
+
 declare global {
-  interface Window { paypal?: { Buttons: (options: Record<string, unknown>) => { render: (target: HTMLElement) => Promise<void> } } }
+  interface Window {
+    paypal?: {
+      createInstance: (options: { clientId: string; components: string[]; pageType: "checkout" }) => Promise<PayPalInstance>;
+    };
+  }
 }
 
 export function PayPalCheckout() {
@@ -14,53 +31,92 @@ export function PayPalCheckout() {
 
   useEffect(() => {
     let cancelled = false;
+    let paypalButton: HTMLElement | null = null;
+
+    async function createOrder() {
+      const response = await fetch("/api/paypal/orders", { method: "POST" });
+      const order = await response.json();
+      if (!response.ok || !order.id) throw new Error(order.error || "Unable to create order");
+      return order.id as string;
+    }
 
     async function start() {
       try {
         const configResponse = await fetch("/api/paypal/config", { cache: "no-store" });
-        if (!configResponse.ok) throw new Error("PayPal setup pending");
+        if (!configResponse.ok) throw new Error("PayPal configuration is unavailable");
         const config = await configResponse.json();
+        if (!config.clientId) throw new Error("PayPal Client ID is missing");
 
-        if (!window.paypal) {
+        if (!window.paypal?.createInstance) {
           await new Promise<void>((resolve, reject) => {
+            const existing = document.querySelector<HTMLScriptElement>('script[src="https://www.paypal.com/web-sdk/v6/core"]');
+            if (existing) {
+              existing.addEventListener("load", () => resolve(), { once: true });
+              existing.addEventListener("error", () => reject(new Error("PayPal Web SDK could not load")), { once: true });
+              return;
+            }
             const script = document.createElement("script");
-            script.src = `https://www.paypal.com/sdk/js?client-id=${encodeURIComponent(config.clientId)}&currency=AUD&intent=capture&components=buttons`;
+            script.src = "https://www.paypal.com/web-sdk/v6/core";
             script.async = true;
             script.onload = () => resolve();
-            script.onerror = () => reject(new Error("Unable to load PayPal"));
+            script.onerror = () => reject(new Error("PayPal Web SDK could not load"));
             document.head.appendChild(script);
           });
         }
 
-        if (cancelled || rendered.current || !container.current || !window.paypal) return;
-        rendered.current = true;
-        setStatus("");
-        await window.paypal.Buttons({
-          style: { layout: "vertical", color: "gold", shape: "pill", label: "paypal" },
-          createOrder: async () => {
-            const response = await fetch("/api/paypal/orders", { method: "POST" });
-            const order = await response.json();
-            if (!response.ok || !order.id) throw new Error(order.error || "Unable to create order");
-            return order.id;
-          },
-          onApprove: async (data: { orderID: string }) => {
+        if (cancelled || rendered.current || !container.current || !window.paypal?.createInstance) return;
+
+        const sdk = await window.paypal.createInstance({
+          clientId: config.clientId,
+          components: ["paypal-payments"],
+          pageType: "checkout",
+        });
+        const methods = await sdk.findEligibleMethods({ currencyCode: "AUD" });
+        if (!methods.isEligible("paypal")) throw new Error("PayPal is not eligible for this checkout");
+
+        const session = sdk.createPayPalOneTimePaymentSession({
+          onApprove: async ({ orderId }) => {
             setStatus("Confirming your payment…");
-            const response = await fetch(`/api/paypal/orders/${encodeURIComponent(data.orderID)}/capture`, { method: "POST" });
+            const response = await fetch(`/api/paypal/orders/${encodeURIComponent(orderId)}/capture`, { method: "POST" });
             const order = await response.json();
             if (!response.ok || order.status !== "COMPLETED") throw new Error(order.error || "Payment was not completed");
-            setComplete(data.orderID);
+            setComplete(orderId);
             setStatus("");
           },
           onCancel: () => setStatus("Payment cancelled. No charge was made."),
-          onError: () => setStatus("PayPal could not complete the payment. Please try again or contact the clinic."),
-        }).render(container.current);
-      } catch {
-        if (!cancelled) setStatus("PayPal checkout is awaiting secure merchant activation.");
+          onError: (error) => {
+            console.error("[paypal-checkout] payment session error", error);
+            setStatus("PayPal could not complete the payment. Please try again or contact the clinic.");
+          },
+        });
+
+        paypalButton = document.createElement("paypal-button");
+        paypalButton.setAttribute("type", "pay");
+        paypalButton.setAttribute("aria-label", "Pay AUD $45 booking deposit with PayPal");
+        paypalButton.addEventListener("click", async () => {
+          setStatus("Opening secure PayPal checkout…");
+          try {
+            await session.start({ presentationMode: "auto" }, createOrder());
+          } catch (error) {
+            console.error("[paypal-checkout] unable to start", error);
+            setStatus("PayPal could not start the payment. Please try again or contact the clinic.");
+          }
+        });
+
+        container.current.replaceChildren(paypalButton);
+        rendered.current = true;
+        setStatus("");
+      } catch (error) {
+        console.error("[paypal-checkout] setup failed", error);
+        if (!cancelled) setStatus("PayPal checkout is temporarily unavailable. Please contact the clinic or try again shortly.");
       }
     }
 
     start();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      paypalButton?.remove();
+    };
   }, []);
 
   if (complete) return <div className="paypal-success" role="status"><strong>Deposit received</strong><p>Your AUD $45 booking deposit has been paid. Reference: {complete}</p><a href="/book">Continue booking details ↗</a></div>;
