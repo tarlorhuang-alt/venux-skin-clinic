@@ -30,7 +30,7 @@ const faqs = [
 ] as const;
 
 const treatmentLinks: Record<string, string> = {
-  "Laser Facial": "/treatments/laser-facial",
+  "CO₂ Laser": "/treatments/laser-facial",
   "Laser & Light": "/treatments/ipl",
   "DMK Skin Revision": "/treatments/dmk-enzyme-therapy",
   "Enzyme Therapy": "/treatments/dmk-enzyme-therapy",
