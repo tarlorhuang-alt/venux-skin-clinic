@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./posters.css";
 
 export const metadata: Metadata = {
   title: "VenuX Skin Clinic | Personalised Skin Care",
