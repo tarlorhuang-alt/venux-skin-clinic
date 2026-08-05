@@ -157,3 +157,59 @@ footer small { grid-column:1/-1; border-top:1px solid var(--line); padding-top:2
   .hero-actions { align-items:flex-start; flex-direction:column; gap:12px; }
   .price-row { grid-template-columns:1fr 76px 76px; gap:8px; } .price-row strong { font-size:9px; }
 }
+
+
+/* Expanded clinic navigation */
+.header-actions { display:flex; align-items:center; gap:12px; }
+.menu-shell { position:relative; }
+.menu-shell>summary { list-style:none; cursor:pointer; display:flex; align-items:center; gap:10px; min-height:44px; padding:0 5px 0 12px; text-transform:uppercase; letter-spacing:.12em; font-size:9px; font-weight:700; }
+.menu-shell>summary::-webkit-details-marker { display:none; }
+.menu-icon { position:relative; width:34px; height:30px; display:block; }
+.menu-icon i { position:absolute; width:21px; height:21px; border:1.5px solid var(--ink); border-radius:7px; background:var(--cream); transition:.2s ease; }
+.menu-icon i:first-child { left:2px; top:7px; }
+.menu-icon i:last-child { left:9px; top:1px; }
+.menu-shell[open] .menu-icon i:first-child { transform:translate(4px,-3px) rotate(45deg); }
+.menu-shell[open] .menu-icon i:last-child { transform:translate(-3px,3px) rotate(-45deg); }
+.menu-backdrop { position:fixed; inset:0; z-index:80; background:rgba(7,32,31,.28); backdrop-filter:blur(8px); }
+.menu-panel { position:fixed; z-index:81; left:18px; right:18px; top:18px; min-height:calc(100dvh - 36px); max-height:calc(100dvh - 36px); overflow:auto; padding:42px 5vw 30px; border:1px solid rgba(7,61,60,.14); border-radius:38px; background:rgba(247,252,252,.98); box-shadow:0 30px 100px rgba(7,32,31,.16); display:grid; grid-template-columns:minmax(190px,.6fr) minmax(360px,1.4fr); grid-template-rows:auto 1fr auto; gap:40px 9vw; }
+.menu-top { grid-column:1/-1; display:flex; justify-content:space-between; align-items:center; padding-bottom:24px; border-bottom:1px solid var(--line); }
+.menu-brand { font:36px/1 var(--font-display); letter-spacing:-.03em; }
+.menu-brand span { display:block; margin-top:6px; font:8px var(--font-sans); text-transform:uppercase; letter-spacing:.28em; }
+.menu-hint { text-transform:uppercase; letter-spacing:.18em; font-size:8px; color:#718079; }
+.mega-nav { grid-column:1/-1; display:grid; grid-template-columns:.58fr 1fr 1fr; gap:28px 6vw; align-content:start; }
+.mega-main { font:30px/1.15 var(--font-display); text-transform:uppercase; letter-spacing:-.02em; }
+.mega-main span { font:14px var(--font-sans); margin-left:8px; }
+.mega-group { display:grid; gap:20px; }
+.mega-group ul { margin:0; padding:0; list-style:none; display:grid; gap:13px; }
+.mega-group li a { font:16px/1.3 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace; }
+.mega-group li a:before { content:"•"; margin-right:12px; color:var(--gold); }
+.mega-nav a { transition:opacity .2s ease,color .2s ease; }
+.mega-nav a:hover { color:var(--gold); }
+.menu-bottom { grid-column:1/-1; display:flex; justify-content:space-between; align-items:center; border-top:1px solid var(--line); padding-top:24px; font-size:12px; text-transform:uppercase; letter-spacing:.13em; font-weight:700; }
+.menu-bottom b { margin:0 8px; color:var(--gold); }
+.menu-bottom a { font-size:14px; }
+.menu-bottom a span { margin-left:14px; }
+
+@media(max-width:800px) {
+  .desktop-nav,.site-header>.header-cta { display:none; }
+  .header-actions .header-cta { display:none; }
+  .menu-label { display:none; }
+  .menu-panel { left:8px; right:8px; top:8px; min-height:calc(100dvh - 16px); max-height:calc(100dvh - 16px); padding:28px 24px 24px; border-radius:28px; display:flex; flex-direction:column; gap:34px; }
+  .menu-top { flex:0 0 auto; }
+  .menu-brand { font-size:30px; }
+  .menu-hint { display:none; }
+  .mega-nav { display:flex; flex-direction:column; gap:25px; }
+  .mega-main { font:24px/1.1 var(--font-sans); letter-spacing:.02em; }
+  .mega-group { gap:12px; }
+  .mega-group ul { gap:8px; padding-left:16px; }
+  .mega-group li a { font-size:15px; }
+  .menu-bottom { margin-top:auto; flex:0 0 auto; }
+}
+@media(max-width:480px) {
+  .menu-panel { padding:24px 20px 20px; }
+  .mega-nav { gap:21px; }
+  .mega-main { font-size:21px; }
+  .mega-group li a { font-size:13px; }
+  .menu-bottom { font-size:10px; }
+  .menu-bottom a { font-size:12px; }
+}
