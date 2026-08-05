@@ -4,12 +4,12 @@ const navigation = [
     href: "/treatments#skin",
     items: [
       ["Facial Treatments", "/pricing"],
-      ["Laser Facial", "/treatments#skin"],
-      ["IPL", "/treatments#skin"],
-      ["HIFU / Ultherapy", "/#popular"],
-      ["RF Microneedling", "/#popular"],
-      ["DMK Enzyme Therapy", "/pricing"],
-      ["LED Light Therapy", "/pricing"],
+      ["Laser Facial", "/treatments/laser-facial"],
+      ["IPL", "/treatments/ipl"],
+      ["HIFU / Ultherapy", "/treatments/hifu-ultherapy"],
+      ["RF Microneedling", "/treatments/rf-microneedling"],
+      ["DMK Enzyme Therapy", "/treatments/dmk-enzyme-therapy"],
+      ["LED Light Therapy", "/treatments/led-light-therapy"],
     ],
   },
   {
@@ -26,6 +26,7 @@ const navigation = [
     href: "/treatments#aesthetics",
     items: [
       ["Aesthetic Consultation", "/treatments#aesthetics"],
+      ["Skin Booster", "/treatments/skin-booster"],
       ["Skin Quality Consultation", "/treatments#aesthetics"],
       ["Personalised Treatment Plan", "/book"],
     ],
@@ -34,10 +35,10 @@ const navigation = [
     label: "Methods",
     href: "/treatments#methods",
     items: [
-      ["Laser & Light", "/treatments#methods"],
-      ["Ultrasound", "/treatments#methods"],
-      ["Radiofrequency", "/treatments#methods"],
-      ["Enzyme Therapy", "/treatments#methods"],
+      ["IPL · Laser & Light", "/treatments/ipl"],
+      ["Ultrasound", "/treatments/hifu-ultherapy"],
+      ["Radiofrequency", "/treatments/rf-microneedling"],
+      ["Enzyme Therapy", "/treatments/dmk-enzyme-therapy"],
     ],
   },
 ] as const;
@@ -58,6 +59,7 @@ export function Header() {
             {category.items.map(([label, href]) => <a href={href} key={label}>{label}<span>↗</span></a>)}
           </div>
         </div>)}
+        <a className="nav-direct" href="/products">Products</a>
         <a className="nav-direct" href="/pricing">Pricing</a>
         <a className="nav-direct" href="/membership">Membership</a>
       </nav>
@@ -81,6 +83,7 @@ export function Footer() {
       <div className="footer-column">
         <span>Explore</span>
         <a href="/treatments">Treatments ↗</a>
+        <a href="/products">Products ↗</a>
         <a href="/pricing">Pricing ↗</a>
         <a href="/membership">Membership ↗</a>
         <a href="/book">Book a consultation ↗</a>
