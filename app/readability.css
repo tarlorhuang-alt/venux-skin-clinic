@@ -1,0 +1,93 @@
+/* Readability layer: stronger contrast and comfortable minimum sizes. */
+:root {
+  --readable-ink: #123f3d;
+  --readable-muted: #526662;
+}
+
+body {
+  color: var(--readable-ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+p,
+li,
+.service-card p,
+.brand-proof-copy p,
+.care-path p,
+.faq-section p,
+.site-footer p,
+.product-card p,
+.treatment-detail-page p {
+  color: var(--readable-muted);
+  font-size: max(14px, 0.95rem);
+  line-height: 1.65;
+}
+
+.kicker,
+.eyebrow,
+.page-hero .kicker,
+.product-kicker,
+.detail-kicker {
+  color: #1c514e;
+  font-size: max(12px, 0.76rem);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+.nav-category-link,
+.nav-direct,
+.header-cta {
+  font-size: max(12px, 0.78rem);
+  font-weight: 650;
+}
+
+.nav-dropdown small,
+.site-footer small,
+.footer-column > span,
+.price-note,
+.product-meta,
+.treatment-detail-page small {
+  color: #526662;
+  font-size: max(11px, 0.72rem);
+  line-height: 1.45;
+}
+
+.nav-dropdown a,
+.footer-column a,
+.footer-column b,
+.service-card li,
+.service-item-detail,
+.text-link,
+.faq-list summary {
+  color: #143f3d;
+  font-size: max(13px, 0.84rem);
+}
+
+.page-hero > p:last-child,
+.brand-intro,
+.faq-intro > p:last-child {
+  color: #435b57;
+  font-size: max(15px, 1rem);
+}
+
+button,
+.button,
+a.header-cta {
+  font-weight: 700;
+}
+
+@media (max-width: 760px) {
+  p,
+  li,
+  .service-card p,
+  .product-card p,
+  .treatment-detail-page p {
+    font-size: 14px;
+  }
+
+  .nav-category-link,
+  .nav-direct,
+  .header-cta {
+    font-size: 11px;
+  }
+}
