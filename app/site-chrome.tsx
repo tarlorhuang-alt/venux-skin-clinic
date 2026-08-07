@@ -5,6 +5,8 @@ const navigation = [
     items: [
       ["Facial Treatments", "/treatments/facial-treatments"],
       ["CO₂ Laser", "/treatments/laser-facial"],
+      ["Lutronic Picosecond", "/treatments/lutronic-picosecond"],
+      ["HIFU Focused Ultrasound", "/treatments/hifu-focused-ultrasound"],
       ["IPL", "/treatments/ipl"],
       ["Ultherapy®", "/treatments/hifu-ultherapy"],
       ["RF Microneedling", "/treatments/rf-microneedling"],
@@ -36,7 +38,9 @@ const navigation = [
     href: "/treatments#methods",
     items: [
       ["IPL · Laser & Light", "/treatments/ipl"],
-      ["Ultrasound", "/treatments/hifu-ultherapy"],
+      ["Lutronic Picosecond", "/treatments/lutronic-picosecond"],
+      ["Ultherapy®", "/treatments/hifu-ultherapy"],
+      ["HIFU Focused Ultrasound", "/treatments/hifu-focused-ultrasound"],
       ["Radiofrequency", "/treatments/rf-microneedling"],
       ["Enzyme Therapy", "/treatments/dmk-enzyme-therapy"],
     ],
