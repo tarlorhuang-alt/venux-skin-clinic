@@ -95,7 +95,7 @@ export function Footer() {
 
       <div className="footer-column footer-social">
         <span>Connect</span>
-        <div aria-label="Instagram account pending"><b>Instagram</b><small>Link to be connected</small></div>
+        <a href="https://www.instagram.com/venuxbeautysydney/" target="_blank" rel="noreferrer" aria-label="Follow VenuX Beauty Sydney on Instagram"><b>Instagram ↗</b><small>@VenuxBeautySydney</small></a>
         <a href="https://wa.me/61432752750" target="_blank" rel="noreferrer" aria-label="Chat with VenuX Skin Clinic on WhatsApp"><b>WhatsApp ↗</b><small>0432 752 750</small></a>
       </div>
 
