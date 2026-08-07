@@ -9,9 +9,27 @@ export const metadata: Metadata = {
 };
 
 const examples = [
-  ["Sun spots & freckles", "Selected superficial pigment may temporarily darken before gradually lifting from the skin.", "pigment"],
-  ["Diffuse facial redness", "Selected light wavelengths can be absorbed by haemoglobin to reduce the appearance of visible redness.", "redness"],
-  ["Uneven photo-damaged tone", "A considered treatment plan may help the complexion look clearer and more even over time.", "tone"],
+  {
+    title: "Tone, redness & texture",
+    description: "Published result after 1 SR IPL, 1 DiamondPolar™ and 1 NanoFractional RF™ treatment.",
+    before: "https://www.venusconcept.com/img/before_after/matt_mahlberg_before.jpg",
+    after: "https://www.venusconcept.com/img/before_after/matt_mahlberg_after.jpg",
+    courtesy: "Colorado Center for Dermatology · Matt Mahlberg, MD",
+  },
+  {
+    title: "Dark spots & uneven texture",
+    description: "Published result after 3 SR IPL, 3 DiamondPolar™ and 3 NanoFractional RF™ treatments.",
+    before: "https://www.venusconcept.com/img/before_after/tribella_en_2_before_2.jpg",
+    after: "https://www.venusconcept.com/img/before_after/tribella_en_2_after_33.jpg",
+    courtesy: "Venus Concept",
+  },
+  {
+    title: "Pigmentation & photo-damaged tone",
+    description: "Published result after 3 SR IPL, 3 DiamondPolar™ and 3 NanoFractional RF™ treatments.",
+    before: "https://www.venusconcept.com/img/before_after/tribella_en_3_before_2.jpg",
+    after: "https://www.venusconcept.com/img/before_after/tribella_en_3after_2.jpg",
+    courtesy: "Anderson Plastic Surgery & MedSpa · Robert G. Anderson, MD",
+  },
 ] as const;
 
 const areas = [
@@ -43,7 +61,7 @@ export default function IplTreatmentPage() {
 
     <section className="ipl-explainer" id="illustration"><div><p className="kicker">01 · Principle & illustration</p><h2>How IPL<br /><i>works.</i></h2></div><div className="ipl-copy"><p>Within TriBella™, IPL photorejuvenation is the first technology used to support clearer-looking tone. Venus SmartPulse™ delivers filtered broad-spectrum light with consistent pulse energy, while real-time cooling supports comfort. TriBella™ can then combine DiamondPolar™ radio frequency for tightness and NanoFractional RF™ resurfacing for texture in one personalised protocol.</p><div className="science-steps"><article><span>01</span><div className="process-orb light-orb"/><h3>Filtered light</h3><p>Controlled pulses pass through the skin surface using personalised parameters.</p></article><article><span>02</span><div className="process-orb target-orb"/><h3>Selected target</h3><p>Melanin or haemoglobin absorbs selected light energy more strongly.</p></article><article><span>03</span><div className="process-orb response-orb"/><h3>Skin response</h3><p>The targeted pigment or redness may change gradually after treatment.</p></article></div><p className="price-note">This is an educational illustration and does not represent a guaranteed clinical result.</p></div></section>
 
-    <section className="example-section" id="examples"><div className="section-heading"><div><p className="kicker">02 · Illustrative examples</p><h2>Concerns we<br /><i>may assess.</i></h2></div><p>IPL is not suitable for every pigment type or every skin tone. Consultation helps distinguish an appropriate cosmetic concern from a lesion requiring medical assessment.</p></div><div className="example-grid">{examples.map(([title, description, type], index)=><article key={title}><div className={`example-swatch ${type}`}><span>Illustrative pattern</span></div><small>0{index+1}</small><h3>{title}</h3><p>{description}</p></article>)}</div><p className="price-note">Illustrations are not patient before-and-after photographs. Responses vary and outcomes are not guaranteed.</p></section>
+    <section className="example-section" id="examples"><div className="section-heading"><div><p className="kicker">02 · Published Venus results</p><h2>Real patient<br /><i>examples.</i></h2></div><p>These before-and-after photographs are published by Venus Concept and credited to the listed Venus provider. They are external clinical examples—not VenuX patients—and individual responses vary.</p></div><div className="example-grid">{examples.map((example, index)=><article key={example.title}><a className="case-images" href="https://www.venusconcept.com/en-id/tribella-treatment.htm" target="_blank" rel="noreferrer" aria-label={`View the official Venus source for ${example.title}`}><figure><img src={example.before} alt={`Before treatment — ${example.title}`} /><figcaption>Before</figcaption></figure><figure><img src={example.after} alt={`After treatment — ${example.title}`} /><figcaption>After</figcaption></figure></a><small>0{index+1} · OFFICIAL VENUS CASE</small><h3>{example.title}</h3><p>{example.description}</p><p className="case-credit">Courtesy of {example.courtesy}</p></article>)}</div><p className="price-note">Source: Venus Concept TriBella™ results gallery. These patients were treated using the complete TriBella™ protocol, not IPL alone. Photographs are not VenuX patient results. Outcomes vary and are not guaranteed.</p></section>
 
     <section className="ipl-pricing" id="pricing"><div className="section-heading"><div><p className="kicker">03 · Confirmed price list</p><h2>Area-based<br /><i>pricing.</i></h2></div><p>Current VenuX IPL prices in AUD. Your practitioner will confirm suitability, the correct treatment area and the recommended plan before treatment.</p></div><div className="ipl-area-table" role="table" aria-label="IPL treatment areas and prices"><div className="ipl-area-row area-head" role="row"><span>Area</span><span>Common focus</span><span>Regular</span><span>Member</span></div>{areas.map(([area, focus, regular, member]) => <div className="ipl-area-row" role="row" key={area}><strong>{area}</strong><span>{focus}</span><span>{regular}</span><span>{member}</span></div>)}</div><p className="price-note">All prices are in Australian dollars. Spot-treatment prices start from the amount shown and vary with treatment size. A patch test may be recommended.</p></section>
 
