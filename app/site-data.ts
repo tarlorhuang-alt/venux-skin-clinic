@@ -4,7 +4,7 @@ export const services = [
     category: "Skin Treatments",
     eyebrow: "肌肤管理",
     description: "Personalised facials and skin therapies designed around your concerns, comfort and long-term goals.",
-    items: ["Facial Treatments", "CO₂ Laser", "DMK Skin Revision", "LED Light Therapy"],
+    items: ["Facial Treatments", "CO₂ Laser", "Lutronic Picosecond", "DMK Skin Revision", "LED Light Therapy"],
   },
   {
     id: "body",
@@ -25,7 +25,7 @@ export const services = [
     category: "Treatment Methods",
     eyebrow: "治疗方式",
     description: "Explore the considered methods used across VenuX skin care and consultation-led treatment planning.",
-    items: ["Laser & Light", "Facial Therapy", "Enzyme Therapy", "Consultation-led Care"],
+    items: ["Laser & Light", "Lutronic Picosecond", "Ultherapy®", "HIFU Focused Ultrasound", "Radiofrequency", "Enzyme Therapy"],
   },
 ];
 
