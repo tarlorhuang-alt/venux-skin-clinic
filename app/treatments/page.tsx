@@ -31,11 +31,14 @@ const faqs = [
 
 const treatmentLinks: Record<string, string> = {
   "CO₂ Laser": "/treatments/laser-facial",
+  "Lutronic Picosecond": "/treatments/lutronic-picosecond",
+  "HIFU Focused Ultrasound": "/treatments/hifu-focused-ultrasound",
   "Laser & Light": "/treatments/ipl",
   "DMK Skin Revision": "/treatments/dmk-enzyme-therapy",
   "Enzyme Therapy": "/treatments/dmk-enzyme-therapy",
   "LED Light Therapy": "/treatments/led-light-therapy",
-  "Ultrasound": "/treatments/hifu-ultherapy",
+  "Ultherapy®": "/treatments/hifu-ultherapy",
+  "HIFU Focused Ultrasound": "/treatments/hifu-focused-ultrasound",
   "Radiofrequency": "/treatments/rf-microneedling",
 };
 
