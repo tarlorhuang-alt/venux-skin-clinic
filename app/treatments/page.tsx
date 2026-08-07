@@ -38,7 +38,6 @@ const treatmentLinks: Record<string, string> = {
   "Enzyme Therapy": "/treatments/dmk-enzyme-therapy",
   "LED Light Therapy": "/treatments/led-light-therapy",
   "Ultherapy®": "/treatments/hifu-ultherapy",
-  "HIFU Focused Ultrasound": "/treatments/hifu-focused-ultrasound",
   "Radiofrequency": "/treatments/rf-microneedling",
 };
 
