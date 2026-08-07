@@ -6,7 +6,7 @@ const navigation = [
       ["Facial Treatments", "/treatments/facial-treatments"],
       ["CO₂ Laser", "/treatments/laser-facial"],
       ["IPL", "/treatments/ipl"],
-      ["HIFU / Ultherapy", "/treatments/hifu-ultherapy"],
+      ["Ultherapy®", "/treatments/hifu-ultherapy"],
       ["RF Microneedling", "/treatments/rf-microneedling"],
       ["DMK Enzyme Therapy", "/treatments/dmk-enzyme-therapy"],
       ["LED Light Therapy", "/treatments/led-light-therapy"],
