@@ -39,3 +39,59 @@
 
 /* AYKO RF technology illustrations */
 .rf-ayko-effects{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:0 0 28px}.rf-ayko-effects figure{position:relative;min-height:430px;margin:0;overflow:hidden;border-radius:24px;background:#111722}.rf-ayko-effects img{width:100%;height:100%;object-fit:cover}.rf-ayko-effects figcaption{position:absolute;left:15px;right:15px;bottom:15px;padding:13px 15px;border-radius:18px;background:rgba(255,255,255,.93)}.rf-ayko-effects figcaption strong{display:block;font-size:12px}.rf-ayko-effects figcaption span{display:block;margin-top:5px;color:#68766f;font-size:9px}.rf-ayko-effects>p{grid-column:1/-1;margin:0;max-width:900px;color:#53665f;font-size:11px;line-height:1.7}@media(max-width:760px){.rf-ayko-effects{grid-template-columns:1fr}.rf-ayko-effects figure{min-height:360px}.rf-ayko-effects>p{grid-column:auto}}
+
+
+/* Compact treatment detail system */
+.detail-hero{min-height:560px}
+.detail-hero>div:first-child{padding:74px 6vw}
+.detail-hero h1{font-size:clamp(48px,6vw,78px)}
+.detail-nav{min-height:54px}
+.detail-principle,.detail-concerns,.co2-pricing,.detail-appointment,.detail-faq,.session-guide{padding-top:78px;padding-bottom:78px}
+.detail-principle h2,.detail-concerns h2,.co2-pricing h2,.detail-appointment h2,.detail-faq h2,.session-guide h2{font-size:clamp(42px,5vw,64px)}
+.detail-card-grid article{min-height:230px;padding:28px}
+.detail-card-grid h3{font-size:28px}
+.principle-steps article{min-height:190px;padding:26px}
+.principle-steps h3{font-size:24px}
+.co2-price-list>div{min-height:58px;padding:14px 18px}
+.detail-steps article{padding:26px;min-height:210px}
+
+/* AYKO focused-ultrasound visual */
+.ayko-hifu-hero{position:relative;min-height:100%;background:url("/venux-popular-triptych-v2.svg") left center/300% 100% no-repeat;overflow:hidden}
+.ayko-hifu-shade{position:absolute;inset:0;background:linear-gradient(145deg,rgba(0,59,54,.08),rgba(0,59,54,.82))}
+.ayko-hifu-brand{position:absolute;left:42px;right:42px;bottom:38px;color:#fff}
+.ayko-hifu-brand>span{display:block;color:#e0bf7a;font-size:12px;font-weight:900;letter-spacing:.22em}
+.ayko-hifu-brand>strong{display:block;margin:8px 0;font:500 38px/1 var(--font-display)}
+.ayko-hifu-brand>small{color:#dbe8e5;font-size:11px;line-height:1.5}
+
+/* Lutronic sessions and educational result illustration */
+.lutronic-result-visual{margin:45px 0 36px}
+.lutronic-result-image{aspect-ratio:2/1;border-radius:24px;background:url("/lutronic-result-illustration-v2.svg") center/cover no-repeat;box-shadow:0 20px 45px rgba(0,59,54,.09)}
+.result-labels{display:grid;grid-template-columns:1fr 1fr;gap:1px;margin-top:10px}
+.result-labels span{padding:11px 16px;background:#003b36;color:#fff;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.1em}
+.lutronic-result-visual>p{max-width:850px;margin:16px 0 9px;color:#4a615c;font-size:13px}
+.lutronic-result-visual>a{color:#003b36;font-size:12px;font-weight:800}
+.session-guide{padding-left:7vw;padding-right:7vw;background:#f2f7f5}
+.session-guide-grid{display:grid;grid-template-columns:repeat(4,1fr);margin-top:42px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.session-guide-grid article{min-height:270px;padding:28px 26px}
+.session-guide-grid article+article{border-left:1px solid var(--line)}
+.session-guide-grid article>span{color:#b48b4d;font-size:10px;font-weight:800}
+.session-guide-grid h3{margin:34px 0 12px;font-size:25px}
+.session-guide-grid strong{display:block;margin-bottom:16px;color:#003b36;font:500 30px var(--font-display)}
+.session-guide-grid p{color:#506560;font-size:13px;line-height:1.65}
+
+@media(max-width:900px){
+  .detail-hero{min-height:0}
+  .detail-hero>div:first-child{padding:60px 24px}
+  .session-guide{padding-left:24px;padding-right:24px}
+  .session-guide-grid{grid-template-columns:1fr 1fr}
+  .session-guide-grid article:nth-child(3){border-left:0;border-top:1px solid var(--line)}
+  .session-guide-grid article:nth-child(4){border-top:1px solid var(--line)}
+}
+@media(max-width:620px){
+  .detail-hero h1{font-size:48px}
+  .detail-principle,.detail-concerns,.co2-pricing,.detail-appointment,.detail-faq,.session-guide{padding-top:62px;padding-bottom:62px}
+  .session-guide-grid{grid-template-columns:1fr}
+  .session-guide-grid article,.session-guide-grid article+article{min-height:0;padding:24px 0;border-left:0;border-top:1px solid var(--line)}
+  .lutronic-result-image{aspect-ratio:1/1;background-size:auto 100%}
+  .ayko-hifu-hero{min-height:420px}
+}
