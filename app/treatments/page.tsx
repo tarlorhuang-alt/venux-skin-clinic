@@ -10,7 +10,7 @@ const standards = [
 
 const brands = [
   { name: "DMK", label: "Skin revision & enzyme therapy", description: "Professional protocols selected for structured skin revision plans and DMK Enzyme Therapy." },
-  { name: "SkinCeuticals", label: "修丽可 · Corrective skin care", description: "Professional skincare incorporated into corrective facials and considered home-care recommendations." },
+  { name: "SkinCeuticals", label: "Corrective professional skin care", description: "Professional skincare incorporated into corrective facials and considered home-care recommendations." },
   { name: "Sothys Paris", label: "Hydration & barrier support", description: "French professional skincare used across hydrating, signature and barrier-support facial experiences." },
 ] as const;
 
@@ -22,7 +22,7 @@ const carePath = [
 
 const faqs = [
   ["How do I know which treatment is right for me?", "Start with a consultation. We review your concerns, history, current routine and goals before recommending an appropriate option."],
-  ["What is the difference between the regular and member price?", "Member pricing is available to eligible VenuX members. You can view current inclusions on the Membership page or ask our team before booking."],
+  ["What is the difference between the regular and member price?", "VenuX Membership begins with a prepaid balance from AUD $1,000 and includes 20% off all VenuX treatments. Visit the Membership page or ask our team before joining."],
   ["Can I book a popular treatment directly?", "Yes. You can select Book now from a popular treatment card. Suitability will still be confirmed before treatment."],
   ["Do I need a consultation before laser or aesthetic care?", "A consultation may be required depending on the treatment and your individual circumstances. Higher-risk procedures always require an appropriate professional assessment."],
   ["How should I prepare for my appointment?", "Preparation varies by treatment. After booking, the clinic will provide any relevant pre-care information for your selected service."],
