@@ -16,7 +16,7 @@
 .footer-column>span { margin-bottom:13px; color:#d2ad68; text-transform:uppercase; letter-spacing:.18em; font-size:8px; }
 .footer-column>a { font-size:11px; line-height:1.45; }
 .footer-column>a:hover { color:#d2ad68; }
-.footer-social>div,.footer-visit>a { display:grid; padding:0 0 13px; border-bottom:1px solid rgba(255,255,255,.15); }
+.footer-social>div,.footer-social>a,.footer-visit>a { display:grid; padding:0 0 13px; border-bottom:1px solid rgba(255,255,255,.15); }
 .footer-social b,.footer-visit b { font:500 19px/1.2 var(--font-display); }
 .footer-social small,.footer-visit small { margin-top:5px; color:#94aaa4; font-size:8px; letter-spacing:.04em; }
 .footer-bottom { grid-column:1/-1; display:flex; justify-content:space-between; gap:30px; margin-top:28px; padding-top:26px; border-top:1px solid rgba(255,255,255,.16); color:#91a7a1; }
