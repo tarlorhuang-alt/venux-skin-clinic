@@ -665,3 +665,21 @@ h2{font-size:clamp(40px,4.8vw,64px)}
   .rejuran-campaign-poster .rejuran-poster-copy{padding:34px 24px}
   .wax-course-row{grid-template-columns:1fr 66px 80px;gap:8px;padding:12px 8px;font-size:12px}
 }
+
+
+/* Mobile launch polish */
+@media(max-width:800px){
+  .category-nav{overflow-x:auto;overflow-y:hidden}
+  .poster-hero{padding:34px 24px 38px}
+  .poster-copy h1{font-size:40px;line-height:.92}
+  .poster-copy>p:not(.kicker){margin:16px 0;font-size:12px;line-height:1.55}
+  .poster-copy .kicker{margin-bottom:18px}
+  .poster-copy .hero-actions{gap:10px}
+  .poster-copy .button{min-height:42px;padding:0 18px;font-size:8px}
+  .hero-promotion{margin-top:16px;padding:14px 16px;border-radius:16px}
+  .hero-promotion span{font-size:8px}
+  .hero-promotion strong{margin:6px 0;font-size:30px}
+  .hero-promotion small{font-size:9px}
+  .hero-promotion a{margin-top:10px;font-size:10px}
+  .poster-caption{display:none}
+}
