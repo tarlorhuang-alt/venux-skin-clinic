@@ -70,14 +70,14 @@ export function Header() {
       </a>
 
       <nav className="category-nav" aria-label="Treatment categories">
-        {navigation.map((category) => <div className="nav-category" key={category.label}>
-          <button className="nav-category-link" type="button" aria-haspopup="true">{category.label}<span>⌄</span></button>
+        {navigation.map((category) => <details className="nav-category" key={category.label}>
+          <summary className="nav-category-link">{category.label}<span>⌄</span></summary>
           <div className="nav-dropdown">
             <small>{category.menuLabel}</small>
             <a className="nav-view-all" href={category.href}>View all {category.label}<span>↗</span></a>
             {category.items.map(([label, href]) => <a href={href} key={label}>{label}<span>↗</span></a>)}
           </div>
-        </div>)}
+        </details>)}
         <a className="nav-direct" href="/products">Products</a>
         <a className="nav-direct" href="/pricing">Pricing</a>
         <a className="nav-direct" href="/membership">Membership</a>
