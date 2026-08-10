@@ -141,3 +141,26 @@ a.header-cta {
   font-size: 11px;
   line-height: 1.6;
 }
+
+
+/* Typography direction: all editorial accents remain upright. */
+i,
+em {
+  font-style: normal !important;
+}
+
+.title-accent {
+  font-style: normal;
+}
+
+.nav-dropdown a {
+  font-size: max(14px, .9rem);
+  font-weight: 700;
+}
+
+@media (max-width: 760px) {
+  .site-footer .footer-column > a,
+  .site-footer .footer-column b {
+    font-size: 14px;
+  }
+}
