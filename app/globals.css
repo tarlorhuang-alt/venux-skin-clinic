@@ -436,3 +436,31 @@ footer small { grid-column:1/-1; border-top:1px solid var(--line); padding-top:2
   .standards-strip article:nth-child(4) { border-top:1px solid rgba(255,255,255,.16); }
   .standards-strip h3 { margin-top:32px; }
 }
+
+
+/* Expanded treatment navigation */
+.nav-dropdown{width:340px;max-height:min(72vh,680px);overflow-y:auto;padding:22px}
+.nav-dropdown small{font-size:10px;font-weight:800;color:#9a7138}
+.nav-dropdown a{gap:18px;white-space:normal;line-height:1.35}
+.title-accent{color:var(--gold);font-weight:500}
+.brand-subtitle{font-family:var(--font-display);font-weight:500;color:var(--gold)}
+
+/* Prepaid membership */
+.membership-page{align-items:start}
+.member-value{margin-top:46px;padding:28px;border:1px solid rgba(255,255,255,.24);border-radius:22px;background:rgba(255,255,255,.08)}
+.member-value small,.member-value span{display:block;color:#dbe9e5}
+.member-value strong{display:block;margin:10px 0;font:500 clamp(44px,5vw,72px)/1 var(--font-display);color:#e2bd78}
+.member-copy .button{margin-top:24px}
+.membership-steps{display:grid;grid-template-columns:repeat(3,1fr);padding:0 7vw;background:#f5fbfa}
+.membership-steps article{min-height:270px;padding:46px 34px 40px 0;border-top:1px solid var(--line)}
+.membership-steps article+article{padding-left:34px;border-left:1px solid var(--line)}
+.membership-steps span{font-size:12px;font-weight:800;color:#b0874a}
+.membership-steps h3{margin:58px 0 14px;font-size:34px}
+.membership-steps p{max-width:360px;color:#49615c;font-size:15px;line-height:1.7}
+.simple-cta>p:not(.kicker){max-width:620px;margin:-16px auto 30px;color:#4a625d;font-size:15px;line-height:1.7}
+@media(max-width:800px){
+  .nav-dropdown{width:min(340px,calc(100vw - 32px))}
+  .membership-steps{grid-template-columns:1fr;padding:0 24px}
+  .membership-steps article,.membership-steps article+article{min-height:0;padding:34px 0;border-left:0;border-top:1px solid var(--line)}
+  .membership-steps h3{margin:24px 0 12px}
+}
