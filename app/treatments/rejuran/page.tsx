@@ -27,6 +27,12 @@ export default function RejuranPage() {
       <div><p className="kicker light">Clinical consultation required</p><h2>Precision-led<br />skin rejuvenation.</h2><p>Your practitioner will review your medical history, concerns and treatment goals before confirming the appropriate amount and course.</p><a className="button light-button" href="/book?treatment=Rejuran">Book an assessment</a></div>
     </section>
 
+    <section className="outcome-illustration">
+      <div className="section-heading"><div><p className="kicker">Illustrative treatment focus</p><h2>Texture, balance<br />and hydration.</h2></div><p>This original educational image demonstrates the type of skin-quality progression a treatment plan may focus on. It is not a patient before-and-after image and does not promise a result.</p></div>
+      <div className="skin-outcome-image" role="img" aria-label="Educational illustration of gradual skin texture and hydration change" />
+      <div className="outcome-labels"><span>01 · Texture assessment</span><span>02 · Progressive course</span><span>03 · Individual response</span></div>
+    </section>
+
     <section className="course-pricing" id="prices">
       <div className="section-heading"><div><p className="kicker">Session pricing</p><h2>Choose a single session<br />or planned course.</h2></div><p>All prices are in AUD. The 4 ml and 6 ml options are total course volumes delivered across two and three sessions respectively.</p></div>
       <div className="course-grid">{options.map((option,index)=><article key={option.amount}><span>0{index+1}</span><small>{option.amount}</small><h3>{option.name}</h3><strong>{option.price}</strong><p>{option.detail}</p><a href={`/book?treatment=${encodeURIComponent(`Rejuran ${option.name}`)}`}>Request appointment ↗</a></article>)}</div>
