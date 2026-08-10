@@ -30,7 +30,7 @@ const faqs = [
   ["Do I need a consultation?", "A skin assessment forms part of professional treatment planning. Some advanced treatments may require a separate consultation before the appointment."],
   ["Can I add LED or a peel?", "Selected add-ons may be appropriate, but this depends on your skin, the main facial and treatment compatibility."],
   ["How often should I book a facial?", "Frequency varies with the treatment, your skin response, goals and home routine. Your practitioner can recommend a realistic schedule."],
-  ["What does member price mean?", "Member prices apply to eligible VenuX members. Please review the Membership page or ask the clinic to confirm your eligibility."],
+  ["What does member price mean?", "VenuX Membership starts with a prepaid balance from AUD $1,000 and includes 20% off all VenuX treatments."],
 ] as const;
 
 const idFor = (category:string) => category.toLowerCase().replaceAll(" & ", "-").replaceAll(" ", "-");
@@ -47,7 +47,7 @@ export default function FacialTreatments(){ return <main><Header />
 
   <section className="facial-menu" id="menu"><div className="facial-section-title"><p className="kicker">Complete treatment menu</p><h2>Find your<br/><i>facial.</i></h2><p>All prices are in AUD. Treatment suitability is confirmed before your appointment.</p></div><div className="facial-menu-key"><span>Treatment</span><span>Duration</span><span>Regular</span><span>Member</span><span></span></div><div className="facial-groups">{facialPriceGroups.map(group=><section id={idFor(group.category)} key={group.number}><header><span>{group.number}</span><h3>{group.category}</h3></header>{group.items.map(([name,time,regular,member])=><div className="facial-row" key={name}><strong>{name}</strong><small>{time}</small><b>${regular}</b><em>${member}</em><a href="/book" aria-label={`Book ${name}`}>Book ↗</a></div>)}</section>)}<section id="add-ons"><header><span>07</span><h3>Add-ons</h3></header>{addOnPrices.map(([name,regular,member])=><div className="facial-row" key={name}><strong>{name}</strong><small>—</small><b>${regular}</b><em>${member}</em><a href="/book" aria-label={`Book ${name}`}>Add ↗</a></div>)}</section></div></section>
 
-  <section className="facial-journey"><div className="facial-section-title"><p className="kicker">Your appointment</p><h2>Professional care,<br/><i>step by step.</i></h2></div><div>{steps.map(([number,title,text])=><article key={number}><span>{number}</span><h3>{title}</h3><p>{text}</p></article>)}</div></section>
+  <section className="facial-journey"><div className="facial-section-title"><p className="kicker">Common treatment process</p><h2>A consistent clinic process,<br/><i>personalised to your skin.</i></h2></div><div>{steps.map(([number,title,text])=><article key={number}><span>{number}</span><h3>{title}</h3><p>{text}</p></article>)}</div></section>
 
   <section className="facial-faq" id="questions"><div className="facial-section-title"><p className="kicker">Question & answer</p><h2>Before you<br/><i>book.</i></h2></div><div className="faq-list">{faqs.map(([q,a],index)=><details key={q}><summary><span>0{index+1}</span><strong>{q}</strong><i>＋</i></summary><p>{a}</p></details>)}</div></section>
 
