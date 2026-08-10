@@ -68,9 +68,10 @@ export function Header() {
 
       <nav className="category-nav" aria-label="Treatment categories">
         {navigation.map((category) => <div className="nav-category" key={category.label}>
-          <a className="nav-category-link" href={category.href}>{category.label}<span>⌄</span></a>
+          <button className="nav-category-link" type="button" aria-haspopup="true">{category.label}<span>⌄</span></button>
           <div className="nav-dropdown">
             <small>{category.menuLabel}</small>
+            <a className="nav-view-all" href={category.href}>View all {category.label}<span>↗</span></a>
             {category.items.map(([label, href]) => <a href={href} key={label}>{label}<span>↗</span></a>)}
           </div>
         </div>)}
