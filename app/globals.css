@@ -559,3 +559,43 @@ body{background:#fff;color:#003b36}
   .poster-copy{width:100%}
   .hero-promotion{width:100%;max-width:440px}
 }
+
+
+/* Compact site-wide scale */
+h1{font-size:clamp(48px,6.4vw,88px)}
+h2{font-size:clamp(40px,4.8vw,64px)}
+.page-hero{padding-top:72px;padding-bottom:66px}
+.page-hero h1{font-size:clamp(50px,6vw,80px)}
+.poster-hero{min-height:650px}
+.popular,.concerns,.locations-section,.brand-proof,.care-path,.faq-section,.simple-cta,.product-next,.retail-catalogue,.course-pricing,.dual-price-section,.outcome-illustration{padding-top:78px;padding-bottom:78px}
+.section-heading{margin-bottom:42px}
+.popular-card{min-height:0}
+.popular-product-photo{height:235px}
+.product-standard article{min-height:190px}
+.standards-strip article{min-height:180px}
+.service-card{min-height:460px;padding:30px}
+.service-number{margin-bottom:46px}
+.service-card h3{font-size:36px}
+
+/* Compact Rejuran branded poster */
+.rejuran-brand-poster{min-height:390px;display:grid;grid-template-columns:.9fr 1.1fr;background:#003b36;color:#fff}
+.rejuran-wordmark{position:relative;display:flex;flex-direction:column;justify-content:flex-end;padding:44px;background:linear-gradient(145deg,rgba(0,59,54,.18),rgba(0,59,54,.78)),url("/venux-popular-triptych-v2.svg") center center/300% 100% no-repeat}
+.rejuran-wordmark>span{font:600 clamp(48px,6vw,84px)/.9 var(--font-display);letter-spacing:.02em;color:#fff}
+.rejuran-wordmark>small{margin-top:12px;color:#e6cf9c;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.16em}
+.rejuran-wordmark>b{display:inline-flex;align-self:flex-start;margin-top:24px;padding:10px 14px;border:1px solid rgba(255,255,255,.35);border-radius:99px;color:#fff;font-size:13px}
+.rejuran-poster-copy{display:flex;flex-direction:column;justify-content:center;padding:48px 6vw}
+.rejuran-poster-copy h2{margin:0 0 18px;color:#fff}
+.rejuran-poster-copy p:not(.kicker){max-width:600px;margin:0 0 24px;color:#d7e5e1;font-size:14px;line-height:1.7}
+.rejuran-poster-copy .button{align-self:flex-start}
+
+@media(max-width:800px){
+  h1{font-size:48px}
+  h2{font-size:40px}
+  .page-hero{padding:56px 24px}
+  .page-hero h1{font-size:48px}
+  .poster-hero{min-height:0}
+  .popular,.concerns,.locations-section,.brand-proof,.care-path,.faq-section,.simple-cta,.product-next,.retail-catalogue,.course-pricing,.dual-price-section,.outcome-illustration{padding-top:62px;padding-bottom:62px}
+  .rejuran-brand-poster{grid-template-columns:1fr}
+  .rejuran-wordmark{min-height:300px;padding:30px}
+  .rejuran-poster-copy{padding:42px 24px}
+}
