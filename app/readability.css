@@ -91,3 +91,53 @@ a.header-cta {
     font-size: 11px;
   }
 }
+
+
+/* Footer contrast overrides: keep text readable on the deep-green background. */
+.site-footer,
+.site-footer p,
+.site-footer li,
+.site-footer a,
+.site-footer b,
+.site-footer strong {
+  color: #f5fbfa;
+}
+
+.site-footer .footer-identity > p {
+  color: #d6e5e1;
+  font-size: 15px;
+  line-height: 1.75;
+}
+
+.site-footer .footer-column > span {
+  color: #e3bd76;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.site-footer .footer-column > a,
+.site-footer .footer-column b {
+  color: #ffffff;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.site-footer .footer-social b,
+.site-footer .footer-visit b {
+  font-size: 21px;
+}
+
+.site-footer .footer-social small,
+.site-footer .footer-visit small,
+.site-footer .footer-star-brand small {
+  color: #d1e1dd;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.site-footer .footer-bottom,
+.site-footer .footer-bottom small {
+  color: #c6d9d4;
+  font-size: 11px;
+  line-height: 1.6;
+}
