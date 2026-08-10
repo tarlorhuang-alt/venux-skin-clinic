@@ -5,6 +5,7 @@ const navigation = [
     href: "/treatments#skin",
     items: [
       ["Facial Treatments", "/treatments/facial-treatments"],
+      ["Rejuran® Skin Rejuvenation", "/treatments/rejuran"],
       ["CO₂ Laser", "/treatments/laser-facial"],
       ["Lutronic Picosecond", "/treatments/lutronic-picosecond"],
       ["IPL Photorejuvenation", "/treatments/ipl"],
@@ -20,6 +21,8 @@ const navigation = [
     menuLabel: "Body treatments",
     href: "/treatments#body",
     items: [
+      ["Professional Waxing", "/treatments/hair-removal"],
+      ["Laser Hair Removal", "/treatments/hair-removal"],
       ["Body Consultation", "/book"],
       ["Body Contouring", "/book"],
       ["Skin Tightening", "/book"],
@@ -32,7 +35,7 @@ const navigation = [
     menuLabel: "Cosmetic aesthetics",
     href: "/treatments#aesthetics",
     items: [
-      ["Rejuran® Skin Rejuvenation · New", "/book"],
+      ["Rejuran® Skin Rejuvenation · New", "/treatments/rejuran"],
       ["Lines & Wrinkles", "/book"],
       ["Facial Volume, Definition & Structure", "/book"],
       ["Hydration & Restoration", "/treatments/skin-booster"],
@@ -63,7 +66,7 @@ export function Header() {
     <header className="site-header category-header">
       <a className="brand" href="/" aria-label="VenuX Skin Clinic home">
         <span className="brand-mark">V</span>
-        <span>VenuX <span className="brand-subtitle">Skin Clinic</span></span>
+        <span className="brand-name"><span className="brand-spark" aria-hidden="true">✦</span> VenuX <span className="brand-subtitle">Skin Clinic</span> <span className="brand-spark brand-spark-tail" aria-hidden="true">✧ ✦</span></span>
       </a>
 
       <nav className="category-nav" aria-label="Treatment categories">
