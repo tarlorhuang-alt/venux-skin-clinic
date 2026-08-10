@@ -23,9 +23,13 @@ export default function RejuranPage() {
   return <main><Header />
     <PageHero kicker="Polynucleotide skin rejuvenation" title="Rejuran®." italic="A considered skin course." intro="A consultation-led treatment pathway for clients seeking support for skin quality, texture and hydration. Individual results and treatment plans vary." />
 
-    <section className="rejuran-brand-poster">
-      <div className="rejuran-wordmark"><span>REJURAN®</span><small>Polynucleotide skin rejuvenation</small><b>2 ml · $650</b></div>
-      <div className="rejuran-poster-copy"><p className="kicker light">Clinical consultation required</p><h2>Repair. Refine.<br />Rejuvenate.</h2><p>Your practitioner reviews your medical history, concerns and goals before confirming the appropriate amount and course.</p><a className="button light-button" href="/book?treatment=Rejuran">Book an assessment</a></div>
+    <section className="rejuran-brand-poster rejuran-campaign-poster" aria-label="Rejuran clinic campaign">
+      <div className="rejuran-poster-stage">
+        <div className="rejuran-brand-lockup"><span>REJURAN®</span><small>Polynucleotide skin rejuvenation</small></div>
+        <div className="rejuran-packshot" aria-hidden="true"><i className="rejuran-box"><b>REJURAN</b><small>Classic · 2 mL</small></i><i className="rejuran-vial"><b>R</b></i></div>
+        <b className="rejuran-price-pill">2 ml · $650</b>
+      </div>
+      <div className="rejuran-poster-copy"><p className="kicker light">Clinical consultation required</p><h2>Repair. Refine.<br />Rejuvenate.</h2><p>A VenuX campaign presentation for Rejuran®. Your practitioner reviews medical history, concerns and goals before confirming product, amount and course.</p><a className="button light-button" href="/book?treatment=Rejuran">Book an assessment</a></div>
     </section>
 
     <section className="outcome-illustration">
