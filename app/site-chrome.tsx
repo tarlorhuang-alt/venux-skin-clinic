@@ -1,14 +1,15 @@
 const navigation = [
   {
     label: "Skin",
+    menuLabel: "Skin treatments",
     href: "/treatments#skin",
     items: [
       ["Facial Treatments", "/treatments/facial-treatments"],
       ["CO₂ Laser", "/treatments/laser-facial"],
       ["Lutronic Picosecond", "/treatments/lutronic-picosecond"],
-      ["HIFU Focused Ultrasound", "/treatments/hifu-focused-ultrasound"],
-      ["IPL", "/treatments/ipl"],
+      ["IPL Photorejuvenation", "/treatments/ipl"],
       ["Ultherapy®", "/treatments/hifu-ultherapy"],
+      ["HIFU Focused Ultrasound", "/treatments/hifu-focused-ultrasound"],
       ["RF Microneedling", "/treatments/rf-microneedling"],
       ["DMK Enzyme Therapy", "/treatments/dmk-enzyme-therapy"],
       ["LED Light Therapy", "/treatments/led-light-therapy"],
@@ -16,25 +17,35 @@ const navigation = [
   },
   {
     label: "Body",
+    menuLabel: "Body treatments",
     href: "/treatments#body",
     items: [
-      ["Body Consultation", "/treatments#body"],
-      ["Body Treatment Planning", "/treatments#body"],
-      ["Book an Assessment", "/book"],
+      ["Body Consultation", "/book"],
+      ["Body Contouring", "/book"],
+      ["Skin Tightening", "/book"],
+      ["Stretch Marks & Scarring", "/book"],
+      ["Personalised Body Plan", "/book"],
     ],
   },
   {
     label: "Aesthetics",
+    menuLabel: "Cosmetic aesthetics",
     href: "/treatments#aesthetics",
     items: [
-      ["Aesthetic Consultation", "/treatments#aesthetics"],
-      ["Skin Booster", "/treatments/skin-booster"],
-      ["Skin Quality Consultation", "/treatments#aesthetics"],
-      ["Personalised Treatment Plan", "/book"],
+      ["Rejuran® Skin Rejuvenation · New", "/book"],
+      ["Lines & Wrinkles", "/book"],
+      ["Facial Volume, Definition & Structure", "/book"],
+      ["Hydration & Restoration", "/treatments/skin-booster"],
+      ["Bio Remodelling", "/book"],
+      ["Hyperhidrosis", "/book"],
+      ["Lip Volume & Definition", "/book"],
+      ["PDO Mono Threads", "/book"],
+      ["Skin Rejuvenation", "/book"],
     ],
   },
   {
     label: "Methods",
+    menuLabel: "Treatment methods",
     href: "/treatments#methods",
     items: [
       ["IPL · Laser & Light", "/treatments/ipl"],
@@ -52,14 +63,14 @@ export function Header() {
     <header className="site-header category-header">
       <a className="brand" href="/" aria-label="VenuX Skin Clinic home">
         <span className="brand-mark">V</span>
-        <span>VenuX <em>Skin Clinic</em></span>
+        <span>VenuX <span className="brand-subtitle">Skin Clinic</span></span>
       </a>
 
       <nav className="category-nav" aria-label="Treatment categories">
         {navigation.map((category) => <div className="nav-category" key={category.label}>
           <a className="nav-category-link" href={category.href}>{category.label}<span>⌄</span></a>
           <div className="nav-dropdown">
-            <small>{category.label} treatments</small>
+            <small>{category.menuLabel}</small>
             {category.items.map(([label, href]) => <a href={href} key={label}>{label}<span>↗</span></a>)}
           </div>
         </div>)}
@@ -78,7 +89,7 @@ export function Footer() {
     <footer className="site-footer">
       <div className="footer-identity">
         <a className="footer-star-brand" href="/" aria-label="VenuX Skin Clinic home">
-          <span className="star-mark" aria-hidden="true"><i>✦</i><b>V</b><em>✦</em></span>
+          <span className="star-mark" aria-hidden="true"><span>✦</span><b>V</b><span>✦</span></span>
           <span><strong>VenuX</strong><small>Skin Clinic</small></span>
         </a>
         <p>Personalised skin care and aesthetic treatments, thoughtfully delivered in Sydney.</p>
@@ -117,7 +128,7 @@ export function PageHero({ kicker, title, italic, intro }: { kicker: string; tit
   return (
     <section className="page-hero">
       <p className="kicker">{kicker}</p>
-      <h1>{title}<br /><i>{italic}</i></h1>
+      <h1>{title}<br /><span className="title-accent">{italic}</span></h1>
       <p>{intro}</p>
     </section>
   );
