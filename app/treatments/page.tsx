@@ -30,6 +30,9 @@ const faqs = [
 ] as const;
 
 const treatmentLinks: Record<string, string> = {
+  "Rejuran® Skin Rejuvenation": "/treatments/rejuran",
+  "Professional Waxing": "/treatments/hair-removal",
+  "Laser Hair Removal": "/treatments/hair-removal",
   "CO₂ Laser": "/treatments/laser-facial",
   "Lutronic Picosecond": "/treatments/lutronic-picosecond",
   "HIFU Focused Ultrasound": "/treatments/hifu-focused-ultrasound",
