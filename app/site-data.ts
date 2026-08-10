@@ -4,14 +4,14 @@ export const services = [
     category: "Skin Treatments",
     eyebrow: "Skin expertise",
     description: "Personalised facials and skin therapies designed around your concerns, comfort and long-term goals.",
-    items: ["Facial Treatments", "CO₂ Laser", "Lutronic Picosecond", "IPL Photorejuvenation", "Ultherapy®", "HIFU Focused Ultrasound", "RF Microneedling", "DMK Skin Revision", "LED Light Therapy"],
+    items: ["Facial Treatments", "Rejuran® Skin Rejuvenation", "CO₂ Laser", "Lutronic Picosecond", "IPL Photorejuvenation", "Ultherapy®", "HIFU Focused Ultrasound", "RF Microneedling", "DMK Skin Revision", "LED Light Therapy"],
   },
   {
     id: "body",
     category: "Body Treatments",
     eyebrow: "Body care",
     description: "Begin with an individual assessment so recommendations can be matched to your body concerns and suitability.",
-    items: ["Body Consultation", "Body Contouring", "Skin Tightening", "Stretch Marks & Scarring", "Personalised Body Plan"],
+    items: ["Professional Waxing", "Laser Hair Removal", "Body Consultation", "Body Contouring", "Skin Tightening", "Stretch Marks & Scarring", "Personalised Body Plan"],
   },
   {
     id: "aesthetics",
