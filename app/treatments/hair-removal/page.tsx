@@ -22,6 +22,20 @@ const areas = [
   ["Full legs + Brazilian + underarms", "$155", "$155"],
 ] as const;
 
+const waxCourses = [
+  ["Upper lip or chin", "$20", "$100"],
+  ["Full face", "$65", "$325"],
+  ["Underarms", "$25", "$125"],
+  ["Standard bikini", "$30", "$150"],
+  ["Brazilian", "$65", "$325"],
+  ["Half arms", "$45", "$225"],
+  ["Full arms", "$65", "$325"],
+  ["Half legs", "$55", "$275"],
+  ["Full legs", "$85", "$425"],
+  ["Chest or back", "$75", "$375"],
+  ["Full legs + Brazilian + underarms", "$155", "$775"],
+] as const;
+
 const questions = [
   ["Which option should I choose?", "Waxing removes hair from the root for an immediately smooth finish. Laser is designed for progressive hair reduction and requires a suitability assessment and a course of sessions."],
   ["How long should hair be before waxing?", "Hair generally needs enough length for the wax to grip. The clinic will provide preparation advice when your booking is confirmed."],
@@ -44,6 +58,14 @@ export default function HairRemovalPage() {
         {areas.map(([area,waxing,laser]) => <div className="dual-price-row" role="row" key={area}><span>{area}</span><strong>{waxing}</strong><strong>{laser}</strong></div>)}
       </div>
       <p className="price-note">Prices are current VenuX launch prices and may change. Laser is not performed over eyebrows or unsuitable areas. Final suitability and treatment area are confirmed by the clinic.</p>
+      <div className="wax-course-block">
+        <div className="sub-price-heading"><div><p className="kicker">Wax maintenance courses</p><h3>Single visit or six sessions.</h3></div><span>Prepaid course · same treatment area</span></div>
+        <div className="wax-course-table" role="table" aria-label="Waxing single-session and six-session prices">
+          <div className="wax-course-row wax-course-head" role="row"><strong>Waxing area</strong><strong>Single</strong><strong>6 sessions</strong></div>
+          {waxCourses.map(([area,single,course])=><div className="wax-course-row" role="row" key={area}><span>{area}</span><strong>{single}</strong><strong>{course}</strong></div>)}
+        </div>
+        <p className="price-note">Six-session launch packages include the sixth visit at no additional charge when five sessions are prepaid. Packages apply to the same area, are non-transferable and expire 12 months from purchase. Booking and cancellation conditions apply.</p>
+      </div>
     </section>
 
     <section className="faq-section" id="questions">
