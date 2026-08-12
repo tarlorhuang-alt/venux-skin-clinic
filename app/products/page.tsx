@@ -14,11 +14,8 @@ const productGroups = [
     tone: "sothys",
     intro: "A curated home-care edit for hydration, comfort and daily skin support.",
     products: [
-      { name: "Hydra-plumping Mask", size: "50 ml", type: "Hydration mask", description: "A weekly mask option for skin that feels dehydrated or in need of added comfort.", source: "https://www.sothys.com.au/en/products/face/masks/hydra-plumping-mask" },
-      { name: "Hydra Protective Serum", size: "50 ml", type: "Hydrating serum", description: "A lightweight serum option designed to support hydration and daily protection.", source: "https://www.sothys.com.au/en/products/face/serums/hydra-protective-serum" },
-      { name: "Hydra Protective Cream", size: "50 ml", type: "Moisturising cream", description: "Daily moisturising care for a comfortable, hydrated skin routine.", source: "https://www.sothys.com.au/en/products/face/creams/hydra-protective-cream" },
-      { name: "Hydrating Intensive Serum", size: "50 ml", type: "Intensive serum", description: "Targeted intensive hydration for a personalised professional home-care plan.", source: "https://www.sothys.com.au/en/products/face/serums/hydrating-intensive-serum" },
-      { name: "Regenerative Solution", size: "Clinic confirmed", type: "Targeted serum", description: "A targeted product selected according to individual skin needs and professional advice.", source: "https://www.sothys.com.au/en/products/face/serums/regenerative-solution" },
+      { name: "Hydra-plumping Mask", size: "50 ml", type: "Hydration mask", price: "Clinic-confirmed AU price", priceNote: "The Sothys Australia product page does not publish an AUD retail price.", image: "https://www.sothys.com.au/images/HYDRA22-mask-hydra-1_5035_800.jpg", description: "A weekly mask option for skin that feels dehydrated or in need of added comfort.", source: "https://www.sothys.com.au/en/products/face/masks/hydra-plumping-mask" },
+      { name: "Hydra Protective Serum", size: "50 ml", type: "Hydrating serum", price: "Clinic-confirmed AU price", priceNote: "The Sothys Australia product page does not publish an AUD retail price.", image: "https://www.sothys.com.au/images/serum-hydra-protecteur-peaux-normales-mixtes-sothys-paris-2026-1_6548_800.jpg", description: "A lightweight serum option designed to support hydration and daily protection.", source: "https://www.sothys.com.au/en/products/face/serums/hydra-protective-serum" },
     ],
   },
   {
@@ -27,11 +24,8 @@ const productGroups = [
     tone: "dmk",
     intro: "DMK products are selected as part of a professionally planned skin revision pathway.",
     products: [
-      { name: "Herb & Mineral Mist", size: "60 ml / 120 ml", type: "Hydrating mist", description: "A home-care mist used within selected DMK routines and prescribed protocols.", source: "https://www.dmkskin.com.au/product-Herb-and-mineral-mist" },
-      { name: "Beta Gel", size: "30 ml", type: "Professional serum", description: "A professional home-care serum supplied following a DMK skin consultation.", source: "https://www.dmkskin.com.au/product-beta-gel" },
-      { name: "Fine Line Crème", size: "30 ml", type: "Targeted crème", description: "Targeted home care considered for selected areas within an individual DMK plan.", source: "https://www.dmkskin.com.au/product-fine-line-creme" },
-      { name: "Eye Tone", size: "15 ml", type: "Eye care", description: "Professional eye-area home care selected according to assessment and routine.", source: "https://www.dmkskin.com.au/product-eye-tone" },
-      { name: "Acu Crème", size: "15 ml / 50 ml", type: "Professional crème", description: "A DMK crème supplied only when appropriate for the client’s prescribed home-care plan.", source: "https://www.dmkskin.com.au/product-acu-creme" },
+      { name: "Herb & Mineral Mist", size: "120 ml", type: "Hydrating mist", price: "$89 current stockist price", priceNote: "Current Australian authorised-stockist price; VenuX confirms its own current selling price before purchase.", image: "https://thebeautyshop.com.au/cdn/shop/files/dmk-herb-mineral-mist-120ml-793573633002-341743.jpg?width=800", description: "A home-care mist used within selected DMK routines and prescribed protocols.", source: "https://thebeautyshop.com.au/products/herb-mineral-mist-120ml" },
+      { name: "Beta Gel", size: "30 ml", type: "Professional serum", price: "$169 current stockist price", priceNote: "Current Australian authorised-stockist price; professional prescription is required.", image: "https://thebeautyshop.com.au/cdn/shop/files/dmk-beta-gel-30ml-793573632869-910066.jpg?width=800", description: "A professional home-care serum supplied following a DMK skin consultation.", source: "https://thebeautyshop.com.au/products/beta-gel-30ml" },
     ],
   },
 ] as const;
@@ -62,14 +56,15 @@ export default function ProductsPage() {
         </div>
         <div className="retail-grid">
           {group.products.map((product, index) => <article className="retail-card" key={product.name}>
-            <div className="product-pack" aria-hidden="true"><span>{group.brand}</span><b>{String(index + 1).padStart(2, "0")}</b></div>
+            <div className="product-pack official-product-image"><img src={product.image} alt={`${group.brand} ${product.name}`} /><b>{String(index + 1).padStart(2, "0")}</b></div>
             <div className="retail-card-copy">
               <p className="product-type">{product.type}</p>
               <h3>{product.name}</h3>
               <span className="product-size">{product.size}</span>
+              <strong className="product-price">{product.price}</strong>
               <p>{product.description}</p>
-              {group.brand === "DMK" ? <small>Professional consultation required</small> : <small>Price and availability confirmed by clinic</small>}
-              <div className="product-actions"><a className="button dark" href={`/book?product=${encodeURIComponent(product.name)}`}>Enquire to purchase</a><a href={product.source} target="_blank" rel="noreferrer">Official details ↗</a></div>
+              <small>{product.priceNote}</small>
+              <div className="product-actions"><a className="button dark" href={`/book?product=${encodeURIComponent(product.name)}`}>Enquire to purchase</a><a href={product.source} target="_blank" rel="noreferrer">{group.brand === "DMK" ? "Authorised stockist source ↗" : "Official details ↗"}</a></div>
             </div>
           </article>)}
         </div>

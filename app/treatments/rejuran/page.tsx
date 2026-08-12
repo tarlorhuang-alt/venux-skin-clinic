@@ -7,9 +7,9 @@ export const metadata: Metadata = {
 };
 
 const options = [
-  { amount: "2 ml", name: "Single session", price: "$650", detail: "A single consultation-led session for a selected treatment area." },
-  { amount: "4 ml total", name: "Two-session course", price: "$1,200", detail: "Two 2 ml sessions planned around your assessment and treatment goals." },
-  { amount: "6 ml total", name: "Three-session course", price: "$1,800", detail: "Three 2 ml sessions delivered as a personalised treatment course." },
+  { amount: "2 ml", name: "Single session", price: "$650", member: "$553", detail: "A single consultation-led session for a selected treatment area." },
+  { amount: "4 ml total", name: "Two-session course", price: "$1,200", member: "$1,020", detail: "Two 2 ml sessions planned around your assessment and treatment goals." },
+  { amount: "6 ml total", name: "Three-session course", price: "$1,800", member: "$1,530", detail: "Three 2 ml sessions delivered as a personalised treatment course." },
 ] as const;
 
 const questions = [
@@ -25,9 +25,9 @@ export default function RejuranPage() {
 
     <section className="rejuran-brand-poster rejuran-campaign-poster" aria-label="Rejuran clinic campaign">
       <div className="rejuran-poster-stage">
-        <div className="rejuran-brand-lockup"><span>REJURAN®</span><small>Polynucleotide skin rejuvenation</small></div>
+        <div className="rejuran-brand-lockup supplied-rejuran-lockup"><img src="/rejuran-brand-logo.png" alt="Rejuran TrueSkin Essence" /><small>Polynucleotide skin rejuvenation</small></div>
         <div className="rejuran-packshot" aria-hidden="true"><i className="rejuran-box"><b>REJURAN</b><small>Classic · 2 mL</small></i><i className="rejuran-vial"><b>R</b></i></div>
-        <b className="rejuran-price-pill">2 ml · $650</b>
+        <b className="rejuran-price-pill">2 ml · $650 <small>Member price $553 · 15% off</small></b>
       </div>
       <div className="rejuran-poster-copy"><p className="kicker light">Clinical consultation required</p><h2>Repair. Refine.<br />Rejuvenate.</h2><p>A VenuX campaign presentation for Rejuran®. Your practitioner reviews medical history, concerns and goals before confirming product, amount and course.</p><a className="button light-button" href="/book?treatment=Rejuran">Book an assessment</a></div>
     </section>
@@ -39,8 +39,8 @@ export default function RejuranPage() {
     </section>
 
     <section className="course-pricing" id="prices">
-      <div className="section-heading"><div><p className="kicker">Session pricing</p><h2>Choose a single session<br />or planned course.</h2></div><p>All prices are in AUD. The 4 ml and 6 ml options are total course volumes delivered across two and three sessions respectively.</p></div>
-      <div className="course-grid">{options.map((option,index)=><article key={option.amount}><span>0{index+1}</span><small>{option.amount}</small><h3>{option.name}</h3><strong>{option.price}</strong><p>{option.detail}</p><a href={`/book?treatment=${encodeURIComponent(`Rejuran ${option.name}`)}`}>Request appointment ↗</a></article>)}</div>
+      <div className="section-heading"><div><p className="kicker">Session pricing</p><h2>Choose a single session<br />or planned course.</h2></div><p>All prices are in AUD. Rejuran VenuX member prices are 15% off regular price. The 4 ml and 6 ml options are total course volumes delivered across two and three sessions respectively.</p></div>
+      <div className="course-grid">{options.map((option,index)=><article key={option.amount}><span>0{index+1}</span><small>{option.amount}</small><h3>{option.name}</h3><strong>{option.price}</strong><em className="member-price-badge">VenuX member price · {option.member} · 15% off</em><p>{option.detail}</p><a href={`/book?treatment=${encodeURIComponent(`Rejuran ${option.name}`)}`}>Request appointment ↗</a></article>)}</div>
       <div className="clinical-notice"><div><span>French hydration treatment</span><h3>Private consultation</h3></div><p>VenuX also offers a consultation for French skin hydration and remodelling options. Brand, suitability and a personalised quotation are discussed privately with an appropriately qualified practitioner in line with Australian advertising requirements.</p><a href="/book?treatment=French%20Skin%20Hydration%20Consultation" className="text-link">Book consultation ↘</a></div>
     </section>
 

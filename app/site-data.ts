@@ -59,10 +59,10 @@ export const facialPriceGroups = [
     number: "04",
     category: "DMK Skin Revision",
     items: [
-      ["DMK Enzyme Therapy Level 1", "90 min", 210, 168],
-      ["DMK Enzyme Therapy Level 2", "90 min", 235, 188],
-      ["DMK Enzyme Therapy Level 3", "90 min", 280, 224],
-      ["DMK Enzyme Therapy Level 4", "90 min", 310, 248],
+      ["DMK Enzyme Therapy Level 1", "90 min", 210, 179],
+      ["DMK Enzyme Therapy Level 2", "90 min", 235, 200],
+      ["DMK Enzyme Therapy Level 3", "90 min", 280, 238],
+      ["DMK Enzyme Therapy Level 4", "90 min", 310, 264],
     ],
   },
   {

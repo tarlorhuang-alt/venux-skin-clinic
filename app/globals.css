@@ -683,3 +683,33 @@ h2{font-size:clamp(40px,4.8vw,64px)}
   .hero-promotion a{margin-top:10px;font-size:10px}
   .poster-caption{display:none}
 }
+
+/* 2026-08-11 pricing, supplied campaign media and booking request polish */
+.popular-product-photo.supplied-photo{position:relative;overflow:hidden;background:#edf2ef}
+.popular-product-photo.supplied-photo img{width:100%;height:100%;object-fit:cover;object-position:center}
+.popular-product-photo.supplied-photo[href*="hifu"] img,.popular-product-photo.supplied-photo[href*="rejuran"] img{object-fit:contain;background:#eef0ef}
+.popular-product-photo.supplied-photo>span{position:absolute;left:16px;top:16px;display:grid;place-items:center;width:36px;height:36px;border-radius:50%;background:rgba(0,59,54,.9);color:#fff;font-weight:800}
+.ultherapy-line-guide{display:grid;grid-template-columns:1.15fr repeat(3,1fr);margin-top:24px;border:1px solid var(--line);border-radius:16px;overflow:hidden;background:#fff}
+.ultherapy-line-guide>span,.ultherapy-line-guide>strong{display:flex;min-height:76px;align-items:center;padding:16px 18px}
+.ultherapy-line-guide>span{background:#073d3c;color:#fff;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.12em}
+.ultherapy-line-guide>strong{justify-content:space-between;gap:10px;border-left:1px solid var(--line);color:#244943;font-size:12px}
+.ultherapy-line-guide b{color:#a77e3f;font-size:16px;white-space:nowrap}
+.supplied-rejuran-lockup img{width:min(320px,76%);height:auto;padding:12px;background:#fff;border-radius:12px;object-fit:contain}
+.supplied-rejuran-lockup>small{color:#dce8f7}
+.rejuran-price-pill{display:flex;flex-direction:column;gap:3px}.rejuran-price-pill small{font-size:9px;color:#d9e7fa}
+.member-price-badge{display:inline-flex;align-self:flex-start;margin:10px 0 4px;padding:8px 11px;border-radius:99px;background:#e9f3ef;color:#07504b;font-size:11px;font-style:normal;font-weight:800}
+.supplied-waxing-visual{position:relative;min-height:650px;padding:0!important;overflow:hidden;background:#071f1c}
+.supplied-waxing-visual>img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.supplied-waxing-visual:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(3,35,31,.88) 0%,rgba(3,35,31,.56) 42%,rgba(3,35,31,.08) 72%)}
+.waxing-visual-overlay{position:relative;z-index:2;align-self:center;width:min(650px,52%);padding:76px 7vw;color:#fff}
+.waxing-location-ribbon{position:absolute;z-index:3;left:7vw;right:7vw;bottom:28px;display:grid;grid-template-columns:1fr 1fr;max-width:850px;background:rgba(255,255,255,.94);backdrop-filter:blur(12px);color:#123f3b}
+.waxing-location-ribbon article{display:flex;flex-direction:column;padding:18px 22px}.waxing-location-ribbon article+article{border-left:1px solid rgba(0,59,54,.18)}
+.waxing-location-ribbon span{color:#a77e3f;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.13em}.waxing-location-ribbon strong{margin:6px 0 3px;font-size:15px}.waxing-location-ribbon small{font-size:11px;color:#4f6762}
+.booking-policy-check{display:flex!important;flex-direction:row!important;align-items:flex-start!important;gap:12px;padding:16px;border:1px solid var(--line);border-radius:12px;background:#f5faf8}.booking-policy-check input{width:18px!important;height:18px!important;min-height:0!important;margin:2px 0 0;flex:0 0 18px}.booking-policy-check span{font-size:12px;line-height:1.6;color:#38544f}.field-note{display:block;margin-top:6px;color:#5a706b;font-size:10px;line-height:1.5}.deposit-policy-list{display:grid;gap:8px;margin:16px 0 20px;padding:0;list-style:none}.deposit-policy-list li{font-size:11px;line-height:1.45;color:#38544f}.deposit-policy-list li:before{content:"✓";margin-right:8px;color:#a77e3f;font-weight:900}
+
+@media(max-width:800px){
+  .ultherapy-line-guide{grid-template-columns:1fr}.ultherapy-line-guide>strong{min-height:58px;border-left:0;border-top:1px solid var(--line)}
+  .supplied-waxing-visual{min-height:690px}.supplied-waxing-visual>img{object-position:62% center}.supplied-waxing-visual:after{background:linear-gradient(180deg,rgba(3,35,31,.2),rgba(3,35,31,.9) 62%)}
+  .waxing-visual-overlay{width:100%;align-self:flex-end;padding:260px 24px 210px}.waxing-location-ribbon{left:24px;right:24px;bottom:24px;grid-template-columns:1fr}.waxing-location-ribbon article{padding:13px 16px}.waxing-location-ribbon article+article{border-left:0;border-top:1px solid rgba(0,59,54,.18)}
+  .supplied-rejuran-lockup img{width:72%}
+}

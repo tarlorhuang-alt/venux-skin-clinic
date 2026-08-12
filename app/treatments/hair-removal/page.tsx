@@ -47,8 +47,10 @@ export default function HairRemovalPage() {
   return <main><Header />
     <PageHero kicker="Hair removal" title="Smooth skin." italic="Your choice of method." intro="Choose professional waxing for immediate smoothness or consultation-led laser hair removal for progressive reduction. VenuX uses the same single-session price for comparable areas." />
 
-    <section className="treatment-product-hero waxing-visual">
-      <div><p className="kicker light">Professional waxing</p><h2>Warm wax.<br />Precise technique.</h2><p>Performed with careful preparation, controlled application and considered aftercare for a polished clinic experience.</p><a className="button light-button" href="/book?treatment=Professional%20Waxing">Book waxing</a></div>
+    <section className="treatment-product-hero waxing-visual supplied-waxing-visual">
+      <img src="/waxing-clinic-hero.jpg" alt="Professional underarm waxing treatment" />
+      <div className="waxing-visual-overlay"><p className="kicker light">Professional waxing</p><h2>Warm wax.<br />Precise technique.</h2><p>Performed with careful preparation, controlled application and considered aftercare for a polished clinic experience.</p><a className="button light-button" href="/book?treatment=Professional%20Waxing">Book waxing</a></div>
+      <div className="waxing-location-ribbon"><article><span>01 · Top Ryde</span><strong>Shop 3002, Top Ryde City</strong><small>Ryde NSW 2112</small></article><article><span>02 · Sydney City</span><strong>515 Kent Street</strong><small>Sydney NSW 2000</small></article></div>
     </section>
 
     <section className="dual-price-section" id="prices">
