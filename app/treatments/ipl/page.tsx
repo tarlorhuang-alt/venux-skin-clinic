@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import { Footer, Header } from "../../site-chrome";
+import { getPriceMap, resolvePrice } from "../../../lib/pricing";
 import "./ipl.css";
 
 export const metadata: Metadata = {
@@ -33,12 +34,12 @@ const examples = [
 ] as const;
 
 const areas = [
-  ["Full face", "Pigmentation, visible redness and overall tone", "$229", "$183"],
-  ["Face + neck", "A broader treatment area for a more even transition", "$299", "$239"],
-  ["Face + neck + décolletage", "Comprehensive treatment across commonly sun-exposed areas", "$369", "$299"],
-  ["Décolletage", "Sun-related discolouration and visible redness", "$189", "$149"],
-  ["Hands", "Visible sun spots and uneven-looking tone", "$129", "$99"],
-  ["Spot treatment", "A small, practitioner-approved target area", "From $59", "From $49"],
+  ["Full face", "Pigmentation, visible redness and overall tone", 229, 183, false],
+  ["Face + neck", "A broader treatment area for a more even transition", 299, 239, false],
+  ["Face + neck + décolletage", "Comprehensive treatment across commonly sun-exposed areas", 369, 299, false],
+  ["Décolletage", "Sun-related discolouration and visible redness", 189, 149, false],
+  ["Hands", "Visible sun spots and uneven-looking tone", 129, 99, false],
+  ["Spot treatment", "A small, practitioner-approved target area", 59, 49, true],
 ] as const;
 
 const questions = [
@@ -50,7 +51,10 @@ const questions = [
   ["Is a patch test required?", "A patch test may be recommended depending on your skin, treatment area, medical history and planned parameters."],
 ] as const;
 
-export default function IplTreatmentPage() {
+export const dynamic = "force-dynamic";
+
+export default async function IplTreatmentPage() {
+  const prices = await getPriceMap();
   return <main><Header />
     <section className="ipl-hero">
       <div><a className="back-link" href="/treatments">← All treatments</a><p className="kicker">TriBella™ by Venus · IPL photorejuvenation</p><h1>Clearer tone.<br /><i>Considered care.</i></h1><p className="ipl-lead">Our IPL treatments are performed on the Venus Versa™ Pro—the platform behind TriBella™. This page focuses on IPL photorejuvenation, the tone-correcting step within the three-part TriBella™ protocol.</p><div className="hero-actions"><a className="button dark" href="/book">Book a consultation</a><a className="text-link" href="#illustration">Explore IPL <span>↓</span></a></div></div>
@@ -79,7 +83,7 @@ export default function IplTreatmentPage() {
 
     <section className="example-section" id="examples"><div className="section-heading"><div><p className="kicker">02 · Published Venus results</p><h2>Real patient<br /><i>examples.</i></h2></div><p>These before-and-after photographs are published by Venus Concept and credited to the listed Venus provider. They are external clinical examples—not VenuX patients—and individual responses vary.</p></div><div className="example-grid">{examples.map((example, index)=><article key={example.title}><a className="case-images" href="https://www.venusconcept.com/en-id/tribella-treatment.htm" target="_blank" rel="noreferrer" aria-label={`View the official Venus source for ${example.title}`}><figure><img src={example.before} alt={`Before treatment — ${example.title}`} /><figcaption>Before</figcaption></figure><figure><img src={example.after} alt={`After treatment — ${example.title}`} /><figcaption>After</figcaption></figure></a><small>0{index+1} · OFFICIAL VENUS CASE</small><h3>{example.title}</h3><p>{example.description}</p><p className="case-credit">Courtesy of {example.courtesy}</p></article>)}</div><p className="price-note">Source: Venus Concept TriBella™ results gallery. These patients were treated using the complete TriBella™ protocol, not IPL alone. Photographs are not VenuX patient results. Outcomes vary and are not guaranteed.</p></section>
 
-    <section className="ipl-pricing" id="pricing"><div className="section-heading"><div><p className="kicker">03 · Confirmed price list</p><h2>Area-based<br /><i>pricing.</i></h2></div><p>Current VenuX IPL prices in AUD. Your practitioner will confirm suitability, the correct treatment area and the recommended plan before treatment.</p></div><div className="ipl-area-table" role="table" aria-label="IPL treatment areas and prices"><div className="ipl-area-row area-head" role="row"><span>Area</span><span>Common focus</span><span>Regular</span><span>Member</span></div>{areas.map(([area, focus, regular, member]) => <div className="ipl-area-row" role="row" key={area}><strong>{area}</strong><span>{focus}</span><span>{regular}</span><span>{member}</span></div>)}</div><p className="price-note">All prices are in Australian dollars. Spot-treatment prices start from the amount shown and vary with treatment size. A patch test may be recommended.</p></section>
+    <section className="ipl-pricing" id="pricing"><div className="section-heading"><div><p className="kicker">03 · Confirmed price list</p><h2>Area-based<br /><i>pricing.</i></h2></div><p>Current VenuX IPL prices in AUD. Your practitioner will confirm suitability, the correct treatment area and the recommended plan before treatment.</p></div><div className="ipl-area-table" role="table" aria-label="IPL treatment areas and prices"><div className="ipl-area-row area-head" role="row"><span>Area</span><span>Common focus</span><span>Regular</span><span>Member</span></div>{areas.map(([area, focus, regular, member, from]) => { const price=resolvePrice(prices,"IPL",area,regular,member); return <div className="ipl-area-row" role="row" key={area}><strong>{area}</strong><span>{focus}</span><span>{from&&"From "}${price.regular}</span><span>{from&&"From "}${price.member}</span></div>;})}</div><p className="price-note">All prices are in Australian dollars. Spot-treatment prices start from the amount shown and vary with treatment size. A patch test may be recommended.</p></section>
 
     <section className="ipl-faq" id="questions"><div className="faq-intro"><p className="kicker">Questions & answers</p><h2>Before you<br /><i>begin.</i></h2><p>These answers are general information. Your consultation and treatment plan will be personalised to your skin and medical history.</p></div><div className="faq-list">{questions.map(([question, answer], index)=><details key={question}><summary><span>0{index+1}</span><strong>{question}</strong><i>＋</i></summary><p>{answer}</p></details>)}</div></section>
 
