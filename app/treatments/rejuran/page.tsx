@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import { Footer, Header, PageHero } from "../../site-chrome";
+import { getPriceMap, resolvePrice } from "../../../lib/pricing";
 
 export const metadata: Metadata = {
   title: "Rejuran® Skin Rejuvenation | VenuX Skin Clinic",
   description: "Explore consultation-led Rejuran skin rejuvenation at VenuX, including 2 ml single sessions and three-session courses.",
 };
+export const dynamic = "force-dynamic";
 
 const options = [
   { amount: "2 ml", name: "Single session", price: "$650", member: "$553", detail: "A single consultation-led session for a selected treatment area." },
@@ -19,7 +21,12 @@ const questions = [
   ["Is everyone suitable?", "No. Medical history, pregnancy or breastfeeding, infection, medication and other individual factors may affect suitability. An appropriate clinical assessment is required."],
 ] as const;
 
-export default function RejuranPage() {
+export default async function RejuranPage() {
+  const prices = await getPriceMap();
+  const currentOptions = options.map((option) => {
+    const price = resolvePrice(prices, "Rejuran", `${option.amount} · ${option.name}`, Number(option.price.replace(/[$,]/g, "")), Number(option.member.replace(/[$,]/g, "")));
+    return { ...option, price: `$${price.regular.toLocaleString("en-AU")}`, member: `$${price.member.toLocaleString("en-AU")}` };
+  });
   return <main><Header />
     <PageHero kicker="Polynucleotide skin rejuvenation" title="Rejuran®." italic="A considered skin course." intro="A consultation-led treatment pathway for clients seeking support for skin quality, texture and hydration. Individual results and treatment plans vary." />
 
@@ -27,7 +34,7 @@ export default function RejuranPage() {
       <div className="rejuran-poster-stage">
         <div className="rejuran-brand-lockup supplied-rejuran-lockup"><img src="/rejuran-brand-logo.png" alt="Rejuran TrueSkin Essence" /><small>Polynucleotide skin rejuvenation</small></div>
         <div className="rejuran-packshot" aria-hidden="true"><i className="rejuran-box"><b>REJURAN</b><small>Classic · 2 mL</small></i><i className="rejuran-vial"><b>R</b></i></div>
-        <b className="rejuran-price-pill">2 ml · $650 <small>Member price $553 · 15% off</small></b>
+        <b className="rejuran-price-pill">2 ml · {currentOptions[0].price} <small>Member price {currentOptions[0].member} · 15% off</small></b>
       </div>
       <div className="rejuran-poster-copy"><p className="kicker light">Clinical consultation required</p><h2>Repair. Refine.<br />Rejuvenate.</h2><p>A VenuX campaign presentation for Rejuran®. Your practitioner reviews medical history, concerns and goals before confirming product, amount and course.</p><a className="button light-button" href="/book?treatment=Rejuran">Book an assessment</a></div>
     </section>
@@ -40,7 +47,7 @@ export default function RejuranPage() {
 
     <section className="course-pricing" id="prices">
       <div className="section-heading"><div><p className="kicker">Session pricing</p><h2>Choose a single session<br />or planned course.</h2></div><p>All prices are in AUD. Rejuran VenuX member prices are 15% off regular price. The 4 ml and 6 ml options are total course volumes delivered across two and three sessions respectively.</p></div>
-      <div className="course-grid">{options.map((option,index)=><article key={option.amount}><span>0{index+1}</span><small>{option.amount}</small><h3>{option.name}</h3><strong>{option.price}</strong><em className="member-price-badge">VenuX member price · {option.member} · 15% off</em><p>{option.detail}</p><a href={`/book?treatment=${encodeURIComponent(`Rejuran ${option.name}`)}`}>Request appointment ↗</a></article>)}</div>
+      <div className="course-grid">{currentOptions.map((option,index)=><article key={option.amount}><span>0{index+1}</span><small>{option.amount}</small><h3>{option.name}</h3><strong>{option.price}</strong><em className="member-price-badge">VenuX member price · {option.member} · 15% off</em><p>{option.detail}</p><a href={`/book?treatment=${encodeURIComponent(`Rejuran ${option.name}`)}`}>Request appointment ↗</a></article>)}</div>
       <div className="clinical-notice"><div><span>French hydration treatment</span><h3>Private consultation</h3></div><p>VenuX also offers a consultation for French skin hydration and remodelling options. Brand, suitability and a personalised quotation are discussed privately with an appropriately qualified practitioner in line with Australian advertising requirements.</p><a href="/book?treatment=French%20Skin%20Hydration%20Consultation" className="text-link">Book consultation ↘</a></div>
     </section>
 

@@ -1,14 +1,17 @@
 import { Footer, Header } from "./site-chrome";
+import { getPriceMap, resolvePrice } from "../lib/pricing";
+
+export const dynamic = "force-dynamic";
 
 const popularTreatments = [
   {
-    number: "01", label: "Ultrasound lifting", name: "Ultherapy®", detail: "700 lines · full face + upper neck", standard: "$2,700", member: "$2,160", memberLabel: "VenuX member price · 20% off", route: "/treatments/hifu-ultherapy", booking: "Ultherapy 700 lines", image: "/ultherapy-700-lines-machine.jpg", imagePosition: "center center",
+    number: "01", label: "Ultrasound lifting", name: "Ultherapy®", detail: "700 lines · full face + upper neck", priceGroup: "Ultherapy", priceName: "Full face + upper neck · approx. 700 lines", standard: 2700, member: 2160, memberLabel: "VenuX member price · 20% off", route: "/treatments/hifu-ultherapy", booking: "Ultherapy 700 lines", image: "/ultherapy-700-lines-machine.jpg", imagePosition: "center center",
   },
   {
-    number: "02", label: "Polynucleotide rejuvenation", name: "Rejuran®", detail: "2 ml · one session", standard: "$650", member: "$553", memberLabel: "VenuX member price · 15% off", route: "/treatments/rejuran", booking: "Rejuran 2ml", image: "/rejuran-brand-logo.png", imagePosition: "center center",
+    number: "02", label: "Polynucleotide rejuvenation", name: "Rejuran®", detail: "2 ml · one session", priceGroup: "Rejuran", priceName: "2 ml · Single session", standard: 650, member: 553, memberLabel: "VenuX member price · 15% off", route: "/treatments/rejuran", booking: "Rejuran 2ml", image: "/rejuran-brand-logo.png", imagePosition: "center center",
   },
   {
-    number: "03", label: "Professional hair removal", name: "Waxing", detail: "Underarms · one session", standard: "$25", member: "$20", memberLabel: "VenuX member price · 20% off", route: "/treatments/hair-removal", booking: "Professional Waxing", image: "/waxing-clinic-hero.jpg", imagePosition: "center center",
+    number: "03", label: "Professional hair removal", name: "Waxing", detail: "Underarms · one session", priceGroup: "Waxing", priceName: "Underarms", standard: 25, member: 20, memberLabel: "VenuX member price · 20% off", route: "/treatments/hair-removal", booking: "Professional Waxing", image: "/waxing-clinic-hero.jpg", imagePosition: "center center",
   },
 ] as const;
 
@@ -31,7 +34,14 @@ const locations = [
   },
 ];
 
-export default function Home() {
+export default async function Home() {
+  const prices = await getPriceMap();
+  const currentPopular = popularTreatments.map((treatment) => ({ ...treatment, price: resolvePrice(prices, treatment.priceGroup, treatment.priceName, treatment.standard, treatment.member) }));
+  const ultherapyGuide = [
+    ["Brow + eye · approx. 200 lines", 1250, 1000],
+    ["Lower face + jawline · approx. 450 lines", 2200, 1760],
+    ["Full face + upper neck · approx. 700 lines", 2700, 2160],
+  ].map(([name, regular, member]) => resolvePrice(prices, "Ultherapy", String(name), Number(regular), Number(member)));
   return (
     <main>
       <Header />
@@ -57,7 +67,7 @@ export default function Home() {
           <p>Ultherapy, Rejuran and professional waxing with clear single-session starting prices. Final suitability, treatment area and quotation are confirmed after assessment.</p>
         </div>
         <div className="popular-grid popular-photo-grid">
-          {popularTreatments.map((treatment) => <article className="popular-card popular-photo-card" key={treatment.number}>
+          {currentPopular.map((treatment) => <article className="popular-card popular-photo-card" key={treatment.number}>
             <a className="popular-product-photo supplied-photo" href={treatment.route} aria-label={`View ${treatment.name}`} style={{ backgroundPosition: treatment.imagePosition }}>
               <img src={treatment.image} alt={`${treatment.name} treatment visual`} /><span>{treatment.number}</span>
             </a>
@@ -65,14 +75,14 @@ export default function Home() {
               <span>{treatment.number} · {treatment.label}</span>
               <h3>{treatment.name}</h3>
               <em>{treatment.detail}</em>
-              <p>Standard <strong>{treatment.standard}</strong></p>
-              <p>{treatment.memberLabel} <strong>{treatment.member}</strong></p>
+              <p>Standard <strong>${treatment.price.regular.toLocaleString("en-AU")}</strong></p>
+              <p>{treatment.memberLabel} <strong>${treatment.price.member.toLocaleString("en-AU")}</strong></p>
               <div className="popular-actions"><a href={treatment.route}>View details</a><a className="popular-book" href={`/book?treatment=${encodeURIComponent(treatment.booking)}`}>Book assessment ↗</a></div>
             </div>
           </article>)}
         </div>
         <div className="ultherapy-line-guide" aria-label="Popular Ultherapy treatment areas">
-          <span>Popular Ultherapy areas</span><strong>Brow + eye · approx. 200 lines <b>$1,250</b></strong><strong>Lower face + jawline · approx. 450 lines <b>$2,200</b></strong><strong>Full face + upper neck · approx. 700 lines <b>$2,700</b></strong>
+          <span>Popular Ultherapy areas</span>{ultherapyGuide.map((item) => <strong key={item.key}>{item.name} <b>${item.regular.toLocaleString("en-AU")}</b></strong>)}
         </div>
         <p className="popular-price-note">All prices are in AUD. Member pricing is labelled on each treatment. Ultherapy line counts are indicative planning guides; anatomy, coverage, actual lines, suitability and final quotation are confirmed after assessment.</p>
       </section>

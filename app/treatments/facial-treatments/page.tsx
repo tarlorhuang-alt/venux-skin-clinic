@@ -2,6 +2,7 @@ import { Footer, Header } from "../../site-chrome";
 import { addOnPrices, facialPriceGroups } from "../../site-data";
 import "./facial-treatments.css";
 import "./brand-logos.css";
+import { getPriceMap, resolvePrice } from "../../../lib/pricing";
 
 const concerns = [
   ["01", "Hydration & Glow", "Dullness, dehydration and an event-ready glow.", "hydration-glow"],
@@ -13,9 +14,9 @@ const concerns = [
 ] as const;
 
 const featured = [
-  { name:"Glass Skin Facial", group:"Hydration & Glow", time:"90 min", regular:299, member:259, text:"A premium, multi-step facial selected for luminous-looking hydration and refined texture.", from:false },
-  { name:"DMK Enzyme Therapy", group:"Skin Revision", time:"90 min", regular:210, member:179, text:"A consultation-led professional enzyme protocol within a structured skin revision plan.", from:true },
-  { name:"Sothys Signature Facial", group:"Anti-Ageing", time:"90 min", regular:229, member:180, text:"A considered Sothys Paris experience combining professional technique and selected formulations.", from:false },
+  { name:"Glass Skin Facial", priceName:"Glass Skin Facial", priceGroup:"Facial", group:"Hydration & Glow", time:"90 min", regular:299, member:259, text:"A premium, multi-step facial selected for luminous-looking hydration and refined texture.", from:false },
+  { name:"DMK Enzyme Therapy", priceName:"DMK Enzyme Therapy Level 1", priceGroup:"DMK", group:"Skin Revision", time:"90 min", regular:210, member:179, text:"A consultation-led professional enzyme protocol within a structured skin revision plan.", from:true },
+  { name:"Sothys Signature Facial", priceName:"Sothys Signature Facial", priceGroup:"Facial", group:"Anti-Ageing", time:"90 min", regular:229, member:180, text:"A considered Sothys Paris experience combining professional technique and selected formulations.", from:false },
 ] as const;
 
 const steps = [
@@ -35,7 +36,9 @@ const faqs = [
 
 const idFor = (category:string) => category.toLowerCase().replaceAll(" & ", "-").replaceAll(" ", "-");
 
-export default function FacialTreatments(){ return <main><Header />
+export const dynamic = "force-dynamic";
+
+export default async function FacialTreatments(){ const prices = await getPriceMap(); const currentFeatured = featured.map((item) => ({...item, price: resolvePrice(prices, item.priceGroup, item.priceName, item.regular, item.member)})); return <main><Header />
   <section className="facial-hero">
     <div className="facial-hero-copy"><a href="/treatments" className="back-link">← All treatments</a><p className="kicker">Professional facial therapy</p><h1>Facials,<br/><i>personalised.</i></h1><p>Professional skin treatments chosen around your concerns, skin condition and long-term goals—not a one-size-fits-all menu.</p><div><a className="button dark" href="#menu">Explore treatments</a><a className="button facial-outline" href="/book">Book a consultation</a></div></div>
     <div className="facial-hero-art" aria-hidden="true"><img src="/scientific-hero.png" alt=""/><span>Skin science<br/><i>meets care.</i></span></div>
@@ -43,9 +46,9 @@ export default function FacialTreatments(){ return <main><Header />
 
   <section className="concern-selector"><div className="facial-section-title"><p className="kicker">Choose by concern</p><h2>Where would you<br/><i>like to begin?</i></h2></div><div className="concern-grid">{concerns.map(([number,title,text,id])=><a href={`#${id}`} key={title}><span>{number}</span><h3>{title}</h3><p>{text}</p><b>Explore ↓</b></a>)}</div></section>
 
-  <section className="featured-facials"><div className="facial-section-title light"><p className="kicker">Featured treatments</p><h2>Clinic<br/><i>favourites.</i></h2></div><div className="featured-grid">{featured.map((item,index)=><article key={item.name}><span>0{index+1} · {item.group}</span><h3>{item.name}</h3><p>{item.text}</p><div className="featured-price"><small>{item.time}</small><strong>{item.from&&"From "}${item.regular}</strong><em>VenuX member price {item.name.startsWith("DMK") ? "· 15% off " : ""}{item.from&&"from "}${item.member}</em></div><a href="/book">Book this facial ↗</a></article>)}</div></section>
+  <section className="featured-facials"><div className="facial-section-title light"><p className="kicker">Featured treatments</p><h2>Clinic<br/><i>favourites.</i></h2></div><div className="featured-grid">{currentFeatured.map((item,index)=><article key={item.name}><span>0{index+1} · {item.group}</span><h3>{item.name}</h3><p>{item.text}</p><div className="featured-price"><small>{item.time}</small><strong>{item.from&&"From "}${item.price.regular}</strong><em>VenuX member price {item.price.memberRate === 85 ? "· 15% off " : ""}{item.from&&"from "}${item.price.member}</em></div><a href="/book">Book this facial ↗</a></article>)}</div></section>
 
-  <section className="facial-menu" id="menu"><div className="facial-section-title"><p className="kicker">Complete treatment menu</p><h2>Find your<br/><i>facial.</i></h2><p>All prices are in AUD. The final column is the VenuX member price. DMK prices are 15% off regular price; other listed member prices follow the applicable clinic offer.</p></div><div className="facial-menu-key"><span>Treatment</span><span>Duration</span><span>Regular price</span><span>VenuX member price</span><span></span></div><div className="facial-groups">{facialPriceGroups.map(group=><section id={idFor(group.category)} key={group.number}><header><span>{group.number}</span><h3>{group.category}</h3></header>{group.items.map(([name,time,regular,member])=><div className="facial-row" key={name}><strong>{name}</strong><small>{time}</small><b>${regular}</b><em>${member}</em><a href="/book" aria-label={`Book ${name}`}>Book ↗</a></div>)}</section>)}<section id="add-ons"><header><span>07</span><h3>Add-ons</h3></header>{addOnPrices.map(([name,regular,member])=><div className="facial-row" key={name}><strong>{name}</strong><small>—</small><b>${regular}</b><em>${member}</em><a href="/book" aria-label={`Book ${name}`}>Add ↗</a></div>)}</section></div></section>
+  <section className="facial-menu" id="menu"><div className="facial-section-title"><p className="kicker">Complete treatment menu</p><h2>Find your<br/><i>facial.</i></h2><p>All prices are in AUD. The final column is the VenuX member price. DMK prices are 15% off regular price; other listed member prices follow the applicable clinic offer.</p></div><div className="facial-menu-key"><span>Treatment</span><span>Duration</span><span>Regular price</span><span>VenuX member price</span><span></span></div><div className="facial-groups">{facialPriceGroups.map(group=><section id={idFor(group.category)} key={group.number}><header><span>{group.number}</span><h3>{group.category}</h3></header>{group.items.map(([name,time,regular,member])=>{ const price=resolvePrice(prices,group.category === "DMK Skin Revision" ? "DMK" : "Facial",name,regular,member); return <div className="facial-row" key={name}><strong>{name}</strong><small>{time}</small><b>${price.regular}</b><em>${price.member}</em><a href="/book" aria-label={`Book ${name}`}>Book ↗</a></div>;})}</section>)}<section id="add-ons"><header><span>07</span><h3>Add-ons</h3></header>{addOnPrices.map(([name,regular,member])=>{ const price=resolvePrice(prices,"Add-on",name,regular,member); return <div className="facial-row" key={name}><strong>{name}</strong><small>—</small><b>${price.regular}</b><em>${price.member}</em><a href="/book" aria-label={`Book ${name}`}>Add ↗</a></div>;})}</section></div></section>
 
   <section className="facial-journey"><div className="facial-section-title"><p className="kicker">Common treatment process</p><h2>A consistent clinic process,<br/><i>personalised to your skin.</i></h2></div><div>{steps.map(([number,title,text])=><article key={number}><span>{number}</span><h3>{title}</h3><p>{text}</p></article>)}</div></section>
 

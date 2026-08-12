@@ -1,7 +1,11 @@
 import { Footer, Header, PageHero } from "../site-chrome";
 import { addOnPrices, facialPriceGroups } from "../site-data";
+import { getPriceMap, resolvePrice } from "../../lib/pricing";
 
-export default function Pricing() {
+export const dynamic = "force-dynamic";
+
+export default async function Pricing() {
+  const prices = await getPriceMap();
   return <main><Header />
     <PageHero kicker="Treatment menu" title="Transparent" italic="by design." intro="Current verified VenuX facial prices, organised by your treatment goals. All amounts are in AUD." />
     <section className="pricing page-section">
@@ -12,9 +16,9 @@ export default function Pricing() {
         {facialPriceGroups.map((group) => <section className="price-group" key={group.number}>
           <div className="price-group-heading"><span>{group.number}</span><h2>{group.category}</h2></div>
           <div className="price-table" role="table" aria-label={`${group.category} prices`}>
-            {group.items.map(([item,duration,regular,member]) => <div className="price-row detailed" role="row" key={item}>
-              <span>{item}</span><small>{duration}</small><strong>${regular}</strong><strong>${member}</strong>
-            </div>)}
+            {group.items.map(([item,duration,regular,member]) => { const price = resolvePrice(prices, group.category === "DMK Skin Revision" ? "DMK" : "Facial", item, regular, member); return <div className="price-row detailed" role="row" key={item}>
+              <span>{item}</span><small>{duration}</small><strong>${price.regular}</strong><strong>${price.member}</strong>
+            </div>; })}
           </div>
         </section>)}
       </div>
@@ -22,9 +26,9 @@ export default function Pricing() {
       <section className="price-group add-on-group">
         <div className="price-group-heading"><span>07</span><h2>Add-ons</h2></div>
         <div className="price-table compact" role="table" aria-label="Add-on prices">
-          {addOnPrices.map(([item,regular,member]) => <div className="price-row detailed" role="row" key={item}>
-            <span>{item}</span><small>—</small><strong>${regular}</strong><strong>${member}</strong>
-          </div>)}
+          {addOnPrices.map(([item,regular,member]) => { const price = resolvePrice(prices, "Add-on", item, regular, member); return <div className="price-row detailed" role="row" key={item}>
+            <span>{item}</span><small>—</small><strong>${price.regular}</strong><strong>${price.member}</strong>
+          </div>; })}
         </div>
       </section>
 
