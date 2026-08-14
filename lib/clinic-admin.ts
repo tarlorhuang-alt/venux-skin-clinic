@@ -47,6 +47,11 @@ export function ensureClinicTables() {
       await sql`ALTER TABLE venux_clients ADD COLUMN IF NOT EXISTS customer_group TEXT NOT NULL DEFAULT 'General'`;
       await sql`ALTER TABLE venux_clients ADD COLUMN IF NOT EXISTS dob DATE`;
       await sql`ALTER TABLE venux_clients ADD COLUMN IF NOT EXISTS address TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE venux_clients ADD COLUMN IF NOT EXISTS gender TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE venux_clients ADD COLUMN IF NOT EXISTS occupation TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE venux_clients ADD COLUMN IF NOT EXISTS emergency_contact_name TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE venux_clients ADD COLUMN IF NOT EXISTS emergency_contact_phone TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE venux_clients ADD COLUMN IF NOT EXISTS lead_source TEXT NOT NULL DEFAULT ''`;
       await sql`CREATE TABLE IF NOT EXISTS venux_memberships (
         client_id BIGINT PRIMARY KEY REFERENCES venux_clients(id) ON DELETE CASCADE,
         balance INTEGER NOT NULL DEFAULT 0 CHECK (balance >= 0),
@@ -72,6 +77,56 @@ export function ensureClinicTables() {
       await sql`CREATE INDEX IF NOT EXISTS venux_clients_email_idx ON venux_clients (LOWER(email))`;
       await sql`CREATE INDEX IF NOT EXISTS venux_clients_mobile_idx ON venux_clients (mobile)`;
       await sql`CREATE INDEX IF NOT EXISTS venux_appointments_date_idx ON venux_appointments (requested_date)`;
+      await sql`CREATE TABLE IF NOT EXISTS venux_health_profiles (
+        client_id BIGINT PRIMARY KEY REFERENCES venux_clients(id) ON DELETE CASCADE,
+        skin_type TEXT NOT NULL DEFAULT '', primary_concerns TEXT NOT NULL DEFAULT '',
+        allergies TEXT NOT NULL DEFAULT '', medical_conditions TEXT NOT NULL DEFAULT '',
+        medications TEXT NOT NULL DEFAULT '', pregnancy_status TEXT NOT NULL DEFAULT '',
+        breastfeeding BOOLEAN NOT NULL DEFAULT FALSE, implants TEXT NOT NULL DEFAULT '',
+        aesthetic_history TEXT NOT NULL DEFAULT '', current_skincare TEXT NOT NULL DEFAULT '',
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`;
+      await sql`CREATE TABLE IF NOT EXISTS venux_skin_assessments (
+        id BIGSERIAL PRIMARY KEY, client_id BIGINT NOT NULL REFERENCES venux_clients(id) ON DELETE CASCADE,
+        concern_categories TEXT NOT NULL DEFAULT '', main_concern TEXT NOT NULL DEFAULT '',
+        anxiety_level INTEGER CHECK (anxiety_level BETWEEN 1 AND 5), expected_outcome TEXT NOT NULL DEFAULT '',
+        fitzpatrick INTEGER CHECK (fitzpatrick BETWEEN 1 AND 6), treatment_recommendation TEXT NOT NULL DEFAULT '',
+        course_plan TEXT NOT NULL DEFAULT '', budget INTEGER CHECK (budget >= 0),
+        practitioner_notes TEXT NOT NULL DEFAULT '', assessed_by TEXT NOT NULL DEFAULT 'Admin',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`;
+      await sql`CREATE TABLE IF NOT EXISTS venux_treatment_records (
+        id BIGSERIAL PRIMARY KEY, client_id BIGINT NOT NULL REFERENCES venux_clients(id) ON DELETE RESTRICT,
+        service TEXT NOT NULL, treated_at TIMESTAMPTZ NOT NULL, operator_name TEXT NOT NULL,
+        treatment_area TEXT NOT NULL DEFAULT '', products TEXT NOT NULL DEFAULT '', brand TEXT NOT NULL DEFAULT '',
+        batch_number TEXT NOT NULL DEFAULT '', dosage TEXT NOT NULL DEFAULT '', parameters TEXT NOT NULL DEFAULT '',
+        shot_count INTEGER CHECK (shot_count >= 0), unit_count NUMERIC(10,2) CHECK (unit_count >= 0),
+        treatment_map TEXT NOT NULL DEFAULT '', immediate_response TEXT NOT NULL DEFAULT '',
+        adverse_reaction TEXT NOT NULL DEFAULT '', adverse_management TEXT NOT NULL DEFAULT '',
+        operator_signature TEXT NOT NULL DEFAULT '', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`;
+      await sql`CREATE TABLE IF NOT EXISTS venux_followups (
+        id BIGSERIAL PRIMARY KEY, client_id BIGINT NOT NULL REFERENCES venux_clients(id) ON DELETE CASCADE,
+        treatment_record_id BIGINT REFERENCES venux_treatment_records(id) ON DELETE SET NULL,
+        due_date DATE NOT NULL, followup_type TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending',
+        recovery_notes TEXT NOT NULL DEFAULT '', satisfaction INTEGER CHECK (satisfaction BETWEEN 1 AND 5),
+        abnormal_reaction BOOLEAN NOT NULL DEFAULT FALSE, review_required BOOLEAN NOT NULL DEFAULT FALSE,
+        completed_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`;
+      await sql`CREATE TABLE IF NOT EXISTS venux_client_courses (
+        id BIGSERIAL PRIMARY KEY, client_id BIGINT NOT NULL REFERENCES venux_clients(id) ON DELETE CASCADE,
+        course_name TEXT NOT NULL, purchased_sessions INTEGER NOT NULL CHECK (purchased_sessions > 0),
+        used_sessions INTEGER NOT NULL DEFAULT 0 CHECK (used_sessions >= 0), expires_on DATE,
+        amount_paid INTEGER NOT NULL DEFAULT 0 CHECK (amount_paid >= 0), status TEXT NOT NULL DEFAULT 'active',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`;
+      await sql`CREATE TABLE IF NOT EXISTS venux_audit_log (
+        id BIGSERIAL PRIMARY KEY, actor_name TEXT NOT NULL DEFAULT 'Admin', actor_role TEXT NOT NULL DEFAULT 'administrator',
+        action TEXT NOT NULL, entity_type TEXT NOT NULL, entity_id BIGINT, detail TEXT NOT NULL DEFAULT '',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`;
+      await sql`CREATE INDEX IF NOT EXISTS venux_followups_due_idx ON venux_followups (status,due_date)`;
+      await sql`CREATE INDEX IF NOT EXISTS venux_treatment_client_idx ON venux_treatment_records (client_id,treated_at DESC)`;
     })();
   }
   return clinicTablesReady;
@@ -186,4 +241,84 @@ export async function saveMembership(clientId: number, balance: number, status: 
   await ensureClinicTables();
   await client()`INSERT INTO venux_memberships (client_id,balance,status,joined_at) VALUES (${clientId},${balance},${status},CASE WHEN ${status}='active' THEN NOW() ELSE NULL END)
     ON CONFLICT (client_id) DO UPDATE SET balance=EXCLUDED.balance,status=EXCLUDED.status,joined_at=COALESCE(venux_memberships.joined_at,EXCLUDED.joined_at),updated_at=NOW()`;
+}
+
+async function audit(action: string, entityType: string, entityId: number, detail = "") {
+  await client()`INSERT INTO venux_audit_log (action,entity_type,entity_id,detail) VALUES (${action},${entityType},${entityId},${detail})`;
+}
+
+export async function getClientClinicalRecord(clientId: number) {
+  await ensureClinicTables();
+  const sql = client();
+  const [clientRows, healthRows, assessments, treatments, followups, courses, appointments, audits] = await Promise.all([
+    sql`SELECT c.*,m.balance,m.status AS membership_status,m.joined_at FROM venux_clients c LEFT JOIN venux_memberships m ON m.client_id=c.id WHERE c.id=${clientId}`,
+    sql`SELECT * FROM venux_health_profiles WHERE client_id=${clientId}`,
+    sql`SELECT * FROM venux_skin_assessments WHERE client_id=${clientId} ORDER BY created_at DESC`,
+    sql`SELECT * FROM venux_treatment_records WHERE client_id=${clientId} ORDER BY treated_at DESC`,
+    sql`SELECT * FROM venux_followups WHERE client_id=${clientId} ORDER BY status DESC,due_date`,
+    sql`SELECT * FROM venux_client_courses WHERE client_id=${clientId} ORDER BY created_at DESC`,
+    sql`SELECT * FROM venux_appointments WHERE client_id=${clientId} ORDER BY requested_date DESC,requested_time DESC LIMIT 20`,
+    sql`SELECT * FROM venux_audit_log WHERE entity_type='client' AND entity_id=${clientId} ORDER BY created_at DESC LIMIT 20`,
+  ]);
+  if (clientRows[0]) await audit("view", "client", clientId, "Clinical record opened");
+  return { client: clientRows[0] ?? null, health: healthRows[0] ?? null, assessments, treatments, followups, courses, appointments, audits };
+}
+
+export async function saveClientProfile(clientId: number, values: Record<string,string>) {
+  await ensureClinicTables();
+  await client()`UPDATE venux_clients SET full_name=${values.fullName},mobile=${values.mobile},email=${values.email},dob=${values.dob || null},address=${values.address},gender=${values.gender},occupation=${values.occupation},emergency_contact_name=${values.emergencyName},emergency_contact_phone=${values.emergencyPhone},lead_source=${values.leadSource},updated_at=NOW() WHERE id=${clientId}`;
+  await audit("update", "client", clientId, "Profile and contact details updated");
+}
+
+export async function saveHealthProfile(clientId: number, values: Record<string,string|boolean>) {
+  await ensureClinicTables();
+  await client()`INSERT INTO venux_health_profiles (client_id,skin_type,primary_concerns,allergies,medical_conditions,medications,pregnancy_status,breastfeeding,implants,aesthetic_history,current_skincare)
+    VALUES (${clientId},${values.skinType},${values.primaryConcerns},${values.allergies},${values.medicalConditions},${values.medications},${values.pregnancyStatus},${values.breastfeeding},${values.implants},${values.aestheticHistory},${values.currentSkincare})
+    ON CONFLICT (client_id) DO UPDATE SET skin_type=EXCLUDED.skin_type,primary_concerns=EXCLUDED.primary_concerns,allergies=EXCLUDED.allergies,medical_conditions=EXCLUDED.medical_conditions,medications=EXCLUDED.medications,pregnancy_status=EXCLUDED.pregnancy_status,breastfeeding=EXCLUDED.breastfeeding,implants=EXCLUDED.implants,aesthetic_history=EXCLUDED.aesthetic_history,current_skincare=EXCLUDED.current_skincare,updated_at=NOW()`;
+  await audit("update", "client", clientId, "Health profile updated");
+}
+
+export async function createSkinAssessment(clientId: number, values: Record<string,string|number|null>) {
+  await ensureClinicTables();
+  await client()`INSERT INTO venux_skin_assessments (client_id,concern_categories,main_concern,anxiety_level,expected_outcome,fitzpatrick,treatment_recommendation,course_plan,budget,practitioner_notes,assessed_by)
+    VALUES (${clientId},${values.concerns},${values.mainConcern},${values.anxietyLevel},${values.expectedOutcome},${values.fitzpatrick},${values.recommendation},${values.coursePlan},${values.budget},${values.notes},${values.assessedBy})`;
+  await audit("create", "client", clientId, "Skin assessment added");
+}
+
+function followupSchedule(service: string) {
+  const value=service.toLowerCase();
+  if(/botox|anti-wrinkle/.test(value)) return [[14,"2-week review"]] as const;
+  if(/skin booster|rejuran|水光/.test(value)) return [[3,"3-day recovery check"],[7,"1-week review"]] as const;
+  if(/ipl|pico|lutronic|皮秒/.test(value)) return [[1,"24-hour safety check"],[7,"1-week review"]] as const;
+  if(/hifu|ultherapy|ultrasound/.test(value)) return [[30,"1-month review"],[90,"3-month review"]] as const;
+  return [] as const;
+}
+
+export async function createTreatmentRecord(clientId: number, values: Record<string,string|number|null>) {
+  await ensureClinicTables();
+  const sql=client();
+  const rows=await sql`INSERT INTO venux_treatment_records (client_id,service,treated_at,operator_name,treatment_area,products,brand,batch_number,dosage,parameters,shot_count,unit_count,treatment_map,immediate_response,adverse_reaction,adverse_management,operator_signature)
+    VALUES (${clientId},${values.service},${values.treatedAt},${values.operator},${values.area},${values.products},${values.brand},${values.batchNumber},${values.dosage},${values.parameters},${values.shotCount},${values.unitCount},${values.treatmentMap},${values.immediateResponse},${values.adverseReaction},${values.adverseManagement},${values.signature}) RETURNING id,treated_at`;
+  const treatmentId=Number(rows[0].id);
+  for(const [days,label] of followupSchedule(String(values.service))){
+    await sql`INSERT INTO venux_followups (client_id,treatment_record_id,due_date,followup_type) VALUES (${clientId},${treatmentId},(${String(values.treatedAt)}::timestamptz + (${days} || ' days')::interval)::date,${label})`;
+  }
+  await audit("create", "client", clientId, `Treatment record added: ${values.service}`);
+}
+
+export async function createClientCourse(clientId: number, values: Record<string,string|number|null>) {
+  await ensureClinicTables();
+  await client()`INSERT INTO venux_client_courses (client_id,course_name,purchased_sessions,used_sessions,expires_on,amount_paid,status) VALUES (${clientId},${values.name},${values.purchased},${values.used},${values.expiresOn || null},${values.amountPaid},${values.status})`;
+  await audit("create", "client", clientId, `Course added: ${values.name}`);
+}
+
+export async function completeFollowup(followupId: number, clientId: number, values: Record<string,string|number|boolean|null>) {
+  await ensureClinicTables();
+  await client()`UPDATE venux_followups SET status='completed',recovery_notes=${values.notes},satisfaction=${values.satisfaction},abnormal_reaction=${values.abnormal},review_required=${values.reviewRequired},completed_at=NOW() WHERE id=${followupId} AND client_id=${clientId}`;
+  await audit("update", "client", clientId, `Follow-up ${followupId} completed`);
+}
+
+export async function getFollowups() {
+  await ensureClinicTables();
+  return client()`SELECT f.*,c.full_name,c.mobile,t.service FROM venux_followups f JOIN venux_clients c ON c.id=f.client_id LEFT JOIN venux_treatment_records t ON t.id=f.treatment_record_id ORDER BY CASE WHEN f.status='pending' THEN 0 ELSE 1 END,f.due_date LIMIT 300`;
 }
