@@ -14,6 +14,15 @@ export type BookingInput = {
   notes?: string;
 };
 
+export type ClientImportRow = {
+  group: string;
+  name: string;
+  dob: string | null;
+  mobile: string;
+  email: string;
+  address: string;
+};
+
 function client() {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error("DATABASE_URL is not configured");
@@ -35,6 +44,9 @@ export function ensureClinicTables() {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )`;
+      await sql`ALTER TABLE venux_clients ADD COLUMN IF NOT EXISTS customer_group TEXT NOT NULL DEFAULT 'General'`;
+      await sql`ALTER TABLE venux_clients ADD COLUMN IF NOT EXISTS dob DATE`;
+      await sql`ALTER TABLE venux_clients ADD COLUMN IF NOT EXISTS address TEXT NOT NULL DEFAULT ''`;
       await sql`CREATE TABLE IF NOT EXISTS venux_memberships (
         client_id BIGINT PRIMARY KEY REFERENCES venux_clients(id) ON DELETE CASCADE,
         balance INTEGER NOT NULL DEFAULT 0 CHECK (balance >= 0),
@@ -68,7 +80,7 @@ export function ensureClinicTables() {
 export async function createBookingRequest(input: BookingInput) {
   await ensureClinicTables();
   const sql = client();
-  const existing = await sql`SELECT id FROM venux_clients WHERE LOWER(email) = LOWER(${input.email}) OR mobile = ${input.mobile} ORDER BY updated_at DESC LIMIT 1`;
+  const existing = await sql`SELECT id FROM venux_clients WHERE LOWER(email) = LOWER(${input.email}) OR (mobile = ${input.mobile} AND LOWER(full_name)=LOWER(${input.name})) ORDER BY updated_at DESC LIMIT 1`;
   let clientId: number;
   if (existing[0]) {
     clientId = Number(existing[0].id);
@@ -129,6 +141,40 @@ export async function getClients() {
     FROM venux_clients c LEFT JOIN venux_memberships m ON m.client_id=c.id
     LEFT JOIN venux_appointments a ON a.client_id=c.id
     GROUP BY c.id,m.balance,m.status,m.joined_at ORDER BY c.updated_at DESC LIMIT 500`;
+}
+
+export async function importClientRows(rows: ClientImportRow[]) {
+  await ensureClinicTables();
+  const sql = client();
+  const unique = new Map<string, ClientImportRow>();
+  for (const row of rows) {
+    const key = row.email ? `e:${row.email.toLowerCase()}` : `p:${row.mobile}|${row.name.toLowerCase().replace(/\s+/g," ")}`;
+    if (!unique.has(key)) unique.set(key,row);
+  }
+  const payload = [...unique.values()];
+  if (!payload.length) return { imported:0, processed:0, duplicates:rows.length };
+  const json = JSON.stringify(payload);
+  await sql`WITH incoming AS (
+      SELECT * FROM jsonb_to_recordset(${json}::jsonb) AS x("group" TEXT,name TEXT,dob DATE,mobile TEXT,email TEXT,address TEXT)
+    ) UPDATE venux_clients c SET full_name=i.name,
+      email=CASE WHEN i.email<>'' THEN i.email ELSE c.email END,
+      customer_group=CASE WHEN i."group"<>'' THEN i."group" ELSE c.customer_group END,
+      dob=COALESCE(i.dob,c.dob),
+      address=CASE WHEN i.address<>'' AND i.address<>'0' THEN i.address ELSE c.address END,
+      updated_at=NOW()
+    FROM incoming i WHERE (i.email<>'' AND LOWER(c.email)=LOWER(i.email)) OR (c.mobile=i.mobile AND LOWER(c.full_name)=LOWER(i.name))`;
+  const inserted = await sql`WITH incoming AS (
+      SELECT * FROM jsonb_to_recordset(${json}::jsonb) AS x("group" TEXT,name TEXT,dob DATE,mobile TEXT,email TEXT,address TEXT)
+    ) INSERT INTO venux_clients (full_name,mobile,email,customer_group,dob,address)
+      SELECT i.name,i.mobile,i.email,COALESCE(NULLIF(i."group",''),'General'),i.dob,CASE WHEN i.address='0' THEN '' ELSE i.address END FROM incoming i
+      WHERE NOT EXISTS (SELECT 1 FROM venux_clients c WHERE (i.email<>'' AND LOWER(c.email)=LOWER(i.email)) OR (c.mobile=i.mobile AND LOWER(c.full_name)=LOWER(i.name)))
+      RETURNING id`;
+  await sql`WITH incoming AS (
+      SELECT * FROM jsonb_to_recordset(${json}::jsonb) AS x("group" TEXT,name TEXT,dob DATE,mobile TEXT,email TEXT,address TEXT)
+    ) INSERT INTO venux_memberships (client_id,balance,status,joined_at)
+      SELECT c.id,0,'active',NOW() FROM incoming i JOIN venux_clients c ON (i.email<>'' AND LOWER(c.email)=LOWER(i.email)) OR (c.mobile=i.mobile AND LOWER(c.full_name)=LOWER(i.name))
+      WHERE LOWER(i."group") NOT IN ('','general') ON CONFLICT (client_id) DO UPDATE SET status='active',updated_at=NOW()`;
+  return { imported:inserted.length, processed:payload.length, duplicates:rows.length-payload.length };
 }
 
 export async function updateAppointment(id: number, status: AppointmentStatus, totalAmount: number, depositStatus: string) {
