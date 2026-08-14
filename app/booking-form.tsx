@@ -44,6 +44,8 @@ export function BookingForm() {
       </label>
       <label className="full">Tell us a little more<textarea name="message" rows={4} placeholder="Your goals, treatment questions or accessibility needs" /></label>
       <label className="full booking-policy-check"><input required name="deposit-policy" type="checkbox" /><span>I understand the AUD $45 deposit is fully credited toward my booked treatment. I may reschedule without losing the deposit when I give at least 24 hours’ notice. Late changes and no-shows may forfeit the deposit.</span></label>
+      <label className="full booking-policy-check"><input name="serviceSmsConsent" value="yes" type="checkbox" /><span>Send me factual appointment confirmations and reminders by SMS.</span></label>
+      <label className="full booking-policy-check"><input name="marketingSmsConsent" value="yes" type="checkbox" /><span>I agree to receive birthday wishes and occasional VenuX offers by SMS. I can opt out at any time.</span></label>
       <button className="button dark full" type="submit" disabled={submitting}>{submitting ? "Saving request…" : "Request a consultation"}</button>
       {error && <p className="admin-error full" role="alert">{error}</p>}
       {submitted && <p className="success full" role="status">Thank you. Your request {reference} is now in the VenuX booking system. Your selected time is not confirmed until the clinic contacts you and the AUD $45 deposit is received.</p>}
