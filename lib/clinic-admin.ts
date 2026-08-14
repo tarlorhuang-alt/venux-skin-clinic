@@ -5,6 +5,7 @@ import { randomBytes } from "node:crypto";
 export type AppointmentStatus = "requested" | "confirmed" | "completed" | "cancelled" | "no_show";
 
 export type BookingInput = {
+  clientId?: number;
   name: string;
   mobile: string;
   email: string;
@@ -163,6 +164,26 @@ export function ensureClinicTables() {
         queued_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), sent_at TIMESTAMPTZ
       )`;
       await sql`CREATE INDEX IF NOT EXISTS venux_sms_outbox_status_idx ON venux_sms_outbox (status,queued_at)`;
+      await sql`CREATE TABLE IF NOT EXISTS venux_staff (
+        id BIGSERIAL PRIMARY KEY, full_name TEXT NOT NULL, role TEXT NOT NULL,
+        active BOOLEAN NOT NULL DEFAULT TRUE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`;
+      await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS staff_id BIGINT REFERENCES venux_staff(id) ON DELETE SET NULL`;
+      await sql`CREATE TABLE IF NOT EXISTS venux_time_clock (
+        id BIGSERIAL PRIMARY KEY, staff_id BIGINT NOT NULL REFERENCES venux_staff(id) ON DELETE CASCADE,
+        clock_in TIMESTAMPTZ NOT NULL DEFAULT NOW(), clock_out TIMESTAMPTZ,
+        note TEXT NOT NULL DEFAULT ''
+      )`;
+      await sql`CREATE INDEX IF NOT EXISTS venux_time_clock_staff_idx ON venux_time_clock (staff_id,clock_in DESC)`;
+      await sql`CREATE UNIQUE INDEX IF NOT EXISTS venux_time_clock_one_open_idx ON venux_time_clock (staff_id) WHERE clock_out IS NULL`;
+      await sql`CREATE TABLE IF NOT EXISTS venux_suppliers (
+        id BIGSERIAL PRIMARY KEY, supplier_name TEXT NOT NULL, contact_name TEXT NOT NULL DEFAULT '',
+        phone TEXT NOT NULL DEFAULT '', email TEXT NOT NULL DEFAULT '', website TEXT NOT NULL DEFAULT '',
+        brands TEXT NOT NULL DEFAULT '', account_reference TEXT NOT NULL DEFAULT '',
+        notes TEXT NOT NULL DEFAULT '', active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`;
     })();
   }
   return clinicTablesReady;
@@ -172,7 +193,9 @@ export async function createBookingRequest(input: BookingInput) {
   await ensureClinicTables();
   const sql = client();
   const normalMobile=normaliseMobile(input.mobile);
-  const existing = await sql`SELECT id FROM venux_clients WHERE (${input.email}<>'' AND LOWER(email) = LOWER(${input.email})) OR REGEXP_REPLACE(mobile,'[^0-9]','','g') IN (${normalMobile},${normalMobile.replace(/^61/,"0")}) ORDER BY updated_at DESC LIMIT 1`;
+  const existing = input.clientId
+    ? await sql`SELECT id FROM venux_clients WHERE id=${input.clientId} LIMIT 1`
+    : await sql`SELECT id FROM venux_clients WHERE (${input.email}<>'' AND LOWER(email) = LOWER(${input.email})) OR REGEXP_REPLACE(mobile,'[^0-9]','','g') IN (${normalMobile},${normalMobile.replace(/^61/,"0")}) ORDER BY updated_at DESC LIMIT 1`;
   let clientId: number;
   if (existing[0]) {
     clientId = Number(existing[0].id);
@@ -223,18 +246,34 @@ export async function getClinicDashboard() {
   };
 }
 
-export async function getAppointments() {
+export async function getAppointments(date = "") {
   await ensureClinicTables();
-  return client()`SELECT a.*,c.full_name,c.mobile,c.email FROM venux_appointments a JOIN venux_clients c ON c.id=a.client_id ORDER BY a.requested_date DESC,a.requested_time DESC LIMIT 250`;
+  return client()`SELECT a.*,c.full_name,c.mobile,c.email,s.full_name AS staff_name
+    FROM venux_appointments a JOIN venux_clients c ON c.id=a.client_id
+    LEFT JOIN venux_staff s ON s.id=a.staff_id
+    WHERE (${date}='' OR a.requested_date=${date || null})
+    ORDER BY a.requested_date DESC,a.requested_time DESC LIMIT 500`;
 }
 
-export async function getClients() {
+export async function getClients(search = "") {
   await ensureClinicTables();
+  const term=search.trim(),like=`%${term}%`,digits=normaliseMobile(term);
   return client()`SELECT c.*,m.balance,m.status AS membership_status,m.joined_at,
     COUNT(a.id)::int AS visit_count,MAX(a.requested_date) AS last_visit
     FROM venux_clients c LEFT JOIN venux_memberships m ON m.client_id=c.id
     LEFT JOIN venux_appointments a ON a.client_id=c.id
+    WHERE (${term}='' OR c.full_name ILIKE ${like} OR c.email ILIKE ${like}
+      OR (${digits}<>'' AND REGEXP_REPLACE(c.mobile,'[^0-9]','','g') LIKE ${`%${digits}%`}))
     GROUP BY c.id,m.balance,m.status,m.joined_at ORDER BY c.updated_at DESC LIMIT 500`;
+}
+
+export async function getClientForBooking(clientId: number) {
+  await ensureClinicTables();
+  return (await client()`SELECT c.*,m.balance,m.status AS membership_status,
+    COUNT(a.id)::int AS visit_count,MAX(a.requested_date) AS last_visit
+    FROM venux_clients c LEFT JOIN venux_memberships m ON m.client_id=c.id
+    LEFT JOIN venux_appointments a ON a.client_id=c.id WHERE c.id=${clientId}
+    GROUP BY c.id,m.balance,m.status LIMIT 1`)[0]??null;
 }
 
 export async function importClientRows(rows: ClientImportRow[]) {
@@ -271,16 +310,22 @@ export async function importClientRows(rows: ClientImportRow[]) {
   return { imported:inserted.length, processed:payload.length, duplicates:rows.length-payload.length };
 }
 
-export async function updateAppointment(id: number, status: AppointmentStatus, totalAmount: number, depositStatus: string) {
+export async function updateAppointment(id: number, status: AppointmentStatus, totalAmount: number, depositStatus: string, staffId: number|null = null) {
   await ensureClinicTables();
   const sql=client();
   const before=await sql`SELECT a.*,c.full_name,c.mobile,c.service_sms_consent FROM venux_appointments a JOIN venux_clients c ON c.id=a.client_id WHERE a.id=${id}`;
   if(!before[0])return;
+  if(["requested","confirmed"].includes(status)&&!["requested","confirmed"].includes(String(before[0].status))){
+    const claimed=await sql`INSERT INTO venux_booking_slots (slot_key,appointment_id)
+      SELECT clinic||'|'||requested_date::text||'|'||requested_time,id FROM venux_appointments WHERE id=${id}
+      ON CONFLICT DO NOTHING RETURNING slot_key`;
+    if(!claimed[0])throw new BookingConflictError("This time is already reserved.");
+  }
   if(status==="confirmed"){
     const conflict=await sql`SELECT id FROM venux_appointments WHERE id<>${id} AND clinic=${before[0].clinic} AND requested_date=${before[0].requested_date} AND requested_time=${before[0].requested_time} AND status='confirmed' LIMIT 1`;
     if(conflict[0])throw new BookingConflictError("Another confirmed appointment already uses this time.");
   }
-  await sql`UPDATE venux_appointments SET status=${status},total_amount=${totalAmount},deposit_status=${depositStatus},updated_at=NOW() WHERE id=${id}`;
+  await sql`UPDATE venux_appointments SET status=${status},total_amount=${totalAmount},deposit_status=${depositStatus},staff_id=${staffId},updated_at=NOW() WHERE id=${id}`;
   if(["cancelled","completed","no_show"].includes(status))await sql`DELETE FROM venux_booking_slots WHERE appointment_id=${id}`;
   if(status==="confirmed"&&before[0].status!=="confirmed"&&before[0].service_sms_consent)await queueAppointmentConfirmation(id);
 }
@@ -410,4 +455,94 @@ export async function completeFollowup(followupId: number, clientId: number, val
 export async function getFollowups() {
   await ensureClinicTables();
   return client()`SELECT f.*,c.full_name,c.mobile,t.service FROM venux_followups f JOIN venux_clients c ON c.id=f.client_id LEFT JOIN venux_treatment_records t ON t.id=f.treatment_record_id ORDER BY CASE WHEN f.status='pending' THEN 0 ELSE 1 END,f.due_date LIMIT 300`;
+}
+
+export async function getStaff() {
+  await ensureClinicTables();
+  return client()`SELECT s.*,
+    EXISTS(SELECT 1 FROM venux_time_clock t WHERE t.staff_id=s.id AND t.clock_out IS NULL) AS clocked_in,
+    (SELECT t.clock_in FROM venux_time_clock t WHERE t.staff_id=s.id ORDER BY t.clock_in DESC LIMIT 1) AS last_clock_in,
+    (SELECT t.clock_out FROM venux_time_clock t WHERE t.staff_id=s.id ORDER BY t.clock_in DESC LIMIT 1) AS last_clock_out
+    FROM venux_staff s ORDER BY s.active DESC,s.full_name`;
+}
+
+export async function createStaff(fullName:string,role:string){
+  await ensureClinicTables();
+  await client()`INSERT INTO venux_staff (full_name,role) VALUES (${fullName},${role})`;
+}
+
+export async function toggleStaffClock(staffId:number,note:string){
+  await ensureClinicTables();const sql=client();
+  const open=await sql`SELECT id FROM venux_time_clock WHERE staff_id=${staffId} AND clock_out IS NULL LIMIT 1`;
+  if(open[0])await sql`UPDATE venux_time_clock SET clock_out=NOW(),note=CASE WHEN ${note}<>'' THEN ${note} ELSE note END WHERE id=${open[0].id}`;
+  else await sql`INSERT INTO venux_time_clock (staff_id,note) VALUES (${staffId},${note})`;
+}
+
+export async function getStaffClockHistory(){
+  await ensureClinicTables();
+  return client()`SELECT t.*,s.full_name,s.role,
+    CASE WHEN t.clock_out IS NULL THEN NULL ELSE ROUND(EXTRACT(EPOCH FROM (t.clock_out-t.clock_in))/3600,2) END AS hours
+    FROM venux_time_clock t JOIN venux_staff s ON s.id=t.staff_id ORDER BY t.clock_in DESC LIMIT 200`;
+}
+
+export async function getOperationsReport(from:string,to:string){
+  await ensureClinicTables();const sql=client();
+  const [summary,byStaff,byTreatment,byDay]=await Promise.all([
+    sql`SELECT COUNT(*) FILTER (WHERE status='completed')::int AS completed,
+      COUNT(*) FILTER (WHERE status='no_show')::int AS no_shows,
+      COUNT(*)::int AS total_bookings,
+      COALESCE(SUM(total_amount) FILTER (WHERE status='completed'),0) AS revenue,
+      COALESCE(AVG(total_amount) FILTER (WHERE status='completed'),0) AS average_sale
+      FROM venux_appointments WHERE requested_date BETWEEN ${from} AND ${to}`,
+    sql`SELECT COALESCE(s.full_name,'Unassigned') AS staff_name,COALESCE(s.role,'') AS role,
+      COUNT(a.id) FILTER (WHERE a.status='completed')::int AS completed,
+      COALESCE(SUM(a.total_amount) FILTER (WHERE a.status='completed'),0) AS revenue
+      FROM venux_appointments a LEFT JOIN venux_staff s ON s.id=a.staff_id
+      WHERE a.requested_date BETWEEN ${from} AND ${to}
+      GROUP BY s.id,s.full_name,s.role ORDER BY revenue DESC`,
+    sql`SELECT treatment,COUNT(*) FILTER (WHERE status='completed')::int AS completed,
+      COALESCE(SUM(total_amount) FILTER (WHERE status='completed'),0) AS revenue
+      FROM venux_appointments WHERE requested_date BETWEEN ${from} AND ${to}
+      GROUP BY treatment ORDER BY revenue DESC LIMIT 25`,
+    sql`SELECT requested_date,COUNT(*)::int AS bookings,
+      COALESCE(SUM(total_amount) FILTER (WHERE status='completed'),0) AS revenue
+      FROM venux_appointments WHERE requested_date BETWEEN ${from} AND ${to}
+      GROUP BY requested_date ORDER BY requested_date`,
+  ]);
+  return {summary:summary[0]??{},byStaff,byTreatment,byDay};
+}
+
+export async function getDormantClients(days=120,search=""){
+  await ensureClinicTables();const term=search.trim(),like=`%${term}%`;
+  return client()`SELECT c.*,m.status AS membership_status,MAX(a.requested_date) FILTER (WHERE a.status='completed') AS last_visit,
+    COUNT(a.id) FILTER (WHERE a.status='completed')::int AS completed_visits
+    FROM venux_clients c LEFT JOIN venux_memberships m ON m.client_id=c.id
+    LEFT JOIN venux_appointments a ON a.client_id=c.id
+    WHERE (${term}='' OR c.full_name ILIKE ${like} OR c.mobile ILIKE ${like})
+    GROUP BY c.id,m.status
+    HAVING MAX(a.requested_date) FILTER (WHERE a.status='completed') IS NULL
+      OR MAX(a.requested_date) FILTER (WHERE a.status='completed') < CURRENT_DATE-${days}::int
+    ORDER BY last_visit NULLS FIRST,c.full_name LIMIT 500`;
+}
+
+export async function queueReturnInvite(clientId:number){
+  await ensureClinicTables();const sql=client();
+  const rows=await sql`SELECT id,full_name,mobile,marketing_sms_consent,sms_unsubscribed_at FROM venux_clients WHERE id=${clientId}`;
+  const row=rows[0];if(!row||!row.marketing_sms_consent||row.sms_unsubscribed_at)return false;
+  const month=new Intl.DateTimeFormat("en-CA",{timeZone:"Australia/Sydney",year:"numeric",month:"2-digit"}).format(new Date());
+  const first=String(row.full_name).trim().split(/\s+/)[0];
+  const result=await sql`INSERT INTO venux_sms_outbox (client_id,event_key,message_type,recipient,message_body)
+    VALUES (${clientId},${`return-invite:${month}:${clientId}`},'return_invite',${row.mobile},${`Hi ${first}, it has been a while since your last visit to VenuX Skin Clinic. Reply or book online if you would like help planning your next treatment. Reply STOP to opt out.`})
+    ON CONFLICT (event_key) DO NOTHING RETURNING id`;
+  return Boolean(result[0]);
+}
+
+export async function getSuppliers(){
+  await ensureClinicTables();return client()`SELECT * FROM venux_suppliers ORDER BY active DESC,supplier_name`;
+}
+
+export async function createSupplier(values:Record<string,string>){
+  await ensureClinicTables();await client()`INSERT INTO venux_suppliers
+    (supplier_name,contact_name,phone,email,website,brands,account_reference,notes)
+    VALUES (${values.name},${values.contact},${values.phone},${values.email},${values.website},${values.brands},${values.accountReference},${values.notes})`;
 }
