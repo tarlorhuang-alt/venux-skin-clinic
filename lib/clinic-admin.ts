@@ -1,5 +1,6 @@
 import "server-only";
 import { neon } from "@neondatabase/serverless";
+import { randomBytes } from "node:crypto";
 
 export type AppointmentStatus = "requested" | "confirmed" | "completed" | "cancelled" | "no_show";
 
@@ -12,7 +13,19 @@ export type BookingInput = {
   date: string;
   time: string;
   notes?: string;
+  source?: "website"|"admin";
+  serviceSmsConsent?: boolean;
+  marketingSmsConsent?: boolean;
 };
+
+export class BookingConflictError extends Error {}
+
+function normaliseMobile(input:string){
+  const digits=input.replace(/\D/g,"");
+  if(/^04\d{8}$/.test(digits))return `61${digits.slice(1)}`;
+  if(/^614\d{8}$/.test(digits))return digits;
+  return digits;
+}
 
 export type ClientImportRow = {
   group: string;
@@ -52,6 +65,10 @@ export function ensureClinicTables() {
       await sql`ALTER TABLE venux_clients ADD COLUMN IF NOT EXISTS emergency_contact_name TEXT NOT NULL DEFAULT ''`;
       await sql`ALTER TABLE venux_clients ADD COLUMN IF NOT EXISTS emergency_contact_phone TEXT NOT NULL DEFAULT ''`;
       await sql`ALTER TABLE venux_clients ADD COLUMN IF NOT EXISTS lead_source TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE venux_clients ADD COLUMN IF NOT EXISTS service_sms_consent BOOLEAN NOT NULL DEFAULT FALSE`;
+      await sql`ALTER TABLE venux_clients ADD COLUMN IF NOT EXISTS marketing_sms_consent BOOLEAN NOT NULL DEFAULT FALSE`;
+      await sql`ALTER TABLE venux_clients ADD COLUMN IF NOT EXISTS marketing_consent_at TIMESTAMPTZ`;
+      await sql`ALTER TABLE venux_clients ADD COLUMN IF NOT EXISTS sms_unsubscribed_at TIMESTAMPTZ`;
       await sql`CREATE TABLE IF NOT EXISTS venux_memberships (
         client_id BIGINT PRIMARY KEY REFERENCES venux_clients(id) ON DELETE CASCADE,
         balance INTEGER NOT NULL DEFAULT 0 CHECK (balance >= 0),
@@ -74,6 +91,17 @@ export function ensureClinicTables() {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )`;
+      await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'website'`;
+      await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS confirmation_token TEXT`;
+      await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS customer_confirmation_status TEXT NOT NULL DEFAULT 'pending'`;
+      await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS confirmed_by_client_at TIMESTAMPTZ`;
+      await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS confirmation_message_queued_at TIMESTAMPTZ`;
+      await sql`CREATE UNIQUE INDEX IF NOT EXISTS venux_appointments_confirmation_token_idx ON venux_appointments (confirmation_token) WHERE confirmation_token IS NOT NULL`;
+      await sql`CREATE TABLE IF NOT EXISTS venux_booking_slots (
+        slot_key TEXT PRIMARY KEY, appointment_id BIGINT UNIQUE REFERENCES venux_appointments(id) ON DELETE CASCADE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`;
+      await sql`INSERT INTO venux_booking_slots (slot_key,appointment_id) SELECT clinic||'|'||requested_date::text||'|'||requested_time,id FROM venux_appointments WHERE status IN ('requested','confirmed') ORDER BY id ON CONFLICT DO NOTHING`;
       await sql`CREATE INDEX IF NOT EXISTS venux_clients_email_idx ON venux_clients (LOWER(email))`;
       await sql`CREATE INDEX IF NOT EXISTS venux_clients_mobile_idx ON venux_clients (mobile)`;
       await sql`CREATE INDEX IF NOT EXISTS venux_appointments_date_idx ON venux_appointments (requested_date)`;
@@ -127,6 +155,14 @@ export function ensureClinicTables() {
       )`;
       await sql`CREATE INDEX IF NOT EXISTS venux_followups_due_idx ON venux_followups (status,due_date)`;
       await sql`CREATE INDEX IF NOT EXISTS venux_treatment_client_idx ON venux_treatment_records (client_id,treated_at DESC)`;
+      await sql`CREATE TABLE IF NOT EXISTS venux_sms_outbox (
+        id BIGSERIAL PRIMARY KEY, client_id BIGINT REFERENCES venux_clients(id) ON DELETE SET NULL,
+        appointment_id BIGINT REFERENCES venux_appointments(id) ON DELETE SET NULL,
+        event_key TEXT NOT NULL UNIQUE, message_type TEXT NOT NULL, recipient TEXT NOT NULL,
+        message_body TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'queued',
+        queued_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), sent_at TIMESTAMPTZ
+      )`;
+      await sql`CREATE INDEX IF NOT EXISTS venux_sms_outbox_status_idx ON venux_sms_outbox (status,queued_at)`;
     })();
   }
   return clinicTablesReady;
@@ -135,17 +171,20 @@ export function ensureClinicTables() {
 export async function createBookingRequest(input: BookingInput) {
   await ensureClinicTables();
   const sql = client();
-  const existing = await sql`SELECT id FROM venux_clients WHERE LOWER(email) = LOWER(${input.email}) OR (mobile = ${input.mobile} AND LOWER(full_name)=LOWER(${input.name})) ORDER BY updated_at DESC LIMIT 1`;
+  const normalMobile=normaliseMobile(input.mobile);
+  const existing = await sql`SELECT id FROM venux_clients WHERE (${input.email}<>'' AND LOWER(email) = LOWER(${input.email})) OR REGEXP_REPLACE(mobile,'[^0-9]','','g') IN (${normalMobile},${normalMobile.replace(/^61/,"0")}) ORDER BY updated_at DESC LIMIT 1`;
   let clientId: number;
   if (existing[0]) {
     clientId = Number(existing[0].id);
-    await sql`UPDATE venux_clients SET full_name=${input.name}, mobile=${input.mobile}, email=${input.email}, updated_at=NOW() WHERE id=${clientId}`;
+    await sql`UPDATE venux_clients SET full_name=${input.name},mobile=${input.mobile},email=CASE WHEN ${input.email}<>'' THEN ${input.email} ELSE email END,service_sms_consent=service_sms_consent OR ${Boolean(input.serviceSmsConsent)},marketing_sms_consent=CASE WHEN sms_unsubscribed_at IS NULL THEN marketing_sms_consent OR ${Boolean(input.marketingSmsConsent)} ELSE FALSE END,marketing_consent_at=CASE WHEN ${Boolean(input.marketingSmsConsent)} AND marketing_consent_at IS NULL THEN NOW() ELSE marketing_consent_at END,updated_at=NOW() WHERE id=${clientId}`;
   } else {
-    const rows = await sql`INSERT INTO venux_clients (full_name,mobile,email) VALUES (${input.name},${input.mobile},${input.email}) RETURNING id`;
+    const rows = await sql`INSERT INTO venux_clients (full_name,mobile,email,service_sms_consent,marketing_sms_consent,marketing_consent_at,lead_source) VALUES (${input.name},${input.mobile},${input.email},${Boolean(input.serviceSmsConsent)},${Boolean(input.marketingSmsConsent)},CASE WHEN ${Boolean(input.marketingSmsConsent)} THEN NOW() ELSE NULL END,${input.source==="admin"?"Clinic":"Website"}) RETURNING id`;
     clientId = Number(rows[0].id);
   }
-  const created = await sql`INSERT INTO venux_appointments (client_id,clinic,treatment,requested_date,requested_time,notes)
-    VALUES (${clientId},${input.clinic},${input.treatment},${input.date},${input.time},${input.notes ?? ""}) RETURNING id`;
+  const token=randomBytes(24).toString("base64url");
+  const slotKey=`${input.clinic}|${input.date}|${input.time}`;
+  const created = await sql`WITH claimed AS (INSERT INTO venux_booking_slots (slot_key) VALUES (${slotKey}) ON CONFLICT DO NOTHING RETURNING slot_key), booked AS (INSERT INTO venux_appointments (client_id,clinic,treatment,requested_date,requested_time,notes,source,confirmation_token) SELECT ${clientId},${input.clinic},${input.treatment},${input.date},${input.time},${input.notes ?? ""},${input.source??"website"},${token} FROM claimed RETURNING id) UPDATE venux_booking_slots s SET appointment_id=b.id FROM booked b WHERE s.slot_key=${slotKey} RETURNING b.id`;
+  if(!created[0])throw new BookingConflictError("This time is no longer available.");
   return Number(created[0].id);
 }
 
@@ -234,7 +273,57 @@ export async function importClientRows(rows: ClientImportRow[]) {
 
 export async function updateAppointment(id: number, status: AppointmentStatus, totalAmount: number, depositStatus: string) {
   await ensureClinicTables();
-  await client()`UPDATE venux_appointments SET status=${status},total_amount=${totalAmount},deposit_status=${depositStatus},updated_at=NOW() WHERE id=${id}`;
+  const sql=client();
+  const before=await sql`SELECT a.*,c.full_name,c.mobile,c.service_sms_consent FROM venux_appointments a JOIN venux_clients c ON c.id=a.client_id WHERE a.id=${id}`;
+  if(!before[0])return;
+  if(status==="confirmed"){
+    const conflict=await sql`SELECT id FROM venux_appointments WHERE id<>${id} AND clinic=${before[0].clinic} AND requested_date=${before[0].requested_date} AND requested_time=${before[0].requested_time} AND status='confirmed' LIMIT 1`;
+    if(conflict[0])throw new BookingConflictError("Another confirmed appointment already uses this time.");
+  }
+  await sql`UPDATE venux_appointments SET status=${status},total_amount=${totalAmount},deposit_status=${depositStatus},updated_at=NOW() WHERE id=${id}`;
+  if(["cancelled","completed","no_show"].includes(status))await sql`DELETE FROM venux_booking_slots WHERE appointment_id=${id}`;
+  if(status==="confirmed"&&before[0].status!=="confirmed"&&before[0].service_sms_consent)await queueAppointmentConfirmation(id);
+}
+
+export async function queueAppointmentConfirmation(appointmentId:number){
+  await ensureClinicTables();const sql=client();
+  const rows=await sql`SELECT a.*,c.full_name,c.mobile FROM venux_appointments a JOIN venux_clients c ON c.id=a.client_id WHERE a.id=${appointmentId}`;
+  const row=rows[0];if(!row)return false;
+  let token=String(row.confirmation_token??"");if(!token){token=randomBytes(24).toString("base64url");await sql`UPDATE venux_appointments SET confirmation_token=${token} WHERE id=${appointmentId}`;}
+  const base=(process.env.NEXT_PUBLIC_SITE_URL||"https://venux-three.vercel.app").replace(/\/$/,"");
+  const date=new Date(String(row.requested_date)).toLocaleDateString("en-AU",{day:"numeric",month:"short",year:"numeric",timeZone:"Australia/Sydney"});
+  const body=`VenuX Skin Clinic: ${row.full_name}, your ${row.treatment} appointment is held for ${date} at ${row.requested_time}, ${row.clinic}. Please confirm: ${base}/booking/confirm/${token}`;
+  const eventKey=`appointment-confirmation:${appointmentId}`;
+  await sql`INSERT INTO venux_sms_outbox (client_id,appointment_id,event_key,message_type,recipient,message_body) VALUES (${row.client_id},${appointmentId},${eventKey},'appointment_confirmation',${row.mobile},${body}) ON CONFLICT (event_key) DO NOTHING`;
+  await sql`UPDATE venux_appointments SET confirmation_message_queued_at=COALESCE(confirmation_message_queued_at,NOW()) WHERE id=${appointmentId}`;
+  return true;
+}
+
+export async function getBookingByToken(token:string){
+  await ensureClinicTables();return (await client()`SELECT a.id,a.treatment,a.clinic,a.requested_date,a.requested_time,a.status,a.customer_confirmation_status,a.confirmed_by_client_at,c.full_name FROM venux_appointments a JOIN venux_clients c ON c.id=a.client_id WHERE a.confirmation_token=${token} LIMIT 1`)[0]??null;
+}
+
+export async function respondToBooking(token:string,response:"confirmed"|"change_requested"){
+  await ensureClinicTables();const rows=await client()`UPDATE venux_appointments SET customer_confirmation_status=${response},confirmed_by_client_at=CASE WHEN ${response}='confirmed' THEN NOW() ELSE NULL END,status=CASE WHEN ${response}='change_requested' THEN 'requested' ELSE status END,updated_at=NOW() WHERE confirmation_token=${token} AND status NOT IN ('cancelled','completed') RETURNING id`;
+  return Boolean(rows[0]);
+}
+
+export async function queueBirthdayMessages(){
+  await ensureClinicTables();const sql=client();
+  const now=new Date(),parts=new Intl.DateTimeFormat("en-AU",{timeZone:"Australia/Sydney",month:"2-digit",day:"2-digit",year:"numeric"}).formatToParts(now);
+  const part=(type:string)=>parts.find(item=>item.type===type)?.value??"";const today=`${part("month")}-${part("day")}`,year=part("year");
+  const rows=await sql`SELECT id,full_name,mobile FROM venux_clients WHERE dob IS NOT NULL AND TO_CHAR(dob,'MM-DD')=${today} AND marketing_sms_consent=TRUE AND sms_unsubscribed_at IS NULL`;
+  let queued=0;
+  for(const row of rows){const eventKey=`birthday:${year}:${row.id}`,first=String(row.full_name).trim().split(/\s+/)[0];const result=await sql`INSERT INTO venux_sms_outbox (client_id,event_key,message_type,recipient,message_body) VALUES (${row.id},${eventKey},'birthday',${row.mobile},${`Happy birthday ${first}! VenuX Skin Clinic wishes you a beautiful day. Reply STOP to opt out.`}) ON CONFLICT (event_key) DO NOTHING RETURNING id`;if(result[0])queued++;}
+  return {eligible:rows.length,queued};
+}
+
+export async function getSmsOutbox(){
+  await ensureClinicTables();return client()`SELECT o.*,c.full_name,a.requested_date,a.requested_time FROM venux_sms_outbox o LEFT JOIN venux_clients c ON c.id=o.client_id LEFT JOIN venux_appointments a ON a.id=o.appointment_id ORDER BY CASE WHEN o.status='queued' THEN 0 ELSE 1 END,o.queued_at DESC LIMIT 500`;
+}
+
+export async function markSmsOutboxSent(id:number){
+  await ensureClinicTables();await client()`UPDATE venux_sms_outbox SET status='sent',sent_at=NOW() WHERE id=${id}`;
 }
 
 export async function saveMembership(clientId: number, balance: number, status: string) {
