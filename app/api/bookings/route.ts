@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createBookingRequest } from "../../../lib/clinic-admin";
+import { BookingConflictError,createBookingRequest } from "../../../lib/clinic-admin";
 
 const allowedClinics = new Set(["Top Ryde · Shop 3002", "Sydney City · 515 Kent Street"]);
 
@@ -15,6 +15,9 @@ export async function POST(request: Request) {
       date: String(body.date ?? "").trim(),
       time: String(body.time ?? "").trim().slice(0,30),
       notes: String(body.message ?? "").trim().slice(0,2000),
+      source:"website" as const,
+      serviceSmsConsent:body.serviceSmsConsent==="yes",
+      marketingSmsConsent:body.marketingSmsConsent==="yes",
     };
     if (!input.name || !input.mobile || !/^\S+@\S+\.\S+$/.test(input.email) || !input.treatment || !allowedClinics.has(input.clinic) || !/^\d{4}-\d{2}-\d{2}$/.test(input.date) || !input.time) {
       return NextResponse.json({ error: "Please check the required booking details." }, { status: 400 });
@@ -24,6 +27,7 @@ export async function POST(request: Request) {
     const id = await createBookingRequest(input);
     return NextResponse.json({ ok: true, reference: `VX-${String(id).padStart(6, "0")}` });
   } catch (error) {
+    if(error instanceof BookingConflictError)return NextResponse.json({error:"That clinic time has just been requested by another client. Please choose another time."},{status:409});
     console.error("Unable to save booking request", error);
     return NextResponse.json({ error: "We could not save this request. Please contact the clinic directly." }, { status: 500 });
   }
