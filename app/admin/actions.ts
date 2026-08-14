@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { clearAdminSession, createAdminSession, isAdminAuthenticated, passwordMatches } from "../../lib/admin-auth";
-import { completeFollowup, createClientCourse, createSkinAssessment, createTreatmentRecord, importClientRows, saveClientProfile, saveHealthProfile, saveMembership, updateAppointment, type AppointmentStatus, type ClientImportRow } from "../../lib/clinic-admin";
+import { BookingConflictError,completeFollowup,createBookingRequest,createClientCourse,createSkinAssessment,createTreatmentRecord,importClientRows,markSmsOutboxSent,queueBirthdayMessages,saveClientProfile,saveHealthProfile,saveMembership,updateAppointment,type AppointmentStatus,type ClientImportRow } from "../../lib/clinic-admin";
 
 export async function adminLogin(formData: FormData) {
   if (!passwordMatches(String(formData.get("password") ?? ""))) redirect("/admin?error=login");
@@ -20,10 +20,24 @@ export async function changeAppointment(formData: FormData) {
   const totalAmount = Number(formData.get("totalAmount") ?? 0);
   const depositStatus = String(formData.get("depositStatus") ?? "unpaid");
   if (!Number.isInteger(id) || id <= 0 || !["requested","confirmed","completed","cancelled","no_show"].includes(status) || !Number.isInteger(totalAmount) || totalAmount < 0 || !["unpaid","paid","refunded","forfeited"].includes(depositStatus)) redirect("/admin/bookings?error=invalid");
-  await updateAppointment(id,status,totalAmount,depositStatus);
+  try{await updateAppointment(id,status,totalAmount,depositStatus);}catch(error){if(error instanceof BookingConflictError)redirect("/admin/bookings?error=conflict");throw error;}
   revalidatePath("/admin"); revalidatePath("/admin/bookings");
   redirect("/admin/bookings?saved=1");
 }
+
+export async function createAdminAppointment(formData:FormData){
+  if(!(await isAdminAuthenticated()))redirect("/admin?error=session");
+  const input={name:String(formData.get("name")??"").trim(),mobile:String(formData.get("mobile")??"").trim(),email:String(formData.get("email")??"").trim().toLowerCase(),treatment:String(formData.get("treatment")??"").trim(),clinic:String(formData.get("clinic")??"").trim(),date:String(formData.get("date")??"").trim(),time:String(formData.get("time")??"").trim(),notes:String(formData.get("notes")??"").trim(),source:"admin" as const,serviceSmsConsent:formData.get("serviceSmsConsent")==="yes",marketingSmsConsent:formData.get("marketingSmsConsent")==="yes"};
+  if(!input.name||!input.mobile||!input.treatment||!input.clinic||!/^\d{4}-\d{2}-\d{2}$/.test(input.date)||!input.time)redirect("/admin/bookings?error=invalid");
+  try{await createBookingRequest(input);}catch(error){if(error instanceof BookingConflictError)redirect("/admin/bookings?error=conflict");throw error;}
+  revalidatePath("/admin");revalidatePath("/admin/bookings");redirect("/admin/bookings?created=1");
+}
+
+export async function markSmsSentAction(formData:FormData){
+  if(!(await isAdminAuthenticated()))redirect("/admin?error=session");const id=Number(formData.get("id"));if(!Number.isInteger(id)||id<=0)redirect("/admin/messages?error=invalid");await markSmsOutboxSent(id);revalidatePath("/admin/messages");redirect("/admin/messages?saved=1");
+}
+
+export async function queueBirthdaysAction(){if(!(await isAdminAuthenticated()))redirect("/admin?error=session");const result=await queueBirthdayMessages();revalidatePath("/admin/messages");redirect(`/admin/messages?birthdays=${result.queued}`);}
 
 export async function changeMembership(formData: FormData) {
   if (!(await isAdminAuthenticated())) redirect("/admin?error=session");
