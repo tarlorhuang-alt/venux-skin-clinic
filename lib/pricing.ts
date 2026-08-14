@@ -125,14 +125,14 @@ export function resolvePrice(map: Map<string, StoredPrice>, group: string, name:
   return map.get(priceKey(group, name)) ?? { key: priceKey(group, name), group, name, regular, member, memberRate: 80 as const };
 }
 
-export async function savePriceRows(rows: Array<{ key: string; regular: number; memberRate: 80 | 85 }>) {
+export async function savePriceRows(rows: Array<{ key: string; regular: number; member?: number; memberRate: 80 | 85 }>) {
   await ensureTable();
   const allowed = new Set(priceCatalogue.map((item) => item.key));
   const clean = rows.filter((row) => allowed.has(row.key) && Number.isInteger(row.regular) && row.regular >= 0);
   const payload = clean.map((row) => ({
     price_key: row.key,
     regular_price: row.regular,
-    member_price: Math.round(row.regular * (row.memberRate / 100)),
+    member_price: row.member ?? Math.round(row.regular * (row.memberRate / 100)),
     member_rate: row.memberRate,
   }));
   if (!payload.length) return;
