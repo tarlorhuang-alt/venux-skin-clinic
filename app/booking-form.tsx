@@ -4,9 +4,23 @@ import { FormEvent, useState } from "react";
 
 export function BookingForm() {
   const [submitted, setSubmitted] = useState(false);
-  function submitBooking(event: FormEvent<HTMLFormElement>) {
+  const [submitting, setSubmitting] = useState(false);
+  const [reference, setReference] = useState("");
+  const [error, setError] = useState("");
+  async function submitBooking(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setSubmitted(true);
+    setSubmitting(true); setError("");
+    const form = event.currentTarget;
+    try {
+      const response = await fetch("/api/bookings", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(Object.fromEntries(new FormData(form))) });
+      const result = await response.json();
+      if (response.ok) { setSubmitted(true); setReference(result.reference); form.reset(); }
+      else setError(result.error || "Unable to save your request.");
+    } catch {
+      setError("Unable to connect. Please contact the clinic directly.");
+    } finally {
+      setSubmitting(false);
+    }
   }
   return (
     <form onSubmit={submitBooking}>
@@ -30,8 +44,9 @@ export function BookingForm() {
       </label>
       <label className="full">Tell us a little more<textarea name="message" rows={4} placeholder="Your goals, treatment questions or accessibility needs" /></label>
       <label className="full booking-policy-check"><input required name="deposit-policy" type="checkbox" /><span>I understand the AUD $45 deposit is fully credited toward my booked treatment. I may reschedule without losing the deposit when I give at least 24 hours’ notice. Late changes and no-shows may forfeit the deposit.</span></label>
-      <button className="button dark full" type="submit">Request a consultation</button>
-      {submitted && <p className="success full" role="status">Thank you. Your appointment request has been prepared. Your selected time is not confirmed until the clinic contacts you and the AUD $45 deposit is received.</p>}
+      <button className="button dark full" type="submit" disabled={submitting}>{submitting ? "Saving request…" : "Request a consultation"}</button>
+      {error && <p className="admin-error full" role="alert">{error}</p>}
+      {submitted && <p className="success full" role="status">Thank you. Your request {reference} is now in the VenuX booking system. Your selected time is not confirmed until the clinic contacts you and the AUD $45 deposit is received.</p>}
     </form>
   );
 }
