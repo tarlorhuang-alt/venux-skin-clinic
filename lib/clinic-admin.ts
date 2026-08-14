@@ -257,13 +257,14 @@ export async function getAppointments(date = "") {
 
 export async function getClients(search = "") {
   await ensureClinicTables();
-  const term=search.trim(),like=`%${term}%`,digits=normaliseMobile(term);
+  const term=search.trim(),like=`%${term}%`,digits=normaliseMobile(term),localDigits=digits.replace(/^61/,"0");
   return client()`SELECT c.*,m.balance,m.status AS membership_status,m.joined_at,
     COUNT(a.id)::int AS visit_count,MAX(a.requested_date) AS last_visit
     FROM venux_clients c LEFT JOIN venux_memberships m ON m.client_id=c.id
     LEFT JOIN venux_appointments a ON a.client_id=c.id
     WHERE (${term}='' OR c.full_name ILIKE ${like} OR c.email ILIKE ${like}
-      OR (${digits}<>'' AND REGEXP_REPLACE(c.mobile,'[^0-9]','','g') LIKE ${`%${digits}%`}))
+      OR (${digits}<>'' AND (REGEXP_REPLACE(c.mobile,'[^0-9]','','g') LIKE ${`%${digits}%`}
+        OR REGEXP_REPLACE(c.mobile,'[^0-9]','','g') LIKE ${`%${localDigits}%`})))
     GROUP BY c.id,m.balance,m.status,m.joined_at ORDER BY c.updated_at DESC LIMIT 500`;
 }
 
