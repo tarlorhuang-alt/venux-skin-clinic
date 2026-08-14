@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { clearAdminSession, createAdminSession, isAdminAuthenticated, passwordMatches } from "../../lib/admin-auth";
-import { importClientRows, saveMembership, updateAppointment, type AppointmentStatus, type ClientImportRow } from "../../lib/clinic-admin";
+import { completeFollowup, createClientCourse, createSkinAssessment, createTreatmentRecord, importClientRows, saveClientProfile, saveHealthProfile, saveMembership, updateAppointment, type AppointmentStatus, type ClientImportRow } from "../../lib/clinic-admin";
 
 export async function adminLogin(formData: FormData) {
   if (!passwordMatches(String(formData.get("password") ?? ""))) redirect("/admin?error=login");
@@ -58,4 +58,61 @@ export async function importClients(formData: FormData) {
   const result=await importClientRows(rows);
   revalidatePath("/admin");revalidatePath("/admin/clients");
   redirect(`/admin/clients?imported=${result.imported}&processed=${result.processed}&duplicates=${result.duplicates}`);
+}
+
+const textValue=(formData:FormData,name:string)=>String(formData.get(name)??"").trim();
+const positiveInt=(formData:FormData,name:string,nullable=false)=>{const raw=textValue(formData,name);if(!raw&&nullable)return null;const value=Number(raw);return Number.isFinite(value)&&value>=0?Math.round(value):null;};
+const clientPath=(id:number)=>`/admin/clients/${id}`;
+
+async function authorisedClient(formData:FormData){
+  if(!(await isAdminAuthenticated())) redirect("/admin?error=session");
+  const clientId=Number(formData.get("clientId"));
+  if(!Number.isInteger(clientId)||clientId<=0) redirect("/admin/clients?error=invalid");
+  return clientId;
+}
+
+export async function updateClientProfileAction(formData:FormData){
+  const clientId=await authorisedClient(formData);
+  const fullName=textValue(formData,"fullName"),mobile=textValue(formData,"mobile");
+  if(!fullName||!mobile) redirect(`${clientPath(clientId)}?error=profile`);
+  await saveClientProfile(clientId,{fullName,mobile,email:textValue(formData,"email").toLowerCase(),dob:textValue(formData,"dob"),address:textValue(formData,"address"),gender:textValue(formData,"gender"),occupation:textValue(formData,"occupation"),emergencyName:textValue(formData,"emergencyName"),emergencyPhone:textValue(formData,"emergencyPhone"),leadSource:textValue(formData,"leadSource")});
+  revalidatePath(clientPath(clientId));revalidatePath("/admin/clients");redirect(`${clientPath(clientId)}?saved=profile`);
+}
+
+export async function updateHealthProfileAction(formData:FormData){
+  const clientId=await authorisedClient(formData);
+  await saveHealthProfile(clientId,{skinType:textValue(formData,"skinType"),primaryConcerns:textValue(formData,"primaryConcerns"),allergies:textValue(formData,"allergies"),medicalConditions:textValue(formData,"medicalConditions"),medications:textValue(formData,"medications"),pregnancyStatus:textValue(formData,"pregnancyStatus"),breastfeeding:formData.get("breastfeeding")==="yes",implants:textValue(formData,"implants"),aestheticHistory:textValue(formData,"aestheticHistory"),currentSkincare:textValue(formData,"currentSkincare")});
+  revalidatePath(clientPath(clientId));redirect(`${clientPath(clientId)}?saved=health`);
+}
+
+export async function addSkinAssessmentAction(formData:FormData){
+  const clientId=await authorisedClient(formData);
+  const fitzpatrick=positiveInt(formData,"fitzpatrick",true),anxietyLevel=positiveInt(formData,"anxietyLevel",true),budget=positiveInt(formData,"budget",true);
+  if((fitzpatrick!==null&&(fitzpatrick<1||fitzpatrick>6))||(anxietyLevel!==null&&(anxietyLevel<1||anxietyLevel>5))) redirect(`${clientPath(clientId)}?error=assessment`);
+  await createSkinAssessment(clientId,{concerns:textValue(formData,"concerns"),mainConcern:textValue(formData,"mainConcern"),anxietyLevel,expectedOutcome:textValue(formData,"expectedOutcome"),fitzpatrick,recommendation:textValue(formData,"recommendation"),coursePlan:textValue(formData,"coursePlan"),budget,notes:textValue(formData,"notes"),assessedBy:textValue(formData,"assessedBy")||"Admin"});
+  revalidatePath(clientPath(clientId));redirect(`${clientPath(clientId)}?saved=assessment`);
+}
+
+export async function addTreatmentRecordAction(formData:FormData){
+  const clientId=await authorisedClient(formData);
+  const service=textValue(formData,"service"),treatedAt=textValue(formData,"treatedAt"),operator=textValue(formData,"operator"),signature=textValue(formData,"signature");
+  if(!service||!treatedAt||!operator||!signature) redirect(`${clientPath(clientId)}?error=treatment`);
+  await createTreatmentRecord(clientId,{service,treatedAt,operator,area:textValue(formData,"area"),products:textValue(formData,"products"),brand:textValue(formData,"brand"),batchNumber:textValue(formData,"batchNumber"),dosage:textValue(formData,"dosage"),parameters:textValue(formData,"parameters"),shotCount:positiveInt(formData,"shotCount",true),unitCount:positiveInt(formData,"unitCount",true),treatmentMap:textValue(formData,"treatmentMap"),immediateResponse:textValue(formData,"immediateResponse"),adverseReaction:textValue(formData,"adverseReaction"),adverseManagement:textValue(formData,"adverseManagement"),signature});
+  revalidatePath(clientPath(clientId));revalidatePath("/admin/follow-ups");redirect(`${clientPath(clientId)}?saved=treatment`);
+}
+
+export async function addClientCourseAction(formData:FormData){
+  const clientId=await authorisedClient(formData);
+  const purchased=positiveInt(formData,"purchased"),used=positiveInt(formData,"used"),amountPaid=positiveInt(formData,"amountPaid");
+  if(!textValue(formData,"name")||purchased===null||purchased<1||used===null||used>purchased||amountPaid===null) redirect(`${clientPath(clientId)}?error=course`);
+  await createClientCourse(clientId,{name:textValue(formData,"name"),purchased,used,expiresOn:textValue(formData,"expiresOn"),amountPaid,status:textValue(formData,"status")||"active"});
+  revalidatePath(clientPath(clientId));redirect(`${clientPath(clientId)}?saved=course`);
+}
+
+export async function completeFollowupAction(formData:FormData){
+  const clientId=await authorisedClient(formData),followupId=Number(formData.get("followupId"));
+  const satisfaction=positiveInt(formData,"satisfaction",true);
+  if(!Number.isInteger(followupId)||followupId<=0||(satisfaction!==null&&(satisfaction<1||satisfaction>5))) redirect(`${clientPath(clientId)}?error=followup`);
+  await completeFollowup(followupId,clientId,{notes:textValue(formData,"notes"),satisfaction,abnormal:formData.get("abnormal")==="yes",reviewRequired:formData.get("reviewRequired")==="yes"});
+  revalidatePath(clientPath(clientId));revalidatePath("/admin/follow-ups");redirect(`${clientPath(clientId)}?saved=followup`);
 }
