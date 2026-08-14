@@ -8,14 +8,17 @@ export type PriceDefinition = {
   name: string;
   regular: number;
   member: number;
-  memberRate: 80 | 85;
+  memberRate: MemberRate;
 };
+
+export type MemberRate = 50 | 60 | 70 | 80 | 85 | 90;
+export const memberRates: MemberRate[] = [90, 85, 80, 70, 60, 50];
 
 export type StoredPrice = PriceDefinition & { updatedAt?: string };
 
 export const priceKey = (group: string, name: string) => `${group}:${name}`;
 
-const advanced: Array<[string, string, number, number, (80 | 85)?]> = [
+const advanced: Array<[string, string, number, number, MemberRate?]> = [
   ["Ultherapy", "Brow + eye · approx. 200 lines", 1250, 1000],
   ["Ultherapy", "Lower face + jawline · approx. 450 lines", 2200, 1760],
   ["Ultherapy", "Full face + upper neck · approx. 700 lines", 2700, 2160],
@@ -91,10 +94,12 @@ function ensureTable() {
         price_key TEXT PRIMARY KEY,
         regular_price INTEGER NOT NULL CHECK (regular_price >= 0),
         member_price INTEGER NOT NULL CHECK (member_price >= 0),
-        member_rate INTEGER NOT NULL CHECK (member_rate IN (80, 85)),
+        member_rate INTEGER NOT NULL,
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
-    `.then(() => undefined);
+    `.then(async () => {
+      await sql`ALTER TABLE venux_prices DROP CONSTRAINT IF EXISTS venux_prices_member_rate_check`;
+    }).then(() => undefined);
   }
   return tableReady;
 }
@@ -111,7 +116,7 @@ export async function getPriceMap(): Promise<Map<string, StoredPrice>> {
         ...base,
         regular: Number(row.regular_price),
         member: Number(row.member_price),
-        memberRate: Number(row.member_rate) === 85 ? 85 : 80,
+        memberRate: memberRates.includes(Number(row.member_rate) as MemberRate) ? Number(row.member_rate) as MemberRate : 80,
         updatedAt: String(row.updated_at),
       });
     }
@@ -125,10 +130,10 @@ export function resolvePrice(map: Map<string, StoredPrice>, group: string, name:
   return map.get(priceKey(group, name)) ?? { key: priceKey(group, name), group, name, regular, member, memberRate: 80 as const };
 }
 
-export async function savePriceRows(rows: Array<{ key: string; regular: number; member?: number; memberRate: 80 | 85 }>) {
+export async function savePriceRows(rows: Array<{ key: string; regular: number; member?: number; memberRate: MemberRate }>) {
   await ensureTable();
   const allowed = new Set(priceCatalogue.map((item) => item.key));
-  const clean = rows.filter((row) => allowed.has(row.key) && Number.isInteger(row.regular) && row.regular >= 0);
+  const clean = rows.filter((row) => allowed.has(row.key) && Number.isInteger(row.regular) && row.regular >= 0 && memberRates.includes(row.memberRate));
   const payload = clean.map((row) => ({
     price_key: row.key,
     regular_price: row.regular,
