@@ -10,15 +10,16 @@ import "./clinical-list.css";
 export const dynamic="force-dynamic";
 export const metadata:Metadata={title:"Clients & Membership | VenuX Clinic OS",robots:{index:false,follow:false}};
 
-export default async function ClientsAdmin({searchParams}:{searchParams:Promise<{saved?:string;error?:string;imported?:string;processed?:string;duplicates?:string}>}){
+export default async function ClientsAdmin({searchParams}:{searchParams:Promise<{saved?:string;error?:string;imported?:string;processed?:string;duplicates?:string;q?:string}>}){
   const params=await searchParams;
   if(!(await isAdminAuthenticated()))return <AdminLogin error={params.error}/>;
-  const clients=await getClients();
+  const clients=await getClients(params.q??"");
   return <AdminShell active="Clients & membership">
     <header className="clinic-admin-head"><div><p>Profiles & prepaid cards</p><h1>Clients & membership</h1></div><span>{clients.length} clients</span></header>
     {params.saved?<div className="clinic-alert">Membership card updated.</div>:null}
     {params.imported!==undefined?<div className="clinic-alert">Import complete: {params.processed} valid records processed, {params.imported} new clients added{Number(params.duplicates)>0?`, ${params.duplicates} exact duplicates combined`:""}.</div>:null}
     {params.error?<div className="clinic-alert error">{params.error==="columns"?"The file needs Name and Mobile columns.":"Please check the customer import file or membership values."}</div>:null}
+    <form method="get" className="client-search-form"><label>Search all client information<input name="q" defaultValue={params.q??""} placeholder="Mobile, name or email"/></label><button>Search</button>{params.q?<a href="/admin/clients">Clear</a>:null}</form>
     <form action={importClients} className="client-import-form"><div><strong>Import customer records</strong><span>CSV columns: Group, Name, DOB, Mobile, Email, Address. Existing clients are matched by Email or by Name + Mobile.</span></div><input type="file" name="clientsFile" accept=".csv,text/csv" required/><button type="submit">Import CSV</button></form>
     <section className="client-grid">{clients.length?clients.map(client=><article className="client-card" key={String(client.id)}>
       <header><div><h2>{String(client.full_name)}</h2><span>Card VX{String(client.id).padStart(6,"0")} · {String(client.customer_group??"General")}</span></div><span className={`status-pill ${client.membership_status??"inactive"}`}>{statusLabel(client.membership_status??"non-member")}</span></header>
