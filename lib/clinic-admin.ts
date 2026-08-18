@@ -6,6 +6,10 @@ export type AppointmentStatus = "requested" | "confirmed" | "completed" | "cance
 
 export type BookingInput = {
   clientId?: number;
+  staffId?: number;
+  serviceId?: number;
+  durationMinutes?: number;
+  totalAmount?: number;
   name: string;
   mobile: string;
   email: string;
@@ -26,6 +30,11 @@ function normaliseMobile(input:string){
   if(/^04\d{8}$/.test(digits))return `61${digits.slice(1)}`;
   if(/^614\d{8}$/.test(digits))return digits;
   return digits;
+}
+
+function timeToMinutes(input:string){
+  const match=input.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);if(!match)return null;
+  let hour=Number(match[1])%12;if(match[3].toUpperCase()==="PM")hour+=12;return hour*60+Number(match[2]);
 }
 
 export type ClientImportRow = {
@@ -184,6 +193,18 @@ export function ensureClinicTables() {
         notes TEXT NOT NULL DEFAULT '', active BOOLEAN NOT NULL DEFAULT TRUE,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )`;
+      await sql`CREATE TABLE IF NOT EXISTS venux_services (
+        id BIGSERIAL PRIMARY KEY, service_name TEXT NOT NULL, category TEXT NOT NULL DEFAULT 'Skin',
+        duration_minutes INTEGER NOT NULL DEFAULT 60 CHECK (duration_minutes > 0),
+        regular_price INTEGER NOT NULL DEFAULT 0 CHECK (regular_price >= 0),
+        active BOOLEAN NOT NULL DEFAULT TRUE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`;
+      await sql`CREATE UNIQUE INDEX IF NOT EXISTS venux_services_name_idx ON venux_services (LOWER(service_name))`;
+      await sql`ALTER TABLE venux_staff ADD COLUMN IF NOT EXISTS city_enabled BOOLEAN NOT NULL DEFAULT FALSE`;
+      await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS service_id BIGINT REFERENCES venux_services(id) ON DELETE SET NULL`;
+      await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS duration_minutes INTEGER NOT NULL DEFAULT 60 CHECK (duration_minutes > 0)`;
+      await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS start_minute INTEGER CHECK (start_minute BETWEEN 0 AND 1439)`;
     })();
   }
   return clinicTablesReady;
@@ -205,8 +226,16 @@ export async function createBookingRequest(input: BookingInput) {
     clientId = Number(rows[0].id);
   }
   const token=randomBytes(24).toString("base64url");
-  const slotKey=`${input.clinic}|${input.date}|${input.time}`;
-  const created = await sql`WITH claimed AS (INSERT INTO venux_booking_slots (slot_key) VALUES (${slotKey}) ON CONFLICT DO NOTHING RETURNING slot_key), booked AS (INSERT INTO venux_appointments (client_id,clinic,treatment,requested_date,requested_time,notes,source,confirmation_token) SELECT ${clientId},${input.clinic},${input.treatment},${input.date},${input.time},${input.notes ?? ""},${input.source??"website"},${token} FROM claimed RETURNING id) UPDATE venux_booking_slots s SET appointment_id=b.id FROM booked b WHERE s.slot_key=${slotKey} RETURNING b.id`;
+  const startMinute=timeToMinutes(input.time);
+  if(input.staffId&&startMinute!==null){
+    const overlap=await sql`SELECT id FROM venux_appointments WHERE staff_id=${input.staffId}
+      AND requested_date=${input.date} AND status IN ('requested','confirmed') AND start_minute IS NOT NULL
+      AND start_minute < ${startMinute+(input.durationMinutes??60)}
+      AND start_minute+duration_minutes > ${startMinute} LIMIT 1`;
+    if(overlap[0])throw new BookingConflictError("This beautician already has an overlapping appointment.");
+  }
+  const slotKey=input.staffId?`${input.clinic}|${input.date}|${input.time}|staff:${input.staffId}`:`${input.clinic}|${input.date}|${input.time}`;
+  const created = await sql`WITH claimed AS (INSERT INTO venux_booking_slots (slot_key) VALUES (${slotKey}) ON CONFLICT DO NOTHING RETURNING slot_key), booked AS (INSERT INTO venux_appointments (client_id,clinic,treatment,requested_date,requested_time,notes,source,confirmation_token,staff_id,service_id,duration_minutes,start_minute,total_amount) SELECT ${clientId},${input.clinic},${input.treatment},${input.date},${input.time},${input.notes ?? ""},${input.source??"website"},${token},${input.staffId??null},${input.serviceId??null},${input.durationMinutes??60},${startMinute},${input.totalAmount??0} FROM claimed RETURNING id) UPDATE venux_booking_slots s SET appointment_id=b.id FROM booked b WHERE s.slot_key=${slotKey} RETURNING b.id`;
   if(!created[0])throw new BookingConflictError("This time is no longer available.");
   return Number(created[0].id);
 }
@@ -546,4 +575,54 @@ export async function createSupplier(values:Record<string,string>){
   await ensureClinicTables();await client()`INSERT INTO venux_suppliers
     (supplier_name,contact_name,phone,email,website,brands,account_reference,notes)
     VALUES (${values.name},${values.contact},${values.phone},${values.email},${values.website},${values.brands},${values.accountReference},${values.notes})`;
+}
+
+export type ServiceImportRow={name:string;category:string;duration:number;price:number};
+
+export async function getOwnerServices(){
+  await ensureClinicTables();return client()`SELECT * FROM venux_services ORDER BY active DESC,category,service_name`;
+}
+
+export async function getOwnerService(serviceId:number){
+  await ensureClinicTables();return (await client()`SELECT * FROM venux_services WHERE id=${serviceId} AND active=TRUE LIMIT 1`)[0]??null;
+}
+
+export async function createClinicService(values:ServiceImportRow){
+  await ensureClinicTables();await client()`INSERT INTO venux_services (service_name,category,duration_minutes,regular_price)
+    VALUES (${values.name},${values.category},${values.duration},${values.price})
+    ON CONFLICT ((LOWER(service_name))) DO UPDATE SET category=EXCLUDED.category,duration_minutes=EXCLUDED.duration_minutes,regular_price=EXCLUDED.regular_price,active=TRUE,updated_at=NOW()`;
+}
+
+export async function importClinicServices(rows:ServiceImportRow[]){
+  await ensureClinicTables();for(const row of rows)await createClinicService(row);return rows.length;
+}
+
+export async function getCityStaff(){
+  await ensureClinicTables();const sql=client();
+  const selected=await sql`SELECT * FROM venux_staff WHERE active=TRUE AND city_enabled=TRUE ORDER BY id LIMIT 3`;
+  if(selected.length)return selected;
+  return sql`SELECT * FROM venux_staff WHERE active=TRUE ORDER BY id LIMIT 3`;
+}
+
+export async function createCityStaff(fullName:string,role:string){
+  await ensureClinicTables();await client()`INSERT INTO venux_staff (full_name,role,city_enabled) VALUES (${fullName},${role},TRUE)`;
+}
+
+export async function getCityDay(date:string){
+  await ensureClinicTables();const sql=client();
+  const [appointments,settlement]=await Promise.all([
+    sql`SELECT a.*,c.full_name,c.mobile,s.full_name AS staff_name,v.service_name,v.duration_minutes AS catalog_duration,v.regular_price
+      FROM venux_appointments a JOIN venux_clients c ON c.id=a.client_id
+      LEFT JOIN venux_staff s ON s.id=a.staff_id LEFT JOIN venux_services v ON v.id=a.service_id
+      WHERE a.clinic ILIKE '%515 Kent Street%' AND a.requested_date=${date}
+      ORDER BY a.requested_time,s.full_name`,
+    sql`SELECT COALESCE(s.full_name,'Unassigned') AS staff_name,
+      COUNT(a.id) FILTER (WHERE a.status NOT IN ('cancelled','no_show'))::int AS projects,
+      COALESCE(SUM(a.duration_minutes) FILTER (WHERE a.status NOT IN ('cancelled','no_show')),0)::int AS minutes,
+      COALESCE(SUM(a.total_amount) FILTER (WHERE a.status='completed'),0)::int AS revenue
+      FROM venux_appointments a LEFT JOIN venux_staff s ON s.id=a.staff_id
+      WHERE a.clinic ILIKE '%515 Kent Street%' AND a.requested_date=${date}
+      GROUP BY s.id,s.full_name ORDER BY s.full_name`,
+  ]);
+  return {appointments,settlement};
 }
