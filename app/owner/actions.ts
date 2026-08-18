@@ -3,7 +3,7 @@
 import {revalidatePath} from "next/cache";
 import {redirect} from "next/navigation";
 import {clearOwnerSession,createOwnerSession,isOwnerAuthenticated,ownerPasswordMatches} from "../../lib/owner-auth";
-import {BookingConflictError,createBookingRequest,createCityStaff,createClinicService,getOwnerService,importClinicServices,updateAppointment,type AppointmentStatus,type ServiceImportRow} from "../../lib/clinic-admin";
+import {BookingConflictError,createBookingRequest,createCityStaff,createClinicService,getOwnerService,importClientRows,importClinicServices,updateAppointment,type AppointmentStatus,type ClientImportRow,type ServiceImportRow} from "../../lib/clinic-admin";
 
 const text=(data:FormData,name:string)=>String(data.get(name)??"").trim();
 const ownerDate=(data:FormData)=>/^\d{4}-\d{2}-\d{2}$/.test(text(data,"date"))?text(data,"date"):"";
@@ -30,6 +30,18 @@ function parseCsv(value:string){
   const ix={name:index("name","service","project"),category:index("category"),duration:index("duration","minutes","duration minutes"),price:index("price","regular price")};
   if(ix.name<0||ix.duration<0||ix.price<0)return [];
   return lines.slice(1).map(line=>line.split(",").map(cell=>cell.trim())).map(columns=>({name:columns[ix.name]??"",category:ix.category>=0?(columns[ix.category]||"Skin"):"Skin",duration:Number(columns[ix.duration]),price:Number(columns[ix.price])})).filter((row):row is ServiceImportRow=>Boolean(row.name)&&Number.isInteger(row.duration)&&row.duration>=5&&row.duration<=480&&Number.isInteger(row.price)&&row.price>=0);
+}
+
+export async function importOwnerClients(data:FormData){
+  await requireOwner();const file=data.get("clientFile");if(!(file instanceof File)||file.size===0||file.size>5_000_000)redirect("/owner?error=clients");
+  const parseClientCsv=(value:string)=>{const rows:string[][]=[];let row:string[]=[],cell="",quoted=false;for(let i=0;i<value.length;i++){const ch=value[i];if(ch==='"'){if(quoted&&value[i+1]==='"'){cell+='"';i++;}else quoted=!quoted;}else if(ch===","&&!quoted){row.push(cell);cell="";}else if((ch==="\n"||ch==="\r")&&!quoted){if(ch==="\r"&&value[i+1]==="\n")i++;row.push(cell);if(row.some(Boolean))rows.push(row);row=[];cell="";}else cell+=ch;}row.push(cell);if(row.some(Boolean))rows.push(row);return rows;};
+  const parsed=parseClientCsv(await file.text());if(parsed.length<2||parsed.length>2001)redirect("/owner?error=clients");
+  const headers=parsed[0].map(value=>value.replace(/^\uFEFF/,"").trim().toLowerCase());const index=(...names:string[])=>headers.findIndex(header=>names.includes(header));
+  const indexes={group:index("group","customer group"),name:index("name","full name"),dob:index("dob","date of birth"),mobile:index("mobile","phone"),email:index("email","e-mail"),address:index("address")};
+  if(indexes.name<0||indexes.mobile<0)redirect("/owner?error=client-columns");
+  const isoDob=(value:string)=>{const clean=value.trim();if(!clean)return null;const au=clean.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);if(au)return `${au[3]}-${au[2].padStart(2,"0")}-${au[1].padStart(2,"0")}`;return /^\d{4}-\d{2}-\d{2}$/.test(clean)?clean:null;};
+  const rows:ClientImportRow[]=parsed.slice(1).map(values=>({group:(values[indexes.group]??"General").trim()||"General",name:(values[indexes.name]??"").trim(),dob:indexes.dob>=0?isoDob(values[indexes.dob]??""):null,mobile:(values[indexes.mobile]??"").replace(/\s+/g,""),email:indexes.email>=0?(values[indexes.email]??"").trim().toLowerCase():"",address:indexes.address>=0?(values[indexes.address]??"").trim():""})).filter(row=>row.name&&row.mobile);
+  if(!rows.length)redirect("/owner?error=clients");const result=await importClientRows(rows);revalidatePath("/owner");revalidatePath("/admin/clients");redirect(`/owner?clientsImported=${result.imported}&clientsProcessed=${result.processed}&clientDuplicates=${result.duplicates}`);
 }
 
 export async function importOwnerServices(data:FormData){
