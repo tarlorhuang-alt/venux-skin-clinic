@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { clearAdminSession, createAdminSession, isAdminAuthenticated, passwordMatches } from "../../lib/admin-auth";
-import { BookingConflictError,completeFollowup,createBookingRequest,createClientCourse,createSkinAssessment,createStaff,createSupplier,createTreatmentRecord,getOwnerService,importClientRows,markSmsOutboxSent,queueBirthdayMessages,queueReturnInvite,saveClientProfile,saveHealthProfile,saveMembership,startAppointment,toggleStaffClock,updateAppointment,type AppointmentStatus,type ClientImportRow } from "../../lib/clinic-admin";
+import { BookingConflictError,completeFollowup,createBookingRequest,createClientCourse,createExpense,createSkinAssessment,createStaff,createSupplier,createTreatmentRecord,getOwnerService,importClientRows,markSmsOutboxSent,queueBirthdayMessages,queueReturnInvite,saveClientProfile,saveHealthProfile,saveMembership,startAppointment,toggleStaffClock,updateAppointment,type AppointmentStatus,type ClientImportRow } from "../../lib/clinic-admin";
 
 export async function adminLogin(formData: FormData) {
   if (!passwordMatches(String(formData.get("password") ?? ""))) redirect("/admin?error=login");
@@ -67,6 +67,14 @@ export async function addSupplierAction(formData:FormData){
   const website=textValue(formData,"website");if(website&&!/^https?:\/\//i.test(website))redirect("/admin/suppliers?error=invalid");
   await createSupplier({name,contact:textValue(formData,"contact"),phone:textValue(formData,"phone"),email:textValue(formData,"email").toLowerCase(),website,brands:textValue(formData,"brands"),accountReference:textValue(formData,"accountReference"),notes:textValue(formData,"notes")});
   revalidatePath("/admin/suppliers");redirect("/admin/suppliers?created=1");
+}
+
+export async function addExpenseAction(formData:FormData){
+  if(!(await isAdminAuthenticated()))redirect("/admin?error=session");
+  const date=textValue(formData,"date"),category=textValue(formData,"category"),description=textValue(formData,"description"),amount=Number(formData.get("amount")??-1);
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!category||!description||!Number.isFinite(amount)||amount<0)redirect("/admin/expenses?error=invalid");
+  await createExpense({date,category,payee:textValue(formData,"payee"),description,amount,paymentMethod:textValue(formData,"paymentMethod")||"Card",notes:textValue(formData,"notes")});
+  revalidatePath("/admin/expenses");revalidatePath("/admin");redirect(`/admin/expenses?month=${date.slice(0,7)}&created=1`);
 }
 
 export async function changeMembership(formData: FormData) {
