@@ -193,6 +193,14 @@ export function ensureClinicTables() {
         notes TEXT NOT NULL DEFAULT '', active BOOLEAN NOT NULL DEFAULT TRUE,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )`;
+      await sql`CREATE TABLE IF NOT EXISTS venux_expenses (
+        id BIGSERIAL PRIMARY KEY, expense_date DATE NOT NULL, category TEXT NOT NULL,
+        payee TEXT NOT NULL DEFAULT '', description TEXT NOT NULL,
+        amount NUMERIC(10,2) NOT NULL CHECK (amount >= 0),
+        payment_method TEXT NOT NULL DEFAULT 'Card', notes TEXT NOT NULL DEFAULT '',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`;
+      await sql`CREATE INDEX IF NOT EXISTS venux_expenses_date_idx ON venux_expenses (expense_date DESC)`;
       await sql`CREATE TABLE IF NOT EXISTS venux_services (
         id BIGSERIAL PRIMARY KEY, service_name TEXT NOT NULL, category TEXT NOT NULL DEFAULT 'Skin',
         duration_minutes INTEGER NOT NULL DEFAULT 60 CHECK (duration_minutes > 0),
@@ -296,6 +304,15 @@ export async function getAppointments(date = "") {
     LEFT JOIN venux_staff s ON s.id=a.staff_id
     WHERE (${date}='' OR a.requested_date=${date || null})
     ORDER BY a.requested_date DESC,a.requested_time DESC LIMIT 500`;
+}
+
+export async function getAppointmentsRange(from:string,to:string) {
+  await ensureClinicTables();
+  return client()`SELECT a.*,c.full_name,c.mobile,c.email,s.full_name AS staff_name
+    FROM venux_appointments a JOIN venux_clients c ON c.id=a.client_id
+    LEFT JOIN venux_staff s ON s.id=a.staff_id
+    WHERE a.requested_date BETWEEN ${from} AND ${to}
+    ORDER BY a.requested_date,a.start_minute NULLS LAST,a.requested_time,a.id LIMIT 1000`;
 }
 
 export async function getClients(search = "") {
@@ -620,6 +637,22 @@ export async function createSupplier(values:Record<string,string>){
   await ensureClinicTables();await client()`INSERT INTO venux_suppliers
     (supplier_name,contact_name,phone,email,website,brands,account_reference,notes)
     VALUES (${values.name},${values.contact},${values.phone},${values.email},${values.website},${values.brands},${values.accountReference},${values.notes})`;
+}
+
+export async function getExpenses(from:string,to:string){
+  await ensureClinicTables();const sql=client();
+  const [rows,summary,byCategory]=await Promise.all([
+    sql`SELECT * FROM venux_expenses WHERE expense_date BETWEEN ${from} AND ${to} ORDER BY expense_date DESC,id DESC LIMIT 1000`,
+    sql`SELECT COUNT(*)::int AS expense_count,COALESCE(SUM(amount),0) AS total FROM venux_expenses WHERE expense_date BETWEEN ${from} AND ${to}`,
+    sql`SELECT category,COUNT(*)::int AS expense_count,COALESCE(SUM(amount),0) AS total FROM venux_expenses WHERE expense_date BETWEEN ${from} AND ${to} GROUP BY category ORDER BY total DESC`,
+  ]);
+  return {rows,summary:summary[0]??{expense_count:0,total:0},byCategory};
+}
+
+export async function createExpense(values:{date:string;category:string;payee:string;description:string;amount:number;paymentMethod:string;notes:string}){
+  await ensureClinicTables();
+  await client()`INSERT INTO venux_expenses (expense_date,category,payee,description,amount,payment_method,notes)
+    VALUES (${values.date},${values.category},${values.payee},${values.description},${values.amount},${values.paymentMethod},${values.notes})`;
 }
 
 export type ServiceImportRow={name:string;category:string;duration:number;price:number;memberPrice?:number|null;commissionPercent?:number;pricingType?:"fixed"|"from"|"per_unit";unitLabel?:string;notes?:string};
