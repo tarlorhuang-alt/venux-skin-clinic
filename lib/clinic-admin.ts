@@ -2,7 +2,7 @@ import "server-only";
 import { neon } from "@neondatabase/serverless";
 import { randomBytes } from "node:crypto";
 
-export type AppointmentStatus = "requested" | "confirmed" | "completed" | "cancelled" | "no_show";
+export type AppointmentStatus = "requested" | "confirmed" | "in_progress" | "completed" | "cancelled" | "no_show";
 
 export type BookingInput = {
   clientId?: number;
@@ -111,7 +111,7 @@ export function ensureClinicTables() {
         slot_key TEXT PRIMARY KEY, appointment_id BIGINT UNIQUE REFERENCES venux_appointments(id) ON DELETE CASCADE,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )`;
-      await sql`INSERT INTO venux_booking_slots (slot_key,appointment_id) SELECT clinic||'|'||requested_date::text||'|'||requested_time,id FROM venux_appointments WHERE status IN ('requested','confirmed') ORDER BY id ON CONFLICT DO NOTHING`;
+      await sql`INSERT INTO venux_booking_slots (slot_key,appointment_id) SELECT clinic||'|'||requested_date::text||'|'||requested_time,id FROM venux_appointments WHERE status IN ('requested','confirmed','in_progress') ORDER BY id ON CONFLICT DO NOTHING`;
       await sql`CREATE INDEX IF NOT EXISTS venux_clients_email_idx ON venux_clients (LOWER(email))`;
       await sql`CREATE INDEX IF NOT EXISTS venux_clients_mobile_idx ON venux_clients (mobile)`;
       await sql`CREATE INDEX IF NOT EXISTS venux_appointments_date_idx ON venux_appointments (requested_date)`;
@@ -200,11 +200,25 @@ export function ensureClinicTables() {
         active BOOLEAN NOT NULL DEFAULT TRUE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )`;
+      await sql`ALTER TABLE venux_services ALTER COLUMN regular_price TYPE NUMERIC(10,2) USING regular_price::numeric`;
+      await sql`ALTER TABLE venux_services ADD COLUMN IF NOT EXISTS member_price NUMERIC(10,2) CHECK (member_price >= 0)`;
+      await sql`ALTER TABLE venux_services ADD COLUMN IF NOT EXISTS commission_percent NUMERIC(5,2) NOT NULL DEFAULT 0 CHECK (commission_percent BETWEEN 0 AND 100)`;
+      await sql`ALTER TABLE venux_services ADD COLUMN IF NOT EXISTS pricing_type TEXT NOT NULL DEFAULT 'fixed'`;
+      await sql`ALTER TABLE venux_services ADD COLUMN IF NOT EXISTS unit_label TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE venux_services ADD COLUMN IF NOT EXISTS price_notes TEXT NOT NULL DEFAULT ''`;
       await sql`CREATE UNIQUE INDEX IF NOT EXISTS venux_services_name_idx ON venux_services (LOWER(service_name))`;
       await sql`ALTER TABLE venux_staff ADD COLUMN IF NOT EXISTS city_enabled BOOLEAN NOT NULL DEFAULT FALSE`;
       await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS service_id BIGINT REFERENCES venux_services(id) ON DELETE SET NULL`;
       await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS duration_minutes INTEGER NOT NULL DEFAULT 60 CHECK (duration_minutes > 0)`;
       await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS start_minute INTEGER CHECK (start_minute BETWEEN 0 AND 1439)`;
+      await sql`ALTER TABLE venux_appointments ALTER COLUMN total_amount TYPE NUMERIC(10,2) USING total_amount::numeric`;
+      await sql`ALTER TABLE venux_appointments ALTER COLUMN deposit_amount TYPE NUMERIC(10,2) USING deposit_amount::numeric`;
+      await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ`;
+      await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ`;
+      await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS recognised_revenue NUMERIC(10,2) NOT NULL DEFAULT 0 CHECK (recognised_revenue >= 0)`;
+      await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS commission_percent NUMERIC(5,2) NOT NULL DEFAULT 0 CHECK (commission_percent BETWEEN 0 AND 100)`;
+      await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS staff_wage_amount NUMERIC(10,2) NOT NULL DEFAULT 0 CHECK (staff_wage_amount >= 0)`;
+      await sql`UPDATE venux_appointments SET recognised_revenue=total_amount WHERE status='completed' AND recognised_revenue=0 AND total_amount>0`;
     })();
   }
   return clinicTablesReady;
@@ -229,7 +243,7 @@ export async function createBookingRequest(input: BookingInput) {
   const startMinute=timeToMinutes(input.time);
   if(input.staffId&&startMinute!==null){
     const overlap=await sql`SELECT id FROM venux_appointments WHERE staff_id=${input.staffId}
-      AND requested_date=${input.date} AND status IN ('requested','confirmed') AND start_minute IS NOT NULL
+      AND requested_date=${input.date} AND status IN ('requested','confirmed','in_progress') AND start_minute IS NOT NULL
       AND start_minute < ${startMinute+(input.durationMinutes??60)}
       AND start_minute+duration_minutes > ${startMinute} LIMIT 1`;
     if(overlap[0])throw new BookingConflictError("This beautician already has an overlapping appointment.");
@@ -252,8 +266,8 @@ export async function getClinicDashboard() {
       (SELECT COUNT(*) FROM venux_appointments a WHERE a.requested_date >= b.last_month AND a.requested_date < b.this_month) AS appointments_last,
       (SELECT COUNT(*) FROM venux_clients c WHERE c.created_at >= b.this_month) AS clients_now,
       (SELECT COUNT(*) FROM venux_clients c WHERE c.created_at >= b.last_month AND c.created_at < b.this_month) AS clients_last,
-      (SELECT COALESCE(SUM(a.total_amount),0) FROM venux_appointments a WHERE a.status='completed' AND a.requested_date >= b.this_month) AS revenue_now,
-      (SELECT COALESCE(SUM(a.total_amount),0) FROM venux_appointments a WHERE a.status='completed' AND a.requested_date >= b.last_month AND a.requested_date < b.this_month) AS revenue_last,
+      (SELECT COALESCE(SUM(a.recognised_revenue),0) FROM venux_appointments a WHERE a.status IN ('in_progress','completed') AND a.requested_date >= b.this_month) AS revenue_now,
+      (SELECT COALESCE(SUM(a.recognised_revenue),0) FROM venux_appointments a WHERE a.status IN ('in_progress','completed') AND a.requested_date >= b.last_month AND a.requested_date < b.this_month) AS revenue_last,
       (SELECT COUNT(*) FROM venux_appointments a WHERE a.status='no_show' AND a.requested_date >= b.this_month) AS no_shows_now
     FROM bounds b`,
     sql`SELECT a.id,a.requested_date,a.requested_time,a.treatment,a.clinic,a.status,c.full_name,c.mobile
@@ -345,7 +359,7 @@ export async function updateAppointment(id: number, status: AppointmentStatus, t
   const sql=client();
   const before=await sql`SELECT a.*,c.full_name,c.mobile,c.service_sms_consent FROM venux_appointments a JOIN venux_clients c ON c.id=a.client_id WHERE a.id=${id}`;
   if(!before[0])return;
-  if(["requested","confirmed"].includes(status)&&!["requested","confirmed"].includes(String(before[0].status))){
+  if(["requested","confirmed","in_progress"].includes(status)&&!["requested","confirmed","in_progress"].includes(String(before[0].status))){
     const claimed=await sql`INSERT INTO venux_booking_slots (slot_key,appointment_id)
       SELECT clinic||'|'||requested_date::text||'|'||requested_time,id FROM venux_appointments WHERE id=${id}
       ON CONFLICT DO NOTHING RETURNING slot_key`;
@@ -355,9 +369,33 @@ export async function updateAppointment(id: number, status: AppointmentStatus, t
     const conflict=await sql`SELECT id FROM venux_appointments WHERE id<>${id} AND clinic=${before[0].clinic} AND requested_date=${before[0].requested_date} AND requested_time=${before[0].requested_time} AND status='confirmed' LIMIT 1`;
     if(conflict[0])throw new BookingConflictError("Another confirmed appointment already uses this time.");
   }
-  await sql`UPDATE venux_appointments SET status=${status},total_amount=${totalAmount},deposit_status=${depositStatus},staff_id=${staffId},updated_at=NOW() WHERE id=${id}`;
+  await sql`UPDATE venux_appointments a SET status=${status},total_amount=${totalAmount},deposit_status=${depositStatus},staff_id=${staffId},
+    started_at=CASE WHEN ${status}='in_progress' THEN COALESCE(a.started_at,NOW()) ELSE a.started_at END,
+    completed_at=CASE WHEN ${status}='completed' THEN COALESCE(a.completed_at,NOW()) ELSE a.completed_at END,
+    commission_percent=CASE WHEN ${status} IN ('in_progress','completed') AND a.started_at IS NULL THEN COALESCE(v.commission_percent,0) ELSE a.commission_percent END,
+    recognised_revenue=CASE WHEN ${status} IN ('in_progress','completed') THEN ${totalAmount} ELSE a.recognised_revenue END,
+    staff_wage_amount=CASE WHEN ${status} IN ('in_progress','completed') THEN ROUND(${totalAmount}*CASE WHEN a.started_at IS NULL THEN COALESCE(v.commission_percent,0) ELSE a.commission_percent END/100,2) ELSE a.staff_wage_amount END,
+    updated_at=NOW()
+    FROM venux_services v WHERE a.id=${id} AND (v.id=a.service_id OR (a.service_id IS NULL AND v.id=(SELECT id FROM venux_services WHERE LOWER(service_name)=LOWER(a.treatment) LIMIT 1)))`;
+  if(before[0].service_id==null){
+    await sql`UPDATE venux_appointments SET status=${status},total_amount=${totalAmount},deposit_status=${depositStatus},staff_id=${staffId},
+      started_at=CASE WHEN ${status}='in_progress' THEN COALESCE(started_at,NOW()) ELSE started_at END,
+      completed_at=CASE WHEN ${status}='completed' THEN COALESCE(completed_at,NOW()) ELSE completed_at END,
+      recognised_revenue=CASE WHEN ${status} IN ('in_progress','completed') THEN ${totalAmount} ELSE recognised_revenue END,
+      staff_wage_amount=CASE WHEN ${status} IN ('in_progress','completed') THEN ROUND(${totalAmount}*commission_percent/100,2) ELSE staff_wage_amount END,updated_at=NOW() WHERE id=${id}`;
+  }
   if(["cancelled","completed","no_show"].includes(status))await sql`DELETE FROM venux_booking_slots WHERE appointment_id=${id}`;
   if(status==="confirmed"&&before[0].status!=="confirmed"&&before[0].service_sms_consent)await queueAppointmentConfirmation(id);
+}
+
+export async function startAppointment(id:number,staffId:number){
+  await ensureClinicTables();
+  const sql=client();
+  const rows=await sql`SELECT total_amount,deposit_status,status FROM venux_appointments WHERE id=${id}`;
+  const row=rows[0];
+  if(!row||!["requested","confirmed"].includes(String(row.status)))return false;
+  await updateAppointment(id,"in_progress",Number(row.total_amount),String(row.deposit_status),staffId);
+  return true;
 }
 
 export async function queueAppointmentConfirmation(appointmentId:number){
@@ -379,7 +417,7 @@ export async function getBookingByToken(token:string){
 }
 
 export async function respondToBooking(token:string,response:"confirmed"|"change_requested"){
-  await ensureClinicTables();const rows=await client()`UPDATE venux_appointments SET customer_confirmation_status=${response},confirmed_by_client_at=CASE WHEN ${response}='confirmed' THEN NOW() ELSE NULL END,status=CASE WHEN ${response}='change_requested' THEN 'requested' ELSE status END,updated_at=NOW() WHERE confirmation_token=${token} AND status NOT IN ('cancelled','completed') RETURNING id`;
+  await ensureClinicTables();const rows=await client()`UPDATE venux_appointments SET customer_confirmation_status=${response},confirmed_by_client_at=CASE WHEN ${response}='confirmed' THEN NOW() ELSE NULL END,status=CASE WHEN ${response}='change_requested' THEN 'requested' ELSE status END,updated_at=NOW() WHERE confirmation_token=${token} AND status NOT IN ('cancelled','completed','in_progress') RETURNING id`;
   return Boolean(rows[0]);
 }
 
@@ -519,23 +557,30 @@ export async function getOperationsReport(from:string,to:string){
   await ensureClinicTables();const sql=client();
   const [summary,byStaff,byTreatment,byDay]=await Promise.all([
     sql`SELECT COUNT(*) FILTER (WHERE status='completed')::int AS completed,
+      COUNT(*) FILTER (WHERE status IN ('in_progress','completed'))::int AS started,
       COUNT(*) FILTER (WHERE status='no_show')::int AS no_shows,
       COUNT(*)::int AS total_bookings,
-      COALESCE(SUM(total_amount) FILTER (WHERE status='completed'),0) AS revenue,
-      COALESCE(AVG(total_amount) FILTER (WHERE status='completed'),0) AS average_sale
+      COALESCE(SUM(recognised_revenue) FILTER (WHERE status IN ('in_progress','completed')),0) AS revenue,
+      COALESCE(SUM(staff_wage_amount) FILTER (WHERE status IN ('in_progress','completed')),0) AS payroll,
+      COALESCE(AVG(recognised_revenue) FILTER (WHERE status IN ('in_progress','completed')),0) AS average_sale
       FROM venux_appointments WHERE requested_date BETWEEN ${from} AND ${to}`,
     sql`SELECT COALESCE(s.full_name,'Unassigned') AS staff_name,COALESCE(s.role,'') AS role,
+      COUNT(a.id) FILTER (WHERE a.status IN ('in_progress','completed'))::int AS started,
       COUNT(a.id) FILTER (WHERE a.status='completed')::int AS completed,
-      COALESCE(SUM(a.total_amount) FILTER (WHERE a.status='completed'),0) AS revenue
+      COALESCE(SUM(a.recognised_revenue) FILTER (WHERE a.status IN ('in_progress','completed')),0) AS revenue,
+      COALESCE(SUM(a.staff_wage_amount) FILTER (WHERE a.status IN ('in_progress','completed')),0) AS payroll
       FROM venux_appointments a LEFT JOIN venux_staff s ON s.id=a.staff_id
       WHERE a.requested_date BETWEEN ${from} AND ${to}
       GROUP BY s.id,s.full_name,s.role ORDER BY revenue DESC`,
-    sql`SELECT treatment,COUNT(*) FILTER (WHERE status='completed')::int AS completed,
-      COALESCE(SUM(total_amount) FILTER (WHERE status='completed'),0) AS revenue
+    sql`SELECT treatment,COUNT(*) FILTER (WHERE status IN ('in_progress','completed'))::int AS started,
+      COUNT(*) FILTER (WHERE status='completed')::int AS completed,
+      COALESCE(SUM(recognised_revenue) FILTER (WHERE status IN ('in_progress','completed')),0) AS revenue,
+      COALESCE(SUM(staff_wage_amount) FILTER (WHERE status IN ('in_progress','completed')),0) AS payroll
       FROM venux_appointments WHERE requested_date BETWEEN ${from} AND ${to}
       GROUP BY treatment ORDER BY revenue DESC LIMIT 25`,
     sql`SELECT requested_date,COUNT(*)::int AS bookings,
-      COALESCE(SUM(total_amount) FILTER (WHERE status='completed'),0) AS revenue
+      COALESCE(SUM(recognised_revenue) FILTER (WHERE status IN ('in_progress','completed')),0) AS revenue,
+      COALESCE(SUM(staff_wage_amount) FILTER (WHERE status IN ('in_progress','completed')),0) AS payroll
       FROM venux_appointments WHERE requested_date BETWEEN ${from} AND ${to}
       GROUP BY requested_date ORDER BY requested_date`,
   ]);
@@ -577,7 +622,7 @@ export async function createSupplier(values:Record<string,string>){
     VALUES (${values.name},${values.contact},${values.phone},${values.email},${values.website},${values.brands},${values.accountReference},${values.notes})`;
 }
 
-export type ServiceImportRow={name:string;category:string;duration:number;price:number};
+export type ServiceImportRow={name:string;category:string;duration:number;price:number;memberPrice?:number|null;commissionPercent?:number;pricingType?:"fixed"|"from"|"per_unit";unitLabel?:string;notes?:string};
 
 export async function getOwnerServices(){
   await ensureClinicTables();return client()`SELECT * FROM venux_services ORDER BY active DESC,category,service_name`;
@@ -588,9 +633,9 @@ export async function getOwnerService(serviceId:number){
 }
 
 export async function createClinicService(values:ServiceImportRow){
-  await ensureClinicTables();await client()`INSERT INTO venux_services (service_name,category,duration_minutes,regular_price)
-    VALUES (${values.name},${values.category},${values.duration},${values.price})
-    ON CONFLICT ((LOWER(service_name))) DO UPDATE SET category=EXCLUDED.category,duration_minutes=EXCLUDED.duration_minutes,regular_price=EXCLUDED.regular_price,active=TRUE,updated_at=NOW()`;
+  await ensureClinicTables();await client()`INSERT INTO venux_services (service_name,category,duration_minutes,regular_price,member_price,commission_percent,pricing_type,unit_label,price_notes)
+    VALUES (${values.name},${values.category},${values.duration},${values.price},${values.memberPrice??null},${values.commissionPercent??0},${values.pricingType??"fixed"},${values.unitLabel??""},${values.notes??""})
+    ON CONFLICT ((LOWER(service_name))) DO UPDATE SET category=EXCLUDED.category,duration_minutes=EXCLUDED.duration_minutes,regular_price=EXCLUDED.regular_price,member_price=EXCLUDED.member_price,commission_percent=EXCLUDED.commission_percent,pricing_type=EXCLUDED.pricing_type,unit_label=EXCLUDED.unit_label,price_notes=EXCLUDED.price_notes,active=TRUE,updated_at=NOW()`;
 }
 
 export async function importClinicServices(rows:ServiceImportRow[]){
@@ -619,7 +664,8 @@ export async function getCityDay(date:string){
     sql`SELECT COALESCE(s.full_name,'Unassigned') AS staff_name,
       COUNT(a.id) FILTER (WHERE a.status NOT IN ('cancelled','no_show'))::int AS projects,
       COALESCE(SUM(a.duration_minutes) FILTER (WHERE a.status NOT IN ('cancelled','no_show')),0)::int AS minutes,
-      COALESCE(SUM(a.total_amount) FILTER (WHERE a.status='completed'),0)::int AS revenue
+      COALESCE(SUM(a.recognised_revenue) FILTER (WHERE a.status IN ('in_progress','completed')),0) AS revenue,
+      COALESCE(SUM(a.staff_wage_amount) FILTER (WHERE a.status IN ('in_progress','completed')),0) AS payroll
       FROM venux_appointments a LEFT JOIN venux_staff s ON s.id=a.staff_id
       WHERE a.clinic ILIKE '%515 Kent Street%' AND a.requested_date=${date}
       GROUP BY s.id,s.full_name ORDER BY s.full_name`,
