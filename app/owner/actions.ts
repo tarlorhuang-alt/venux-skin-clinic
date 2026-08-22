@@ -3,7 +3,7 @@
 import {revalidatePath} from "next/cache";
 import {redirect} from "next/navigation";
 import {clearOwnerSession,createOwnerSession,isOwnerAuthenticated,ownerPasswordMatches} from "../../lib/owner-auth";
-import {BookingConflictError,createBookingRequest,createCityStaff,createClinicService,getOwnerService,importClientRows,importClinicServices,startAppointment,updateAppointment,type AppointmentStatus,type ClientImportRow,type ServiceImportRow} from "../../lib/clinic-admin";
+import {BookingConflictError,createBookingRequest,createCityStaff,createClinicService,finishAppointment,getOwnerService,importClientRows,importClinicServices,startAppointment,updateAppointment,type AppointmentStatus,type ClientImportRow,type ServiceImportRow} from "../../lib/clinic-admin";
 import {PRICE_LIST_2026_SERVICES} from "../../lib/price-list-services";
 
 const text=(data:FormData,name:string)=>String(data.get(name)??"").trim();
@@ -79,4 +79,10 @@ export async function startCityAppointment(data:FormData){
   await requireOwner();const id=Number(data.get("id")),date=ownerDate(data),staffId=Number(data.get("staffId"));
   if(!Number.isInteger(id)||id<=0||!date||!Number.isInteger(staffId)||staffId<=0)redirect(`/owner?date=${date}&error=start`);
   const started=await startAppointment(id,staffId);revalidatePath("/owner");revalidatePath("/admin/bookings");revalidatePath("/admin/reports");redirect(`/owner?date=${date}&${started?"started=1":"error=start"}`);
+}
+
+export async function finishCityAppointment(data:FormData){
+  await requireOwner();const id=Number(data.get("id")),date=ownerDate(data),staffId=Number(data.get("staffId"));
+  if(!Number.isInteger(id)||id<=0||!date||!Number.isInteger(staffId)||staffId<=0)redirect(`/owner?date=${date}&error=finish`);
+  const finished=await finishAppointment(id,staffId);revalidatePath("/owner");revalidatePath("/admin/bookings");revalidatePath("/admin/reports");revalidatePath("/admin/payroll");redirect(`/owner?date=${date}&${finished?"finished=1":"error=finish"}`);
 }
