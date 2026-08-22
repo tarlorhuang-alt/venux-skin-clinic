@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import {Suspense} from "react";
 import { isAdminAuthenticated } from "../../../lib/admin-auth";
-import { getAppointments,getClientForBooking,getClients,getOwnerServices,getStaff } from "../../../lib/clinic-admin";
+import { getAppointments,getAppointmentsRange,getClientForBooking,getClients,getOwnerServices,getStaff } from "../../../lib/clinic-admin";
 import { changeAppointment,createAdminAppointment,startAppointmentAction } from "../actions";
 import { AdminLogin,AdminShell,statusLabel } from "../admin-ui";
+import {ClientLiveSearch} from "./client-live-search";
 import "../admin.css";
 import "./bookings.css";
 import "./bookings-updates.css";
@@ -11,28 +13,35 @@ export const dynamic="force-dynamic";
 export const metadata:Metadata={title:"Bookings | VenuX Clinic OS",robots:{index:false,follow:false}};
 const times=["10:00 AM","11:00 AM","12:00 PM","1:30 PM","2:30 PM","3:30 PM","4:30 PM","5:30 PM"];
 const todaySydney=()=>new Intl.DateTimeFormat("en-CA",{timeZone:"Australia/Sydney",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
+const weekBounds=(date:string)=>{const selected=new Date(`${date}T00:00:00Z`),day=selected.getUTCDay()||7,monday=new Date(selected);monday.setUTCDate(selected.getUTCDate()-day+1);const sunday=new Date(monday);sunday.setUTCDate(monday.getUTCDate()+6);return {from:monday.toISOString().slice(0,10),to:sunday.toISOString().slice(0,10)};};
 
 export default async function BookingsAdmin({searchParams}:{searchParams:Promise<{saved?:string;created?:string;started?:string;error?:string;q?:string;client?:string;date?:string}>}){
   const params=await searchParams;if(!(await isAdminAuthenticated()))return <AdminLogin error={params.error}/>;
   const date=/^\d{4}-\d{2}-\d{2}$/.test(params.date??"")?String(params.date):todaySydney();
-  const clientId=Number(params.client??0);
-  const [rows,staff,services,selectedClient,searchResults]=await Promise.all([
-    getAppointments(date),getStaff(),getOwnerServices(),clientId>0?getClientForBooking(clientId):null,params.q?getClients(params.q):Promise.resolve([]),
+  const clientId=Number(params.client??0),week=weekBounds(date);
+  const [rows,weeklyRows,staff,services,selectedClient,searchResults]=await Promise.all([
+    getAppointments(date),getAppointmentsRange(week.from,week.to),getStaff(),getOwnerServices(),clientId>0?getClientForBooking(clientId):null,params.q?getClients(params.q):Promise.resolve([]),
   ]);
   const activeServices=services.filter(row=>row.active),servicesByCategory=new Map<string,typeof activeServices>();
   for(const service of activeServices){const category=String(service.category);servicesByCategory.set(category,[...(servicesByCategory.get(category)??[]),service]);}
-  return <AdminShell active="Bookings"><header className="clinic-admin-head"><div><p>Calendar & client booking</p><h1>Daily bookings</h1></div><span>{rows.length} appointments on {new Date(`${date}T00:00:00`).toLocaleDateString("en-AU",{weekday:"long",day:"numeric",month:"long"})}</span></header>
+  const days=Array.from({length:7},(_,index)=>{const value=new Date(`${week.from}T00:00:00Z`);value.setUTCDate(value.getUTCDate()+index);const iso=value.toISOString().slice(0,10);return {iso,rows:weeklyRows.filter(row=>String(row.requested_date).slice(0,10)===iso)};});
+  const treatmentCounts=new Map<string,number>();for(const row of weeklyRows){if(!["cancelled","no_show"].includes(String(row.status)))treatmentCounts.set(String(row.treatment),(treatmentCounts.get(String(row.treatment))??0)+1);}const treatmentFrequency=[...treatmentCounts].sort((a,b)=>b[1]-a[1]);
+  return <AdminShell active="Bookings"><header className="clinic-admin-head"><div><p>Calendar & client booking</p><h1>Weekly bookings</h1></div><span>{weeklyRows.length} appointments · {week.from} to {week.to}</span></header>
     {params.saved?<div className="clinic-alert">Appointment updated. Confirmed appointments with SMS consent create a customer confirmation message.</div>:null}
     {params.created?<div className="clinic-alert">Appointment created and connected to the client record.</div>:null}
     {params.started?<div className="clinic-alert">Service started. Revenue and the configured beautician wage have been recorded.</div>:null}
     {params.error?<div className="clinic-alert error">{params.error==="conflict"?"That clinic, date and time is already reserved. No duplicate appointment was created.":params.error==="staff"?"Assign a beautician before starting the service.":"Please check the appointment values."}</div>:null}
 
     <section className="booking-tools">
-      <form method="get" className="client-lookup"><label>Search client by mobile, name or email<input name="q" defaultValue={params.q??""} placeholder="0432 752 750" inputMode="search"/></label><button>Search client</button></form>
+      <div className="client-lookup"><Suspense fallback={<label>Type client name, mobile or email<input placeholder="Loading client search…" disabled/></label>}><ClientLiveSearch initialValue={params.q??""}/></Suspense><span className="live-search-label">Automatic search</span></div>
       <form method="get" className="day-picker"><label>View appointment date<input name="date" type="date" defaultValue={date}/></label><button>Show day</button></form>
     </section>
     {params.q?<section className="booking-search-results"><h2>Matching clients</h2>{searchResults.length?searchResults.slice(0,8).map(client=><a key={String(client.id)} href={`/admin/bookings?client=${client.id}&date=${date}`}><strong>{String(client.full_name)}</strong><span>{String(client.mobile)} · {client.email?String(client.email):"No email"}</span><small>{Number(client.visit_count)} appointments · {client.last_visit?`Last ${new Date(String(client.last_visit)).toLocaleDateString("en-AU")}`:"No visit recorded"}</small></a>):<p>No matching client. Enter their details below to create a new profile with the appointment.</p>}</section>:null}
     {selectedClient?<aside className="selected-client"><div><small>Selected client</small><strong>{String(selectedClient.full_name)}</strong><span>{String(selectedClient.mobile)} · {selectedClient.email?String(selectedClient.email):"No email"}</span></div><div><span>Membership: {statusLabel(selectedClient.membership_status??"inactive")}</span><span>{Number(selectedClient.visit_count)} appointments</span><a href={`/admin/clients/${selectedClient.id}`}>Open full record →</a></div></aside>:null}
+
+    <section className="week-overview"><header><div><small>Selected week</small><h2>Monday to Sunday</h2></div><span>{weeklyRows.length} total appointments</span></header><div className="week-grid">{days.map(day=><article className={day.iso===date?"selected":""} key={day.iso}><a href={`/admin/bookings?date=${day.iso}`}><small>{new Date(`${day.iso}T00:00:00Z`).toLocaleDateString("en-AU",{weekday:"short"})}</small><strong>{new Date(`${day.iso}T00:00:00Z`).getUTCDate()}</strong><span>{day.rows.length} booked</span></a><div>{day.rows.length?day.rows.map(row=><a className="week-booking" href={`/admin/bookings?date=${day.iso}`} key={String(row.id)}><time>{String(row.requested_time)}</time><strong>{String(row.full_name)}</strong><span>{String(row.treatment)}</span><small>{row.staff_name?String(row.staff_name):"Unassigned"}</small></a>):<p>No bookings</p>}</div></article>)}</div></section>
+
+    <section className="frequency-panel"><header><div><small>Weekly demand</small><h2>Treatment frequency</h2></div><span>Cancelled and no-show excluded</span></header><div>{treatmentFrequency.length?treatmentFrequency.map(([treatment,count],index)=><article key={treatment}><b>{String(index+1).padStart(2,"0")}</b><span><strong>{treatment}</strong><small>{count} appointment{count===1?"":"s"} this week</small></span><em>{count}</em></article>):<p>No treatment frequency yet for this week.</p>}</div></section>
 
     <details className="admin-booking-create" open><summary>+ Book an appointment {selectedClient?`for ${selectedClient.full_name}`:"for a client"}</summary><form action={createAdminAppointment}>
       {selectedClient?<input type="hidden" name="clientId" value={String(selectedClient.id)}/>:null}
