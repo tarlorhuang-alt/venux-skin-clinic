@@ -5,7 +5,7 @@ export function AdminLogin({ error }: { error?: string }) {
 }
 
 export function AdminShell({ active, children }: { active: string; children: React.ReactNode }) {
-  const links = [["Dashboard","/admin"],["Bookings","/admin/bookings"],["Clients & membership","/admin/clients"],["Revenue & performance","/admin/reports"],["Staff & time clock","/admin/staff"],["Client retention","/admin/retention"],["Suppliers","/admin/suppliers"],["Messages","/admin/messages"],["Follow-ups","/admin/follow-ups"],["Treatment prices","/admin/prices"]];
+  const links = [["Dashboard","/admin"],["Bookings","/admin/bookings"],["Clients & membership","/admin/clients"],["Revenue & performance","/admin/reports"],["Expenses","/admin/expenses"],["Staff & time clock","/admin/staff"],["Client retention","/admin/retention"],["Messages","/admin/messages"],["Follow-ups","/admin/follow-ups"],["Treatment prices","/admin/prices"]];
   return <main className="clinic-admin"><aside><a className="clinic-admin-logo" href="/admin"><span>✦</span><strong>VenuX</strong><small>Clinic OS</small></a><nav>{links.map(([label,href])=><a className={active===label?"active":""} href={href} key={href}>{label}</a>)}</nav><form action={adminLogout}><button type="submit">Sign out</button></form></aside><div className="clinic-admin-main">{children}</div></main>;
 }
 
