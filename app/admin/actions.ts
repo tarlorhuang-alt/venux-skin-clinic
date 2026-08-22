@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { clearAdminSession, createAdminSession, isAdminAuthenticated, passwordMatches } from "../../lib/admin-auth";
-import { BookingConflictError,completeFollowup,createBookingRequest,createClientCourse,createExpense,createSkinAssessment,createStaff,createSupplier,createTreatmentRecord,getOwnerService,importClientRows,markSmsOutboxSent,queueBirthdayMessages,queueReturnInvite,saveClientProfile,saveHealthProfile,saveMembership,startAppointment,toggleStaffClock,updateAppointment,type AppointmentStatus,type ClientImportRow } from "../../lib/clinic-admin";
+import { BookingConflictError,completeFollowup,createBookingRequest,createClientCourse,createExpense,createSkinAssessment,createStaff,createSupplier,createTreatmentRecord,finishAppointment,getOwnerService,importClientRows,markSmsOutboxSent,queueBirthdayMessages,queueReturnInvite,saveClientProfile,saveHealthProfile,saveMembership,startAppointment,toggleStaffClock,updateAppointment,type AppointmentStatus,type ClientImportRow } from "../../lib/clinic-admin";
 
 export async function adminLogin(formData: FormData) {
   if (!passwordMatches(String(formData.get("password") ?? ""))) redirect("/admin?error=login");
@@ -30,6 +30,12 @@ export async function startAppointmentAction(formData:FormData){
   if(!(await isAdminAuthenticated()))redirect("/admin?error=session");const id=Number(formData.get("id")),staffId=Number(formData.get("staffId"));
   if(!Number.isInteger(id)||id<=0||!Number.isInteger(staffId)||staffId<=0)redirect("/admin/bookings?error=staff");
   const started=await startAppointment(id,staffId);revalidatePath("/admin");revalidatePath("/admin/bookings");revalidatePath("/admin/reports");redirect(`/admin/bookings?${started?"started=1":"error=start"}`);
+}
+
+export async function finishAppointmentAction(formData:FormData){
+  if(!(await isAdminAuthenticated()))redirect("/admin?error=session");const id=Number(formData.get("id")),staffId=Number(formData.get("staffId"));
+  if(!Number.isInteger(id)||id<=0||!Number.isInteger(staffId)||staffId<=0)redirect("/admin/bookings?error=staff");
+  const finished=await finishAppointment(id,staffId);revalidatePath("/admin");revalidatePath("/admin/bookings");revalidatePath("/admin/reports");revalidatePath("/admin/payroll");redirect(`/admin/bookings?${finished?"finished=1":"error=finish"}`);
 }
 
 export async function createAdminAppointment(formData:FormData){
