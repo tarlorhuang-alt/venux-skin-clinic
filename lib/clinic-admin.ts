@@ -299,7 +299,7 @@ export async function getClinicDashboard() {
 
 export async function getAppointments(date = "") {
   await ensureClinicTables();
-  return client()`SELECT a.*,c.full_name,c.mobile,c.email,s.full_name AS staff_name
+  return client()`SELECT a.*,a.requested_date::text AS requested_date,c.full_name,c.mobile,c.email,s.full_name AS staff_name
     FROM venux_appointments a JOIN venux_clients c ON c.id=a.client_id
     LEFT JOIN venux_staff s ON s.id=a.staff_id
     WHERE (${date}='' OR a.requested_date=${date || null})
@@ -308,7 +308,7 @@ export async function getAppointments(date = "") {
 
 export async function getAppointmentsRange(from:string,to:string) {
   await ensureClinicTables();
-  return client()`SELECT a.*,c.full_name,c.mobile,c.email,s.full_name AS staff_name
+  return client()`SELECT a.*,a.requested_date::text AS requested_date,c.full_name,c.mobile,c.email,s.full_name AS staff_name
     FROM venux_appointments a JOIN venux_clients c ON c.id=a.client_id
     LEFT JOIN venux_staff s ON s.id=a.staff_id
     WHERE a.requested_date BETWEEN ${from} AND ${to}
