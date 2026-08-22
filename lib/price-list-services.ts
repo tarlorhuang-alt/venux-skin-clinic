@@ -1,0 +1,118 @@
+import type {ServiceImportRow} from "./clinic-admin";
+
+const confirmed=(name:string,category:string,duration:number,price:number,memberPrice:number|null,pricingType:ServiceImportRow["pricingType"]="fixed",unitLabel="",notes=""):ServiceImportRow=>({name,category,duration,price,memberPrice,commissionPercent:0,pricingType,unitLabel,notes});
+const estimated=(name:string,category:string,duration:number,price:number,memberPrice:number|null,pricingType:ServiceImportRow["pricingType"]="fixed",unitLabel="",notes=""):ServiceImportRow=>confirmed(name,category,duration,price,memberPrice,pricingType,unitLabel,notes||"Scheduling duration is an estimate; owner to confirm.");
+
+export const PRICE_LIST_2026_SERVICES:ServiceImportRow[]=[
+  confirmed("Hydrating Eye Treatment","Facial Treatments",30,99,79),
+  confirmed("Hydra Peel Glow Facial","Facial Treatments",60,159,129),
+  confirmed("Sothys Hydra Revitalizing + LED","Facial Treatments",75,179,149),
+  confirmed("Sothys Acne Clarifying + Acne Peel","Facial Treatments",75,179,149),
+  confirmed("Sothys Barrier Repair + LED","Facial Treatments",75,179,149),
+  confirmed("Payot Paris Signature Glow Facial","Facial Treatments",90,230,180),
+
+  confirmed("Carbon Laser Facial","Advanced Skin Treatments",60,259,219),
+  confirmed("DiamondPolar RF + Deep Cleansing","Advanced Skin Treatments",75,259,239),
+  confirmed("IPL Photo Rejuvenation + LED","Advanced Skin Treatments",75,299,249),
+  confirmed("ViVa NanoFractional RF","Advanced Skin Treatments",90,299,499,"fixed","","Source image shows VIP $499, higher than standard $299; verify before use."),
+
+  estimated("Microneedling Treatment","Microneedling Treatments",60,249,219),
+  estimated("Advanced Microneedling Facial","Microneedling Treatments",75,339,329),
+  estimated("Scalp & Hair Revitalisation","Microneedling Treatments",75,339,329),
+  estimated("Advanced Skin Rejuvenation","Microneedling Treatments",90,699,579),
+
+  estimated("DMK Enzyme Therapy · Level 1","DMK Enzyme Therapy",90,220,199),
+  estimated("DMK Enzyme Therapy · Level 2","DMK Enzyme Therapy",90,245,229),
+  estimated("DMK Enzyme Therapy · Level 3","DMK Enzyme Therapy",90,285,269),
+  estimated("DMK Enzyme Therapy · Level 4","DMK Enzyme Therapy",90,325,299),
+  estimated("DMK Alkaline Wash","DMK Enzyme Therapy",60,129,109,"from"),
+  estimated("DMK Body Enzyme Therapy","DMK Enzyme Therapy",90,199,169,"from"),
+  estimated("DMK Body Sculpting Wrap","DMK Enzyme Therapy",90,249,209,"from"),
+
+  estimated("Pigmentation Laser Treatment","Laser Therapy",60,299,239,"from"),
+  estimated("Redness & Acne Laser Treatment","Laser Therapy",60,249,199),
+  estimated("Tattoo Removal","Laser Therapy",30,99,89,"from"),
+  estimated("Skin Tag / Mole / Wart Removal","Laser Therapy",30,99,89,"from"),
+
+  estimated("AYKO HIFU · Eye Area","AYKO German HIFU",45,800,650),
+  estimated("AYKO HIFU · Neck","AYKO German HIFU",60,800,650),
+  estimated("AYKO HIFU · Jawline","AYKO German HIFU",60,800,650),
+  estimated("AYKO HIFU · Lower Face","AYKO German HIFU",75,1200,1000),
+  estimated("AYKO HIFU · Décolletage / Upper Chest","AYKO German HIFU",90,1500,1200),
+  estimated("AYKO HIFU · Full Face","AYKO German HIFU",90,1800,1500),
+  estimated("AYKO HIFU Body · Bust","AYKO German HIFU",90,1000,800),
+  estimated("AYKO HIFU Body · Knees","AYKO German HIFU",75,1000,800),
+  estimated("AYKO HIFU Body · Upper Arms","AYKO German HIFU",120,2200,1800),
+  estimated("AYKO HIFU Body · Thighs","AYKO German HIFU",150,2700,2200),
+  estimated("AYKO HIFU Body · Back","AYKO German HIFU",150,2700,2200),
+  estimated("AYKO HIFU Body · Abdomen","AYKO German HIFU",150,2700,2200),
+
+  estimated("Ultherapy · 300 Lines","Ultherapy",90,990,750,"fixed","","Suitable areas shown: brow, jawline or under chin. Scheduling duration is an estimate; owner to confirm."),
+  estimated("Ultherapy · 600 Lines","Ultherapy",120,1980,1500,"fixed","","Suitable areas shown: lower face, jawline and under chin. Scheduling duration is an estimate; owner to confirm."),
+  estimated("Ultherapy · 800 Lines","Ultherapy",150,2640,2000,"fixed","","Suitable areas shown: full face or face plus selected neck areas. Scheduling duration is an estimate; owner to confirm."),
+
+  estimated("Laser Hair Removal · Upper Lip","Laser Hair Removal",15,20,16),
+  estimated("Laser Hair Removal · Underarms","Laser Hair Removal",20,35,29),
+  estimated("Laser Hair Removal · Female Brazilian","Laser Hair Removal",30,59,49),
+  estimated("Laser Hair Removal · Full Face","Laser Hair Removal",30,69,55),
+  estimated("Laser Hair Removal · Half Arms","Laser Hair Removal",30,109,89),
+  estimated("Laser Hair Removal · Full Arms","Laser Hair Removal",45,159,129),
+  estimated("Laser Hair Removal · Half Legs","Laser Hair Removal",45,149,119),
+  estimated("Laser Hair Removal · Full Legs","Laser Hair Removal",60,199,159),
+  estimated("Laser Hair Removal · Chest","Laser Hair Removal",45,139,109),
+  estimated("Laser Hair Removal · Female Full Body","Laser Hair Removal",90,299,249),
+  estimated("Laser Hair Removal · Male Full Body","Laser Hair Removal",120,399,329),
+
+  confirmed("Head Massage · 30 min","Body & Massage",30,75,65),
+  confirmed("Relaxing Massage · 30 min","Body & Massage",30,55,49),
+  confirmed("Relaxing Massage · 60 min","Body & Massage",60,95,85),
+  confirmed("Remedial Massage · 30 min","Body & Massage",30,80,72),
+  confirmed("Remedial Massage · 45 min","Body & Massage",45,110,99),
+  confirmed("Remedial Massage · 60 min","Body & Massage",60,140,125),
+  confirmed("Detox Massage · 70 min","Body & Massage",70,169,149),
+  confirmed("Detox Massage · 90 min","Body & Massage",90,199,179),
+
+  estimated("Anti-Wrinkle Treatment","Cosmetic Injections",30,4.9,null,"per_unit","unit"),
+  estimated("Dermal Filler","Cosmetic Injections",45,499,null,"from"),
+  estimated("Skin Booster","Cosmetic Injections",45,499,null,"from"),
+  estimated("Fat Dissolving Treatment","Cosmetic Injections",45,350,null,"from"),
+  estimated("Thread Lift","Cosmetic Injections",60,900,null,"from"),
+  estimated("PRP Skin Rejuvenation","Regenerative Treatments",60,299,null,"from"),
+  estimated("PRP Hair Restoration","Regenerative Treatments",60,299,null,"from"),
+  estimated("Radiesse® (CaHA Biostimulator)","Regenerative Treatments",60,1100,null,"from"),
+  estimated("Sculptra","Regenerative Treatments",60,1100,null,"from"),
+  estimated("Ellansé® Collagen Stimulator","Regenerative Treatments",60,1200,null,"from"),
+
+  ...[
+    ["Eyebrow",22],["Lip / Chin / Nose",18],["Brow & Lip",30],["Side of Face",30],["Full Face",60],["Underarm",20],["Navel",25],["Half Arm",25],["3/4 Arm",30],["Full Arm",40],["Half Leg",39],["3/4 Leg",45],["Full Leg",60],["Bikini",35],["G-String",35],["Brazilian",65],["Back / Front",60],["Full Body",260],
+  ].map(([area,price])=>estimated(`Waxing · Women · ${area}`,"Waxing",area==="Full Body"?90:area==="Full Leg"||area==="Brazilian"?45:30,Number(price),null)),
+  ...[
+    ["Eyebrow",27],["Lip / Chin / Nose",22],["Brow & Lip",32],["Side of Face",35],["Full Face",68],["Underarm",22],["Navel",27],["Half Arm",35],["3/4 Arm",45],["Full Arm",55],["Half Leg",45],["3/4 Leg",60],["Full Leg",75],["Back / Front",75],["Full Body",300],["Shoulder",35],
+  ].map(([area,price])=>estimated(`Waxing · Men · ${area}`,"Waxing",area==="Full Body"?90:area==="Full Leg"||area==="Back / Front"?45:30,Number(price),null)),
+
+  estimated("LED Light Therapy","LED, Lashes & Brows",20,79,59),
+  estimated("Dual LED Light Therapy","LED, Lashes & Brows",30,99,79),
+  estimated("Eyebrow Tint","LED, Lashes & Brows",20,20,18),
+  estimated("Eyelash Tint","LED, Lashes & Brows",20,25,22),
+  estimated("Brow + Lash Tint","LED, Lashes & Brows",30,40,35),
+  estimated("Lash Lift","LED, Lashes & Brows",60,79,69),
+  estimated("Lash Lift + Tint","LED, Lashes & Brows",75,95,79),
+  estimated("Brow Lamination","LED, Lashes & Brows",60,79,69),
+  estimated("Lash Extension Removal","LED, Lashes & Brows",30,30,25),
+  estimated("Eyelash Extensions · Full Set","LED, Lashes & Brows",120,118,null,"from"),
+  estimated("Eyelash Extensions · Refill","LED, Lashes & Brows",75,65,null,"from"),
+  estimated("Cosmetic Tattoo · Eyeliner","Cosmetic Tattoo",150,399,null,"from"),
+  estimated("Cosmetic Tattoo · Eyebrow","Cosmetic Tattoo",180,699,null,"from"),
+
+  estimated("Extraction Add-On","Add-on Services",20,30,25,"from"),
+  estimated("Hydra Peel Deep Clean Add-On","Add-on Services",20,49,39),
+  estimated("Chemical Peel Add-On","Add-on Services",20,49,39),
+  estimated("Ampoule Infusion Add-On","Add-on Services",15,49,39),
+  estimated("Hydrating Eye Add-On","Add-on Services",20,69,55),
+  estimated("Luxury Hand Renewal Treatment Add-On","Add-on Services",20,69,55),
+
+  confirmed("VIP Recharge · $1,500","VIP Recharge Program",5,1500,null,"fixed","","Includes VIP pricing across eligible services."),
+  confirmed("VIP Recharge · $2,000","VIP Recharge Program",5,2000,null,"fixed","","Includes VIP pricing and $50 bonus credit."),
+  confirmed("VIP Recharge · $3,000","VIP Recharge Program",5,3000,null,"fixed","","Includes VIP pricing and $200 bonus credit."),
+  confirmed("VIP Recharge · $5,000","VIP Recharge Program",5,5000,null,"fixed","","Includes VIP pricing, $500 bonus credit and one complimentary eligible facial during the birthday month; terms apply."),
+];

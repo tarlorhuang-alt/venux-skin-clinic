@@ -1,0 +1,12 @@
+.owner-service-form{grid-template-columns:2fr 1fr .55fr .7fr .7fr .7fr .7fr .7fr;align-items:end}
+.owner-service-form select{width:100%;height:42px;padding:0 9px;border:1px solid var(--owner-line);border-radius:7px;background:#fbfcfb}
+.owner-service-form .service-notes{grid-column:span 7}
+.owner-price-list-import{display:flex;align-items:center;justify-content:space-between;gap:18px;margin:14px 0;padding:16px;border:1px solid #d9c28f;border-radius:10px;background:#fbf7ed}
+.owner-price-list-import strong,.owner-price-list-import small{display:block}
+.owner-price-list-import small{margin-top:4px;color:var(--owner-muted);font-size:8px}
+.owner-price-list-import button{padding:11px 16px;background:var(--owner-gold);white-space:nowrap}
+.city-slot form.city-start{display:block}
+.city-slot form.city-start button{width:100%;height:36px;background:var(--owner-gold)}
+.service-list>div{grid-template-columns:2fr 1fr .55fr .65fr .55fr .55fr}
+@media(max-width:1050px){.owner-service-form{grid-template-columns:repeat(4,1fr)}.owner-service-form .service-notes{grid-column:span 3}}
+@media(max-width:450px){.owner-service-form{grid-template-columns:1fr}.owner-service-form .service-notes{grid-column:auto}.owner-price-list-import{align-items:start;flex-direction:column}}

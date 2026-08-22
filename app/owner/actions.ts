@@ -3,7 +3,8 @@
 import {revalidatePath} from "next/cache";
 import {redirect} from "next/navigation";
 import {clearOwnerSession,createOwnerSession,isOwnerAuthenticated,ownerPasswordMatches} from "../../lib/owner-auth";
-import {BookingConflictError,createBookingRequest,createCityStaff,createClinicService,getOwnerService,importClientRows,importClinicServices,updateAppointment,type AppointmentStatus,type ClientImportRow,type ServiceImportRow} from "../../lib/clinic-admin";
+import {BookingConflictError,createBookingRequest,createCityStaff,createClinicService,getOwnerService,importClientRows,importClinicServices,startAppointment,updateAppointment,type AppointmentStatus,type ClientImportRow,type ServiceImportRow} from "../../lib/clinic-admin";
+import {PRICE_LIST_2026_SERVICES} from "../../lib/price-list-services";
 
 const text=(data:FormData,name:string)=>String(data.get(name)??"").trim();
 const ownerDate=(data:FormData)=>/^\d{4}-\d{2}-\d{2}$/.test(text(data,"date"))?text(data,"date"):"";
@@ -18,18 +19,22 @@ export async function ownerLogout(){await clearOwnerSession();redirect("/owner")
 async function requireOwner(){if(!(await isOwnerAuthenticated()))redirect("/owner?error=session");}
 
 export async function addOwnerService(data:FormData){
-  await requireOwner();const name=text(data,"name"),category=text(data,"category")||"Skin",duration=Number(data.get("duration")),price=Number(data.get("price"));
-  if(!name||!Number.isInteger(duration)||duration<5||duration>480||!Number.isInteger(price)||price<0)redirect("/owner?error=service");
-  await createClinicService({name,category,duration,price});revalidatePath("/owner");redirect("/owner?service=1");
+  await requireOwner();const name=text(data,"name"),category=text(data,"category")||"Skin",duration=Number(data.get("duration")),price=Number(data.get("price")),memberRaw=text(data,"memberPrice"),memberPrice=memberRaw===""?null:Number(memberRaw),commissionPercent=Number(data.get("commissionPercent")??0),pricingType=text(data,"pricingType") as ServiceImportRow["pricingType"],unitLabel=text(data,"unitLabel"),notes=text(data,"notes");
+  if(!name||!Number.isInteger(duration)||duration<5||duration>480||!Number.isFinite(price)||price<0||(memberPrice!==null&&(!Number.isFinite(memberPrice)||memberPrice<0))||!Number.isFinite(commissionPercent)||commissionPercent<0||commissionPercent>100||!["fixed","from","per_unit"].includes(pricingType??""))redirect("/owner?error=service");
+  await createClinicService({name,category,duration,price,memberPrice,commissionPercent,pricingType,unitLabel,notes});revalidatePath("/owner");redirect("/owner?service=1");
 }
 
 function parseCsv(value:string){
-  const lines=value.replace(/^\uFEFF/,"").split(/\r?\n/).filter(Boolean);if(lines.length<2)return [];
-  const headers=lines[0].split(",").map(item=>item.trim().toLowerCase());
+  const parsed:string[][]=[];let row:string[]=[],cell="",quoted=false;for(let i=0;i<value.length;i++){const ch=value[i];if(ch==='"'){if(quoted&&value[i+1]==='"'){cell+='"';i++;}else quoted=!quoted;}else if(ch===","&&!quoted){row.push(cell);cell="";}else if((ch==="\n"||ch==="\r")&&!quoted){if(ch==="\r"&&value[i+1]==="\n")i++;row.push(cell);if(row.some(Boolean))parsed.push(row);row=[];cell="";}else cell+=ch;}row.push(cell);if(row.some(Boolean))parsed.push(row);if(parsed.length<2)return [];
+  const headers=parsed[0].map(item=>item.replace(/^\uFEFF/,"").trim().toLowerCase());
   const index=(...names:string[])=>headers.findIndex(header=>names.includes(header));
-  const ix={name:index("name","service","project"),category:index("category"),duration:index("duration","minutes","duration minutes"),price:index("price","regular price")};
+  const ix={name:index("name","service","project"),category:index("category"),duration:index("duration","minutes","duration minutes"),price:index("price","regular price","standard"),member:index("member price","vip","vip price"),commission:index("commission","commission percent","commission %"),pricingType:index("pricing type"),unitLabel:index("unit","unit label"),notes:index("notes","price notes")};
   if(ix.name<0||ix.duration<0||ix.price<0)return [];
-  return lines.slice(1).map(line=>line.split(",").map(cell=>cell.trim())).map(columns=>({name:columns[ix.name]??"",category:ix.category>=0?(columns[ix.category]||"Skin"):"Skin",duration:Number(columns[ix.duration]),price:Number(columns[ix.price])})).filter((row):row is ServiceImportRow=>Boolean(row.name)&&Number.isInteger(row.duration)&&row.duration>=5&&row.duration<=480&&Number.isInteger(row.price)&&row.price>=0);
+  return parsed.slice(1).map(columns=>{const memberRaw=ix.member>=0?(columns[ix.member]??"").trim():"";return {name:(columns[ix.name]??"").trim(),category:ix.category>=0?((columns[ix.category]??"").trim()||"Skin"):"Skin",duration:Number(columns[ix.duration]),price:Number(columns[ix.price]),memberPrice:memberRaw===""?null:Number(memberRaw),commissionPercent:ix.commission>=0?Number(columns[ix.commission]||0):0,pricingType:(ix.pricingType>=0?(columns[ix.pricingType]||"fixed"):"fixed") as ServiceImportRow["pricingType"],unitLabel:ix.unitLabel>=0?(columns[ix.unitLabel]??"").trim():"",notes:ix.notes>=0?(columns[ix.notes]??"").trim():""};}).filter(row=>Boolean(row.name)&&Number.isInteger(row.duration)&&row.duration>=5&&row.duration<=480&&Number.isFinite(row.price)&&row.price>=0&&(row.memberPrice===null||Number.isFinite(row.memberPrice))&&Number.isFinite(row.commissionPercent)&&Number(row.commissionPercent)>=0&&Number(row.commissionPercent)<=100&&["fixed","from","per_unit"].includes(row.pricingType??"")) as ServiceImportRow[];
+}
+
+export async function importBundledPriceList(){
+  await requireOwner();const count=await importClinicServices(PRICE_LIST_2026_SERVICES);revalidatePath("/owner");revalidatePath("/admin/bookings");redirect(`/owner?imported=${count}`);
 }
 
 export async function importOwnerClients(data:FormData){
@@ -66,6 +71,12 @@ export async function createCityAppointment(data:FormData){
 
 export async function settleCityAppointment(data:FormData){
   await requireOwner();const id=Number(data.get("id")),date=ownerDate(data),staffId=Number(data.get("staffId")),amount=Number(data.get("amount")),status=text(data,"status") as AppointmentStatus;
-  if(!Number.isInteger(id)||id<=0||!date||!Number.isInteger(staffId)||staffId<=0||!Number.isInteger(amount)||amount<0||!["requested","confirmed","completed","cancelled","no_show"].includes(status))redirect(`/owner?date=${date}&error=settlement`);
+  if(!Number.isInteger(id)||id<=0||!date||!Number.isInteger(staffId)||staffId<=0||!Number.isFinite(amount)||amount<0||!["requested","confirmed","in_progress","completed","cancelled","no_show"].includes(status))redirect(`/owner?date=${date}&error=settlement`);
   await updateAppointment(id,status,amount,"paid",staffId);revalidatePath("/owner");redirect(`/owner?date=${date}&settled=1`);
+}
+
+export async function startCityAppointment(data:FormData){
+  await requireOwner();const id=Number(data.get("id")),date=ownerDate(data),staffId=Number(data.get("staffId"));
+  if(!Number.isInteger(id)||id<=0||!date||!Number.isInteger(staffId)||staffId<=0)redirect(`/owner?date=${date}&error=start`);
+  const started=await startAppointment(id,staffId);revalidatePath("/owner");revalidatePath("/admin/bookings");revalidatePath("/admin/reports");redirect(`/owner?date=${date}&${started?"started=1":"error=start"}`);
 }
