@@ -1,0 +1,8 @@
+.payroll-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.payroll-summary article{display:grid;gap:5px;padding:15px;border-radius:12px;background:#f2f7f5}
+.payroll-summary span,.payroll-summary small{color:var(--os-muted);font-size:9px}
+.payroll-summary strong{font-size:13px}
+.payroll-summary b{color:var(--os-green);font:24px Georgia,serif}
+.payroll-table .ops-table-head,.payroll-table .ops-table-row{grid-template-columns:1.1fr 1fr 1.4fr 1fr .7fr}
+@media(max-width:1050px){.payroll-summary{grid-template-columns:1fr 1fr}}
+@media(max-width:720px){.payroll-summary{grid-template-columns:1fr}}
