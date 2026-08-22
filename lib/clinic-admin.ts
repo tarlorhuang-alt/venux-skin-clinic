@@ -37,6 +37,11 @@ function timeToMinutes(input:string){
   let hour=Number(match[1])%12;if(match[3].toUpperCase()==="PM")hour+=12;return hour*60+Number(match[2]);
 }
 
+function projectWageFor(treatment:string,category:string){
+  const value=`${category} ${treatment}`.toLowerCase();
+  return value.includes("dmk")||value.includes("facial")||((value.includes("ayko")||value.includes("german"))&&value.includes("hifu"))?32:25;
+}
+
 export type ClientImportRow = {
   group: string;
   name: string;
@@ -226,6 +231,7 @@ export function ensureClinicTables() {
       await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS recognised_revenue NUMERIC(10,2) NOT NULL DEFAULT 0 CHECK (recognised_revenue >= 0)`;
       await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS commission_percent NUMERIC(5,2) NOT NULL DEFAULT 0 CHECK (commission_percent BETWEEN 0 AND 100)`;
       await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS staff_wage_amount NUMERIC(10,2) NOT NULL DEFAULT 0 CHECK (staff_wage_amount >= 0)`;
+      await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS wage_project_rate NUMERIC(10,2) NOT NULL DEFAULT 0 CHECK (wage_project_rate >= 0)`;
       await sql`UPDATE venux_appointments SET recognised_revenue=total_amount WHERE status='completed' AND recognised_revenue=0 AND total_amount>0`;
     })();
   }
@@ -374,8 +380,9 @@ export async function importClientRows(rows: ClientImportRow[]) {
 export async function updateAppointment(id: number, status: AppointmentStatus, totalAmount: number, depositStatus: string, staffId: number|null = null) {
   await ensureClinicTables();
   const sql=client();
-  const before=await sql`SELECT a.*,c.full_name,c.mobile,c.service_sms_consent FROM venux_appointments a JOIN venux_clients c ON c.id=a.client_id WHERE a.id=${id}`;
+  const before=await sql`SELECT a.*,c.full_name,c.mobile,c.service_sms_consent,COALESCE(v.category,'') AS service_category,COALESCE(v.service_name,a.treatment) AS service_name FROM venux_appointments a JOIN venux_clients c ON c.id=a.client_id LEFT JOIN venux_services v ON v.id=a.service_id OR (a.service_id IS NULL AND LOWER(v.service_name)=LOWER(a.treatment)) WHERE a.id=${id} ORDER BY v.id LIMIT 1`;
   if(!before[0])return;
+  const projectWage=projectWageFor(String(before[0].service_name),String(before[0].service_category));
   if(["requested","confirmed","in_progress"].includes(status)&&!["requested","confirmed","in_progress"].includes(String(before[0].status))){
     const claimed=await sql`INSERT INTO venux_booking_slots (slot_key,appointment_id)
       SELECT clinic||'|'||requested_date::text||'|'||requested_time,id FROM venux_appointments WHERE id=${id}
@@ -390,16 +397,18 @@ export async function updateAppointment(id: number, status: AppointmentStatus, t
     started_at=CASE WHEN ${status}='in_progress' THEN COALESCE(a.started_at,NOW()) ELSE a.started_at END,
     completed_at=CASE WHEN ${status}='completed' THEN COALESCE(a.completed_at,NOW()) ELSE a.completed_at END,
     commission_percent=CASE WHEN ${status} IN ('in_progress','completed') AND a.started_at IS NULL THEN COALESCE(v.commission_percent,0) ELSE a.commission_percent END,
+    wage_project_rate=CASE WHEN ${status} IN ('in_progress','completed') AND a.started_at IS NULL THEN ${projectWage} ELSE a.wage_project_rate END,
     recognised_revenue=CASE WHEN ${status} IN ('in_progress','completed') THEN ${totalAmount} ELSE a.recognised_revenue END,
-    staff_wage_amount=CASE WHEN ${status} IN ('in_progress','completed') THEN ROUND(${totalAmount}*CASE WHEN a.started_at IS NULL THEN COALESCE(v.commission_percent,0) ELSE a.commission_percent END/100,2) ELSE a.staff_wage_amount END,
+    staff_wage_amount=CASE WHEN ${status}='completed' THEN CASE WHEN a.started_at IS NULL THEN ${projectWage} ELSE COALESCE(NULLIF(a.wage_project_rate,0),${projectWage}) END WHEN ${status}='in_progress' THEN 0 ELSE a.staff_wage_amount END,
     updated_at=NOW()
     FROM venux_services v WHERE a.id=${id} AND (v.id=a.service_id OR (a.service_id IS NULL AND v.id=(SELECT id FROM venux_services WHERE LOWER(service_name)=LOWER(a.treatment) LIMIT 1)))`;
   if(before[0].service_id==null){
     await sql`UPDATE venux_appointments SET status=${status},total_amount=${totalAmount},deposit_status=${depositStatus},staff_id=${staffId},
       started_at=CASE WHEN ${status}='in_progress' THEN COALESCE(started_at,NOW()) ELSE started_at END,
       completed_at=CASE WHEN ${status}='completed' THEN COALESCE(completed_at,NOW()) ELSE completed_at END,
+      wage_project_rate=CASE WHEN ${status} IN ('in_progress','completed') AND started_at IS NULL THEN ${projectWage} ELSE wage_project_rate END,
       recognised_revenue=CASE WHEN ${status} IN ('in_progress','completed') THEN ${totalAmount} ELSE recognised_revenue END,
-      staff_wage_amount=CASE WHEN ${status} IN ('in_progress','completed') THEN ROUND(${totalAmount}*commission_percent/100,2) ELSE staff_wage_amount END,updated_at=NOW() WHERE id=${id}`;
+      staff_wage_amount=CASE WHEN ${status}='completed' THEN CASE WHEN started_at IS NULL THEN ${projectWage} ELSE COALESCE(NULLIF(wage_project_rate,0),${projectWage}) END WHEN ${status}='in_progress' THEN 0 ELSE staff_wage_amount END,updated_at=NOW() WHERE id=${id}`;
   }
   if(["cancelled","completed","no_show"].includes(status))await sql`DELETE FROM venux_booking_slots WHERE appointment_id=${id}`;
   if(status==="confirmed"&&before[0].status!=="confirmed"&&before[0].service_sms_consent)await queueAppointmentConfirmation(id);
@@ -412,6 +421,16 @@ export async function startAppointment(id:number,staffId:number){
   const row=rows[0];
   if(!row||!["requested","confirmed"].includes(String(row.status)))return false;
   await updateAppointment(id,"in_progress",Number(row.total_amount),String(row.deposit_status),staffId);
+  return true;
+}
+
+export async function finishAppointment(id:number,staffId:number){
+  await ensureClinicTables();
+  const sql=client();
+  const rows=await sql`SELECT total_amount,deposit_status,status,staff_id FROM venux_appointments WHERE id=${id}`;
+  const row=rows[0];
+  if(!row||String(row.status)!=="in_progress"||Number(row.staff_id)!==staffId)return false;
+  await updateAppointment(id,"completed",Number(row.total_amount),String(row.deposit_status),staffId);
   return true;
 }
 
@@ -602,6 +621,21 @@ export async function getOperationsReport(from:string,to:string){
       GROUP BY requested_date ORDER BY requested_date`,
   ]);
   return {summary:summary[0]??{},byStaff,byTreatment,byDay};
+}
+
+export async function getPayrollReport(from:string,to:string){
+  await ensureClinicTables();const sql=client();
+  const [summary,rows]=await Promise.all([
+    sql`SELECT s.id AS staff_id,s.full_name,s.role,COUNT(a.id)::int AS projects,COALESCE(SUM(a.staff_wage_amount),0) AS wage
+      FROM venux_staff s LEFT JOIN venux_appointments a ON a.staff_id=s.id AND a.status='completed' AND a.requested_date BETWEEN ${from} AND ${to}
+      WHERE s.active=TRUE GROUP BY s.id,s.full_name,s.role ORDER BY s.full_name`,
+    sql`SELECT a.id,a.requested_date,a.started_at,a.completed_at,a.treatment,a.wage_project_rate,a.staff_wage_amount,
+      s.full_name AS staff_name,c.full_name AS client_name
+      FROM venux_appointments a JOIN venux_staff s ON s.id=a.staff_id JOIN venux_clients c ON c.id=a.client_id
+      WHERE a.status='completed' AND a.requested_date BETWEEN ${from} AND ${to}
+      ORDER BY a.requested_date DESC,a.completed_at DESC`,
+  ]);
+  return {summary,rows};
 }
 
 export async function getDormantClients(days=120,search=""){
