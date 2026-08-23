@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { clearAdminSession, createAdminSession, isAdminAuthenticated, passwordMatches } from "../../lib/admin-auth";
-import { BookingConflictError,completeFollowup,createBookingRequest,createClientCourse,createExpense,createSkinAssessment,createStaff,createSupplier,createTreatmentRecord,finishAppointment,getOwnerService,importClientRows,markSmsOutboxSent,queueBirthdayMessages,queueReturnInvite,saveClientProfile,saveHealthProfile,saveMembership,startAppointment,toggleStaffClock,updateAppointment,type AppointmentStatus,type ClientImportRow } from "../../lib/clinic-admin";
+import { BookingConflictError,completeFollowup,createBookingRequest,createClientCourse,createExpense,createSkinAssessment,createStaff,createSupplier,createTreatmentRecord,finishAppointment,getOwnerService,importClientRows,markSmsOutboxSent,queueBirthdayMessages,queueReturnInvite,saveClientProfile,saveHealthProfile,saveMembership,startAppointment,toggleStaffClock,updateAppointment,useClientCourseSession,type AppointmentStatus,type ClientImportRow } from "../../lib/clinic-admin";
 
 export async function adminLogin(formData: FormData) {
   if (!passwordMatches(String(formData.get("password") ?? ""))) redirect("/admin?error=login");
@@ -33,9 +33,9 @@ export async function startAppointmentAction(formData:FormData){
 }
 
 export async function finishAppointmentAction(formData:FormData){
-  if(!(await isAdminAuthenticated()))redirect("/admin?error=session");const id=Number(formData.get("id")),staffId=Number(formData.get("staffId"));
-  if(!Number.isInteger(id)||id<=0||!Number.isInteger(staffId)||staffId<=0)redirect("/admin/bookings?error=staff");
-  const finished=await finishAppointment(id,staffId);revalidatePath("/admin");revalidatePath("/admin/bookings");revalidatePath("/admin/reports");revalidatePath("/admin/payroll");redirect(`/admin/bookings?${finished?"finished=1":"error=finish"}`);
+  if(!(await isAdminAuthenticated()))redirect("/admin?error=session");const id=Number(formData.get("id")),staffId=Number(formData.get("staffId")),comment=String(formData.get("comment")??"").trim(),manualFee=Number(formData.get("manualFee"));
+  if(!Number.isInteger(id)||id<=0||!Number.isInteger(staffId)||staffId<=0||!comment||!Number.isFinite(manualFee)||manualFee<0)redirect("/admin/bookings?error=finish");
+  const finished=await finishAppointment(id,staffId,comment,manualFee);revalidatePath("/admin");revalidatePath("/admin/bookings");revalidatePath("/admin/reports");revalidatePath("/admin/payroll");redirect(`/admin/bookings?${finished?"finished=1":"error=finish"}`);
 }
 
 export async function createAdminAppointment(formData:FormData){
@@ -87,11 +87,13 @@ export async function changeMembership(formData: FormData) {
   if (!(await isAdminAuthenticated())) redirect("/admin?error=session");
   const clientId = Number(formData.get("clientId"));
   const balance = Number(formData.get("balance"));
+  const amountPaid = Number(formData.get("amountPaid")??0);
   const status = String(formData.get("status"));
-  if (!Number.isInteger(clientId) || clientId <= 0 || !Number.isInteger(balance) || balance < 0 || !["active","inactive","paused"].includes(status)) redirect("/admin/clients?error=invalid");
-  await saveMembership(clientId,balance,status);
-  revalidatePath("/admin"); revalidatePath("/admin/clients");
-  redirect("/admin/clients?saved=1");
+  const returnTo=String(formData.get("returnTo")??"");
+  if (!Number.isInteger(clientId) || clientId <= 0 || !Number.isFinite(balance) || balance < 0 || !Number.isFinite(amountPaid) || amountPaid < 0 || !["active","inactive","paused"].includes(status)) redirect("/admin/clients?error=invalid");
+  await saveMembership(clientId,balance,status,amountPaid);
+  revalidatePath("/admin"); revalidatePath("/admin/clients");revalidatePath(clientPath(clientId));
+  redirect(returnTo==="record"?`${clientPath(clientId)}?saved=membership`:"/admin/clients?saved=1");
 }
 
 function parseCsv(text: string) {
@@ -165,6 +167,12 @@ export async function addClientCourseAction(formData:FormData){
   if(!textValue(formData,"name")||purchased===null||purchased<1||used===null||used>purchased||amountPaid===null) redirect(`${clientPath(clientId)}?error=course`);
   await createClientCourse(clientId,{name:textValue(formData,"name"),purchased,used,expiresOn:textValue(formData,"expiresOn"),amountPaid,status:textValue(formData,"status")||"active"});
   revalidatePath(clientPath(clientId));redirect(`${clientPath(clientId)}?saved=course`);
+}
+
+export async function useClientCourseSessionAction(formData:FormData){
+  const clientId=await authorisedClient(formData),courseId=Number(formData.get("courseId"));
+  if(!Number.isInteger(courseId)||courseId<=0)redirect(`${clientPath(clientId)}?error=course`);
+  const used=await useClientCourseSession(clientId,courseId);revalidatePath(clientPath(clientId));redirect(`${clientPath(clientId)}?${used?"saved=session":"error=course"}`);
 }
 
 export async function completeFollowupAction(formData:FormData){

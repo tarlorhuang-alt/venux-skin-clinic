@@ -6,3 +6,4 @@
 .payroll-table .ops-table-head,.payroll-table .ops-table-row{grid-template-columns:1.1fr 1fr 1.4fr 1fr .7fr}
 @media(max-width:1050px){.payroll-summary{grid-template-columns:1fr 1fr}}
 @media(max-width:720px){.payroll-summary{grid-template-columns:1fr}}
+.payroll-client{color:#173f36;font-weight:750;text-decoration:underline;text-underline-offset:3px}.payroll-project{display:grid;gap:.25rem}.payroll-project small{color:var(--admin-muted);font-size:.76rem;line-height:1.35}
