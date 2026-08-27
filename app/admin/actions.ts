@@ -104,7 +104,8 @@ function parseCsv(text: string) {
 
 export async function importClients(formData: FormData) {
   if (!(await isAdminAuthenticated())) redirect("/admin?error=session");
-  const file=formData.get("clientsFile");
+  const file=formData.get("clientsFile"),clinicLocation=String(formData.get("clinicLocation")??"");
+  if(!["City","Top Ryde"].includes(clinicLocation))redirect("/admin/clients?error=location");
   if(!(file instanceof File)||file.size===0||file.size>5_000_000) redirect("/admin/clients?error=file");
   const parsed=parseCsv(await file.text());
   if(parsed.length<2||parsed.length>2001) redirect("/admin/clients?error=file");
@@ -115,7 +116,7 @@ export async function importClients(formData: FormData) {
   const isoDob=(value:string)=>{const clean=value.trim();if(!clean)return null;const au=clean.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);if(au)return `${au[3]}-${au[2].padStart(2,"0")}-${au[1].padStart(2,"0")}`;return /^\d{4}-\d{2}-\d{2}$/.test(clean)?clean:null;};
   const rows:ClientImportRow[]=parsed.slice(1).map(values=>({group:(values[indexes.group]??"General").trim()||"General",name:(values[indexes.name]??"").trim(),dob:indexes.dob>=0?isoDob(values[indexes.dob]??""):null,mobile:(values[indexes.mobile]??"").replace(/\s+/g,""),email:indexes.email>=0?(values[indexes.email]??"").trim().toLowerCase():"",address:indexes.address>=0?(values[indexes.address]??"").trim():""})).filter(row=>row.name&&row.mobile);
   if(!rows.length) redirect("/admin/clients?error=file");
-  const result=await importClientRows(rows);
+  const result=await importClientRows(rows,clinicLocation as "City"|"Top Ryde");
   revalidatePath("/admin");revalidatePath("/admin/clients");
   redirect(`/admin/clients?imported=${result.imported}&processed=${result.processed}&duplicates=${result.duplicates}`);
 }
@@ -135,7 +136,8 @@ export async function updateClientProfileAction(formData:FormData){
   const clientId=await authorisedClient(formData);
   const fullName=textValue(formData,"fullName"),mobile=textValue(formData,"mobile");
   if(!fullName||!mobile) redirect(`${clientPath(clientId)}?error=profile`);
-  await saveClientProfile(clientId,{fullName,mobile,email:textValue(formData,"email").toLowerCase(),dob:textValue(formData,"dob"),address:textValue(formData,"address"),gender:textValue(formData,"gender"),occupation:textValue(formData,"occupation"),emergencyName:textValue(formData,"emergencyName"),emergencyPhone:textValue(formData,"emergencyPhone"),leadSource:textValue(formData,"leadSource")});
+  const clinicLocation=textValue(formData,"clinicLocation");if(!["City","Top Ryde"].includes(clinicLocation))redirect(`${clientPath(clientId)}?error=profile`);
+  await saveClientProfile(clientId,{fullName,mobile,email:textValue(formData,"email").toLowerCase(),dob:textValue(formData,"dob"),address:textValue(formData,"address"),gender:textValue(formData,"gender"),occupation:textValue(formData,"occupation"),emergencyName:textValue(formData,"emergencyName"),emergencyPhone:textValue(formData,"emergencyPhone"),leadSource:textValue(formData,"leadSource"),clinicLocation});
   revalidatePath(clientPath(clientId));revalidatePath("/admin/clients");redirect(`${clientPath(clientId)}?saved=profile`);
 }
 

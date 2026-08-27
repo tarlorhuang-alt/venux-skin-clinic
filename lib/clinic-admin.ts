@@ -80,10 +80,26 @@ export function ensureClinicTables() {
       await sql`ALTER TABLE venux_clients ADD COLUMN IF NOT EXISTS emergency_contact_name TEXT NOT NULL DEFAULT ''`;
       await sql`ALTER TABLE venux_clients ADD COLUMN IF NOT EXISTS emergency_contact_phone TEXT NOT NULL DEFAULT ''`;
       await sql`ALTER TABLE venux_clients ADD COLUMN IF NOT EXISTS lead_source TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE venux_clients ADD COLUMN IF NOT EXISTS clinic_location TEXT NOT NULL DEFAULT 'Top Ryde'`;
+      await sql`ALTER TABLE venux_clients ADD COLUMN IF NOT EXISTS location_source TEXT NOT NULL DEFAULT 'default'`;
       await sql`ALTER TABLE venux_clients ADD COLUMN IF NOT EXISTS service_sms_consent BOOLEAN NOT NULL DEFAULT FALSE`;
       await sql`ALTER TABLE venux_clients ADD COLUMN IF NOT EXISTS marketing_sms_consent BOOLEAN NOT NULL DEFAULT FALSE`;
       await sql`ALTER TABLE venux_clients ADD COLUMN IF NOT EXISTS marketing_consent_at TIMESTAMPTZ`;
       await sql`ALTER TABLE venux_clients ADD COLUMN IF NOT EXISTS sms_unsubscribed_at TIMESTAMPTZ`;
+      await sql`CREATE TABLE IF NOT EXISTS venux_system_settings (
+        setting_key TEXT PRIMARY KEY,
+        setting_value TEXT NOT NULL DEFAULT '',
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`;
+      const locationMigration=await sql`SELECT setting_key FROM venux_system_settings WHERE setting_key='client_location_batch_v1' LIMIT 1`;
+      if(!locationMigration[0]){
+        await sql`WITH latest_bulk_batch AS (
+          SELECT date_trunc('minute',updated_at) AS batch_minute,COUNT(*)::int AS records
+          FROM venux_clients GROUP BY 1 HAVING COUNT(*) BETWEEN 750 AND 850 ORDER BY batch_minute DESC LIMIT 1
+        ) UPDATE venux_clients c SET clinic_location='City',location_source='second_excel_import'
+          FROM latest_bulk_batch b WHERE date_trunc('minute',c.updated_at)=b.batch_minute`;
+        await sql`INSERT INTO venux_system_settings (setting_key,setting_value) VALUES ('client_location_batch_v1','completed') ON CONFLICT (setting_key) DO NOTHING`;
+      }
       await sql`CREATE TABLE IF NOT EXISTS venux_memberships (
         client_id BIGINT PRIMARY KEY REFERENCES venux_clients(id) ON DELETE CASCADE,
         balance INTEGER NOT NULL DEFAULT 0 CHECK (balance >= 0),
@@ -122,6 +138,8 @@ export function ensureClinicTables() {
       await sql`CREATE INDEX IF NOT EXISTS venux_clients_email_idx ON venux_clients (LOWER(email))`;
       await sql`CREATE INDEX IF NOT EXISTS venux_clients_mobile_idx ON venux_clients (mobile)`;
       await sql`CREATE INDEX IF NOT EXISTS venux_appointments_date_idx ON venux_appointments (requested_date)`;
+      await sql`UPDATE venux_clients c SET clinic_location='City',location_source='appointment'
+        WHERE c.location_source='default' AND EXISTS (SELECT 1 FROM venux_appointments a WHERE a.client_id=c.id AND (a.clinic ILIKE '%Kent Street%' OR a.clinic ILIKE '%City%'))`;
       await sql`CREATE TABLE IF NOT EXISTS venux_health_profiles (
         client_id BIGINT PRIMARY KEY REFERENCES venux_clients(id) ON DELETE CASCADE,
         skin_type TEXT NOT NULL DEFAULT '', primary_concerns TEXT NOT NULL DEFAULT '',
@@ -245,15 +263,16 @@ export async function createBookingRequest(input: BookingInput) {
   await ensureClinicTables();
   const sql = client();
   const normalMobile=normaliseMobile(input.mobile);
+  const bookingLocation=/kent street|city/i.test(input.clinic)?"City":"Top Ryde";
   const existing = input.clientId
     ? await sql`SELECT id FROM venux_clients WHERE id=${input.clientId} LIMIT 1`
     : await sql`SELECT id FROM venux_clients WHERE (${input.email}<>'' AND LOWER(email) = LOWER(${input.email})) OR REGEXP_REPLACE(mobile,'[^0-9]','','g') IN (${normalMobile},${normalMobile.replace(/^61/,"0")}) ORDER BY updated_at DESC LIMIT 1`;
   let clientId: number;
   if (existing[0]) {
     clientId = Number(existing[0].id);
-    await sql`UPDATE venux_clients SET full_name=${input.name},mobile=${input.mobile},email=CASE WHEN ${input.email}<>'' THEN ${input.email} ELSE email END,service_sms_consent=service_sms_consent OR ${Boolean(input.serviceSmsConsent)},marketing_sms_consent=CASE WHEN sms_unsubscribed_at IS NULL THEN marketing_sms_consent OR ${Boolean(input.marketingSmsConsent)} ELSE FALSE END,marketing_consent_at=CASE WHEN ${Boolean(input.marketingSmsConsent)} AND marketing_consent_at IS NULL THEN NOW() ELSE marketing_consent_at END,updated_at=NOW() WHERE id=${clientId}`;
+    await sql`UPDATE venux_clients SET full_name=${input.name},mobile=${input.mobile},email=CASE WHEN ${input.email}<>'' THEN ${input.email} ELSE email END,clinic_location=CASE WHEN location_source='default' THEN ${bookingLocation} ELSE clinic_location END,location_source=CASE WHEN location_source='default' THEN 'booking' ELSE location_source END,service_sms_consent=service_sms_consent OR ${Boolean(input.serviceSmsConsent)},marketing_sms_consent=CASE WHEN sms_unsubscribed_at IS NULL THEN marketing_sms_consent OR ${Boolean(input.marketingSmsConsent)} ELSE FALSE END,marketing_consent_at=CASE WHEN ${Boolean(input.marketingSmsConsent)} AND marketing_consent_at IS NULL THEN NOW() ELSE marketing_consent_at END,updated_at=NOW() WHERE id=${clientId}`;
   } else {
-    const rows = await sql`INSERT INTO venux_clients (full_name,mobile,email,service_sms_consent,marketing_sms_consent,marketing_consent_at,lead_source) VALUES (${input.name},${input.mobile},${input.email},${Boolean(input.serviceSmsConsent)},${Boolean(input.marketingSmsConsent)},CASE WHEN ${Boolean(input.marketingSmsConsent)} THEN NOW() ELSE NULL END,${input.source==="admin"?"Clinic":"Website"}) RETURNING id`;
+    const rows = await sql`INSERT INTO venux_clients (full_name,mobile,email,clinic_location,location_source,service_sms_consent,marketing_sms_consent,marketing_consent_at,lead_source) VALUES (${input.name},${input.mobile},${input.email},${bookingLocation},'booking',${Boolean(input.serviceSmsConsent)},${Boolean(input.marketingSmsConsent)},CASE WHEN ${Boolean(input.marketingSmsConsent)} THEN NOW() ELSE NULL END,${input.source==="admin"?"Clinic":"Website"}) RETURNING id`;
     clientId = Number(rows[0].id);
   }
   const token=randomBytes(24).toString("base64url");
@@ -308,7 +327,7 @@ export async function getClinicDashboard() {
 
 export async function getAppointments(date = "") {
   await ensureClinicTables();
-  return client()`SELECT a.*,a.requested_date::text AS requested_date,c.full_name,c.mobile,c.email,s.full_name AS staff_name
+  return client()`SELECT a.*,a.requested_date::text AS requested_date,c.full_name,c.mobile,c.email,c.clinic_location,s.full_name AS staff_name
     FROM venux_appointments a JOIN venux_clients c ON c.id=a.client_id
     LEFT JOIN venux_staff s ON s.id=a.staff_id
     WHERE (${date}='' OR a.requested_date=${date || null})
@@ -317,29 +336,33 @@ export async function getAppointments(date = "") {
 
 export async function getAppointmentsRange(from:string,to:string) {
   await ensureClinicTables();
-  return client()`SELECT a.*,a.requested_date::text AS requested_date,c.full_name,c.mobile,c.email,s.full_name AS staff_name
+  return client()`SELECT a.*,a.requested_date::text AS requested_date,c.full_name,c.mobile,c.email,c.clinic_location,s.full_name AS staff_name
     FROM venux_appointments a JOIN venux_clients c ON c.id=a.client_id
     LEFT JOIN venux_staff s ON s.id=a.staff_id
     WHERE a.requested_date BETWEEN ${from} AND ${to}
     ORDER BY a.requested_date,a.start_minute NULLS LAST,a.requested_time,a.id LIMIT 1000`;
 }
 
-export async function getClients(search = "") {
+export async function getClients(search = "",location = "") {
   await ensureClinicTables();
   const term=search.trim(),like=`%${term}%`,digits=normaliseMobile(term),localDigits=digits.replace(/^61/,"0");
   return client()`SELECT c.*,m.balance,m.amount_paid AS membership_amount_paid,m.status AS membership_status,m.joined_at,
     COUNT(a.id)::int AS visit_count,MAX(a.requested_date) AS last_visit
     FROM venux_clients c LEFT JOIN venux_memberships m ON m.client_id=c.id
     LEFT JOIN venux_appointments a ON a.client_id=c.id
-    WHERE (${term}='' OR c.full_name ILIKE ${like} OR c.email ILIKE ${like}
+    WHERE (${location}='' OR c.clinic_location=${location}) AND (${term}='' OR c.full_name ILIKE ${like} OR c.email ILIKE ${like}
       OR (${digits}<>'' AND (REGEXP_REPLACE(c.mobile,'[^0-9]','','g') LIKE ${`%${digits}%`}
         OR REGEXP_REPLACE(c.mobile,'[^0-9]','','g') LIKE ${`%${localDigits}%`})))
     GROUP BY c.id,m.balance,m.amount_paid,m.status,m.joined_at ORDER BY c.updated_at DESC LIMIT 500`;
 }
 
+export async function getClientLocationStats(){
+  await ensureClinicTables();return client()`SELECT clinic_location,COUNT(*)::int AS clients FROM venux_clients GROUP BY clinic_location ORDER BY clinic_location`;
+}
+
 export async function getClientExportRows(){
   await ensureClinicTables();
-  return client()`SELECT c.id,c.full_name,c.mobile,c.email,c.dob,c.address,c.customer_group,c.lead_source,
+  return client()`SELECT c.id,c.full_name,c.mobile,c.email,c.dob,c.address,c.customer_group,c.clinic_location,c.lead_source,
     COALESCE(m.status,'inactive') AS membership_status,COALESCE(m.balance,0) AS membership_balance,
     COALESCE(m.amount_paid,0) AS membership_amount_paid,COUNT(a.id)::int AS appointment_count,MAX(a.requested_date) AS last_visit
     FROM venux_clients c LEFT JOIN venux_memberships m ON m.client_id=c.id LEFT JOIN venux_appointments a ON a.client_id=c.id
@@ -355,7 +378,7 @@ export async function getClientForBooking(clientId: number) {
     GROUP BY c.id,m.balance,m.status LIMIT 1`)[0]??null;
 }
 
-export async function importClientRows(rows: ClientImportRow[]) {
+export async function importClientRows(rows: ClientImportRow[],clinicLocation:"City"|"Top Ryde"="Top Ryde") {
   await ensureClinicTables();
   const sql = client();
   const unique = new Map<string, ClientImportRow>();
@@ -371,14 +394,15 @@ export async function importClientRows(rows: ClientImportRow[]) {
     ) UPDATE venux_clients c SET full_name=i.name,
       email=CASE WHEN i.email<>'' THEN i.email ELSE c.email END,
       customer_group=CASE WHEN i."group"<>'' THEN i."group" ELSE c.customer_group END,
+      clinic_location=${clinicLocation},location_source='explicit_import',
       dob=COALESCE(i.dob,c.dob),
       address=CASE WHEN i.address<>'' AND i.address<>'0' THEN i.address ELSE c.address END,
       updated_at=NOW()
     FROM incoming i WHERE (i.email<>'' AND LOWER(c.email)=LOWER(i.email)) OR (c.mobile=i.mobile AND LOWER(c.full_name)=LOWER(i.name))`;
   const inserted = await sql`WITH incoming AS (
       SELECT * FROM jsonb_to_recordset(${json}::jsonb) AS x("group" TEXT,name TEXT,dob DATE,mobile TEXT,email TEXT,address TEXT)
-    ) INSERT INTO venux_clients (full_name,mobile,email,customer_group,dob,address)
-      SELECT i.name,i.mobile,i.email,COALESCE(NULLIF(i."group",''),'General'),i.dob,CASE WHEN i.address='0' THEN '' ELSE i.address END FROM incoming i
+    ) INSERT INTO venux_clients (full_name,mobile,email,customer_group,dob,address,clinic_location,location_source)
+      SELECT i.name,i.mobile,i.email,COALESCE(NULLIF(i."group",''),'General'),i.dob,CASE WHEN i.address='0' THEN '' ELSE i.address END,${clinicLocation},'explicit_import' FROM incoming i
       WHERE NOT EXISTS (SELECT 1 FROM venux_clients c WHERE (i.email<>'' AND LOWER(c.email)=LOWER(i.email)) OR (c.mobile=i.mobile AND LOWER(c.full_name)=LOWER(i.name)))
       RETURNING id`;
   await sql`WITH incoming AS (
@@ -518,7 +542,7 @@ export async function getClientClinicalRecord(clientId: number) {
 
 export async function saveClientProfile(clientId: number, values: Record<string,string>) {
   await ensureClinicTables();
-  await client()`UPDATE venux_clients SET full_name=${values.fullName},mobile=${values.mobile},email=${values.email},dob=${values.dob || null},address=${values.address},gender=${values.gender},occupation=${values.occupation},emergency_contact_name=${values.emergencyName},emergency_contact_phone=${values.emergencyPhone},lead_source=${values.leadSource},updated_at=NOW() WHERE id=${clientId}`;
+  await client()`UPDATE venux_clients SET full_name=${values.fullName},mobile=${values.mobile},email=${values.email},dob=${values.dob || null},address=${values.address},gender=${values.gender},occupation=${values.occupation},emergency_contact_name=${values.emergencyName},emergency_contact_phone=${values.emergencyPhone},lead_source=${values.leadSource},clinic_location=${values.clinicLocation},location_source='manual',updated_at=NOW() WHERE id=${clientId}`;
   await audit("update", "client", clientId, "Profile and contact details updated");
 }
 
