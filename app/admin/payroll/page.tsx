@@ -1,5 +1,6 @@
 import type {Metadata} from "next";
-import {isAdminAuthenticated} from "../../../lib/admin-auth";
+import {isAdminAuthenticated,isOwnerAuthenticated} from "../../../lib/admin-auth";
+import {redirect} from "next/navigation";
 import {getPayrollReport} from "../../../lib/clinic-admin";
 import {AdminLogin,AdminShell} from "../admin-ui";
 import "../admin.css";
@@ -12,7 +13,7 @@ const isoSydney=()=>new Intl.DateTimeFormat("en-CA",{timeZone:"Australia/Sydney"
 
 export default async function PayrollPage({searchParams}:{searchParams:Promise<{from?:string;to?:string;error?:string}>}){
   const params=await searchParams;
-  if(!(await isAdminAuthenticated()))return <AdminLogin error={params.error}/>;
+  if(!(await isAdminAuthenticated()))return <AdminLogin error={params.error}/>;if(!(await isOwnerAuthenticated()))redirect("/admin?error=restricted");
   const today=isoSydney(),from=/^\d{4}-\d{2}-\d{2}$/.test(params.from??"")?String(params.from):`${today.slice(0,7)}-01`,to=/^\d{4}-\d{2}-\d{2}$/.test(params.to??"")?String(params.to):today;
   const report=await getPayrollReport(from,to),total=report.summary.reduce((sum,row)=>sum+Number(row.wage??0),0),projects=report.summary.reduce((sum,row)=>sum+Number(row.projects??0),0);
   return <AdminShell active="Payroll"><header className="clinic-admin-head"><div><p>Fixed project wages</p><h1>Beautician payroll</h1></div><span>Wages are added when End service is selected</span></header>
