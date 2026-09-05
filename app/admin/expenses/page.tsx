@@ -1,5 +1,6 @@
 import type {Metadata} from "next";
-import {isAdminAuthenticated} from "../../../lib/admin-auth";
+import {isAdminAuthenticated,isOwnerAuthenticated} from "../../../lib/admin-auth";
+import {redirect} from "next/navigation";
 import {getExpenses} from "../../../lib/clinic-admin";
 import {addExpenseAction} from "../actions";
 import {AdminLogin,AdminShell} from "../admin-ui";
@@ -12,7 +13,7 @@ export const metadata:Metadata={title:"Expenses | VenuX Clinic OS",robots:{index
 const currentMonth=()=>new Intl.DateTimeFormat("en-CA",{timeZone:"Australia/Sydney",year:"numeric",month:"2-digit"}).format(new Date());
 
 export default async function ExpensesPage({searchParams}:{searchParams:Promise<{month?:string;created?:string;error?:string}>}){
-  const params=await searchParams;if(!(await isAdminAuthenticated()))return <AdminLogin error={params.error}/>;
+  const params=await searchParams;if(!(await isAdminAuthenticated()))return <AdminLogin error={params.error}/>;if(!(await isOwnerAuthenticated()))redirect("/admin?error=restricted");
   const month=/^\d{4}-\d{2}$/.test(params.month??"")?String(params.month):currentMonth(),from=`${month}-01`,last=new Date(`${month}-01T00:00:00Z`);last.setUTCMonth(last.getUTCMonth()+1);last.setUTCDate(0);const end=last.toISOString().slice(0,10);
   const {rows,summary,byCategory}=await getExpenses(from,end),total=Number(summary.total??0);
   return <AdminShell active="Expenses"><header className="clinic-admin-head"><div><p>Clinic cost control</p><h1>Expenses</h1></div><span>{Number(summary.expense_count??0)} entries · {month}</span></header>

@@ -1,5 +1,6 @@
 import type {Metadata} from "next";
-import {isAdminAuthenticated} from "../../../lib/admin-auth";
+import {isAdminAuthenticated,isOwnerAuthenticated} from "../../../lib/admin-auth";
+import {redirect} from "next/navigation";
 import {getOperationsReport} from "../../../lib/clinic-admin";
 import {AdminLogin,AdminShell} from "../admin-ui";
 import "../admin.css";
@@ -10,7 +11,7 @@ export const metadata:Metadata={title:"Revenue & Performance | VenuX",robots:{in
 const isoSydney=()=>new Intl.DateTimeFormat("en-CA",{timeZone:"Australia/Sydney",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
 
 export default async function ReportsPage({searchParams}:{searchParams:Promise<{from?:string;to?:string;error?:string}>}){
-  const params=await searchParams;if(!(await isAdminAuthenticated()))return <AdminLogin error={params.error}/>;const today=isoSydney(),from=/^\d{4}-\d{2}-\d{2}$/.test(params.from??"")?String(params.from):`${today.slice(0,7)}-01`,to=/^\d{4}-\d{2}-\d{2}$/.test(params.to??"")?String(params.to):today;
+  const params=await searchParams;if(!(await isAdminAuthenticated()))return <AdminLogin error={params.error}/>;if(!(await isOwnerAuthenticated()))redirect("/admin?error=restricted");const today=isoSydney(),from=/^\d{4}-\d{2}-\d{2}$/.test(params.from??"")?String(params.from):`${today.slice(0,7)}-01`,to=/^\d{4}-\d{2}-\d{2}$/.test(params.to??"")?String(params.to):today;
   const report=await getOperationsReport(from,to),summary=report.summary;
   return <AdminShell active="Revenue & performance"><header className="clinic-admin-head"><div><p>Financial & team reporting</p><h1>Revenue & performance</h1></div><span>Revenue is recorded at start; fixed project wage at completion</span></header>
     <form method="get" className="report-filter"><label>From<input type="date" name="from" defaultValue={from}/></label><label>To<input type="date" name="to" defaultValue={to}/></label><button>Update report</button></form>

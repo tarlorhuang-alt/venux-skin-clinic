@@ -2,13 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { clearAdminSession, createAdminSession, isAdminAuthenticated, passwordMatches } from "../../../lib/admin-auth";
+import { clearAdminSession, createAdminSession, isOwnerAuthenticated, roleForPassword } from "../../../lib/admin-auth";
 import { memberRates, type MemberRate, priceCatalogue, savePriceRows } from "../../../lib/pricing";
 
 export async function login(formData: FormData) {
   const password = String(formData.get("password") || "");
-  if (!passwordMatches(password)) redirect("/admin/prices?error=invalid-password");
-  await createAdminSession();
+  if (roleForPassword(password)!=="owner") redirect("/admin/prices?error=invalid-password");
+  await createAdminSession("owner");
   redirect("/admin/prices");
 }
 
@@ -18,7 +18,7 @@ export async function logout() {
 }
 
 export async function savePrices(formData: FormData) {
-  if (!(await isAdminAuthenticated())) redirect("/admin/prices?error=session-expired");
+  if (!(await isOwnerAuthenticated())) redirect("/admin/prices?error=session-expired");
   const rows = priceCatalogue.map((item) => {
     const regular = Number(formData.get(`${item.key}:regular`));
     const rate = Number(formData.get(`${item.key}:rate`));

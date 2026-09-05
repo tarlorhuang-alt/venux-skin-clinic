@@ -3,6 +3,7 @@ import {isAdminAuthenticated} from "../../../lib/admin-auth";
 import {getStaff,getStaffClockHistory} from "../../../lib/clinic-admin";
 import {addStaffAction,toggleStaffClockAction} from "../actions";
 import {AdminLogin,AdminShell} from "../admin-ui";
+import {LiveClockStatus} from "./live-clock-status";
 import "../admin.css";
 import "../operations.css";
 import "./staff-workspace.css";
@@ -14,6 +15,7 @@ export default async function StaffPage({searchParams}:{searchParams:Promise<{cr
   const params=await searchParams;if(!(await isAdminAuthenticated()))return <AdminLogin error={params.error}/>;
   const [staff,history]=await Promise.all([getStaff(),getStaffClockHistory()]);
   return <AdminShell active="Staff & time clock"><header className="clinic-admin-head"><div><p>Team operations</p><h1>Staff & time clock</h1></div><span>{staff.filter(row=>row.active).length} active team members</span></header>
+    <LiveClockStatus/>
     {params.created?<div className="clinic-alert">Team member added.</div>:null}{params.clock?<div className="clinic-alert">Time clock updated.</div>:null}
     <section className="ops-card ops-section staff-workspace"><header><div><h2>Staff booking workspace</h2><p>Appointments, client search and new client profiles use the same clinic database.</p></div><span>Shared live records</span></header><p>Type a client name or mobile number in the booking workspace to filter existing profiles. If there is no match, staff can create the client while making the appointment.</p><div className="staff-workspace-actions"><a href="/admin/bookings">Open bookings</a><a href="/admin/clients">Search client records</a></div></section>
     <section className="ops-two"><form action={addStaffAction} className="ops-card ops-form"><h2>Add team member</h2><label>Name<input name="name" required/></label><label>Role<select name="role" required defaultValue="Beauty therapist"><option>Beauty therapist</option><option>Dermal therapist</option><option>Nurse</option><option>Reception</option><option>Manager</option></select></label><button>Add staff member</button></form>
