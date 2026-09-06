@@ -397,16 +397,15 @@ export async function getClients(search = "",location = "") {
     GROUP BY c.id,m.balance,m.status,m.joined_at ORDER BY c.updated_at DESC LIMIT 500`;
 }
 
-export async function getClientsByMobile(search:string){
-  await ensureClinicTables();
-  const digits=search.replace(/\D/g,"").slice(0,20);
-  if(digits.length<3)return [];
+export async function getClientsForBookingSearch(search:string){
+  await ensureClinicTables();const term=search.trim().slice(0,80),digits=term.replace(/\D/g,"").slice(0,20);
+  if(term.length<2&&digits.length<3)return [];
   const alternate=digits.startsWith("0")?`61${digits.slice(1)}`:digits.startsWith("61")?`0${digits.slice(2)}`:"";
   return client()`SELECT c.*,m.balance,m.status AS membership_status,m.joined_at,
     COUNT(a.id)::int AS visit_count,MAX(a.requested_date) AS last_visit
     FROM venux_clients c LEFT JOIN venux_memberships m ON m.client_id=c.id
     LEFT JOIN venux_appointments a ON a.client_id=c.id
-    WHERE REGEXP_REPLACE(c.mobile,'[^0-9]','','g') LIKE ${`%${digits}%`}
+    WHERE c.full_name ILIKE ${`%${term}%`} OR (${digits.length>=3} AND REGEXP_REPLACE(c.mobile,'[^0-9]','','g') LIKE ${`%${digits}%`})
       OR (${alternate}<>'' AND REGEXP_REPLACE(c.mobile,'[^0-9]','','g') LIKE ${`%${alternate}%`})
     GROUP BY c.id,m.balance,m.status,m.joined_at ORDER BY c.updated_at DESC LIMIT 50`;
 }
