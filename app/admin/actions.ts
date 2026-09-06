@@ -62,7 +62,7 @@ export async function queueBirthdaysAction(){if(!(await isAdminAuthenticated()))
 
 export async function createPackageAction(formData:FormData){
   if(!(await isOwnerAuthenticated()))redirect("/admin?error=restricted");const name=textValue(formData,"name"),price=Number(formData.get("price")),validityDays=Number(formData.get("validityDays"));
-  const combined=new Map<number,number>();for(let index=1;index<=8;index++){const serviceId=Number(formData.get(`serviceId${index}`)),sessions=Number(formData.get(`sessions${index}`));if(serviceId>0&&Number.isInteger(sessions)&&sessions>0)combined.set(serviceId,(combined.get(serviceId)??0)+sessions);}
+  const combined=new Map<number,number>();for(let index=1;index<=5;index++){const serviceId=Number(formData.get(`serviceId${index}`)),sessions=Number(formData.get(`sessions${index}`));if(serviceId>0&&Number.isInteger(sessions)&&sessions>0)combined.set(serviceId,(combined.get(serviceId)??0)+sessions);}
   const items=[...combined].map(([serviceId,sessions])=>({serviceId,sessions}));if(!name||!Number.isFinite(price)||price<0||!Number.isInteger(validityDays)||validityDays<1||!items.length)redirect("/admin/packages?error=template");
   await createPackageTemplate({name,price,validityDays,items});revalidatePath("/admin/packages");redirect("/admin/packages?created=1");
 }
