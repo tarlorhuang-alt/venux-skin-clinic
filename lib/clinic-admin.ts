@@ -132,6 +132,8 @@ export function ensureClinicTables() {
       await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS confirmed_by_client_at TIMESTAMPTZ`;
       await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS confirmation_message_queued_at TIMESTAMPTZ`;
       await sql`CREATE UNIQUE INDEX IF NOT EXISTS venux_appointments_confirmation_token_idx ON venux_appointments (confirmation_token) WHERE confirmation_token IS NOT NULL`;
+      await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS membership_balance_deducted_amount NUMERIC(10,2) NOT NULL DEFAULT 0 CHECK (membership_balance_deducted_amount >= 0)`;
+      await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS membership_balance_deducted_at TIMESTAMPTZ`;
       await sql`CREATE TABLE IF NOT EXISTS venux_booking_slots (
         slot_key TEXT PRIMARY KEY, appointment_id BIGINT UNIQUE REFERENCES venux_appointments(id) ON DELETE CASCADE,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -385,14 +387,14 @@ export async function getAppointmentClinic(id:number){await ensureClinicTables()
 export async function getClients(search = "",location = "") {
   await ensureClinicTables();
   const term=search.trim(),like=`%${term}%`,digits=normaliseMobile(term),localDigits=digits.replace(/^61/,"0");
-  return client()`SELECT c.*,m.balance,m.amount_paid AS membership_amount_paid,m.status AS membership_status,m.joined_at,
+  return client()`SELECT c.*,m.balance,m.status AS membership_status,m.joined_at,
     COUNT(a.id)::int AS visit_count,MAX(a.requested_date) AS last_visit
     FROM venux_clients c LEFT JOIN venux_memberships m ON m.client_id=c.id
     LEFT JOIN venux_appointments a ON a.client_id=c.id
     WHERE (${location}='' OR c.clinic_location=${location}) AND (${term}='' OR c.full_name ILIKE ${like} OR c.email ILIKE ${like}
       OR (${digits}<>'' AND (REGEXP_REPLACE(c.mobile,'[^0-9]','','g') LIKE ${`%${digits}%`}
         OR REGEXP_REPLACE(c.mobile,'[^0-9]','','g') LIKE ${`%${localDigits}%`})))
-    GROUP BY c.id,m.balance,m.amount_paid,m.status,m.joined_at ORDER BY c.updated_at DESC LIMIT 500`;
+    GROUP BY c.id,m.balance,m.status,m.joined_at ORDER BY c.updated_at DESC LIMIT 500`;
 }
 
 export async function getClientsByMobile(search:string){
@@ -400,13 +402,13 @@ export async function getClientsByMobile(search:string){
   const digits=search.replace(/\D/g,"").slice(0,20);
   if(digits.length<3)return [];
   const alternate=digits.startsWith("0")?`61${digits.slice(1)}`:digits.startsWith("61")?`0${digits.slice(2)}`:"";
-  return client()`SELECT c.*,m.balance,m.amount_paid AS membership_amount_paid,m.status AS membership_status,m.joined_at,
+  return client()`SELECT c.*,m.balance,m.status AS membership_status,m.joined_at,
     COUNT(a.id)::int AS visit_count,MAX(a.requested_date) AS last_visit
     FROM venux_clients c LEFT JOIN venux_memberships m ON m.client_id=c.id
     LEFT JOIN venux_appointments a ON a.client_id=c.id
     WHERE REGEXP_REPLACE(c.mobile,'[^0-9]','','g') LIKE ${`%${digits}%`}
       OR (${alternate}<>'' AND REGEXP_REPLACE(c.mobile,'[^0-9]','','g') LIKE ${`%${alternate}%`})
-    GROUP BY c.id,m.balance,m.amount_paid,m.status,m.joined_at ORDER BY c.updated_at DESC LIMIT 50`;
+    GROUP BY c.id,m.balance,m.status,m.joined_at ORDER BY c.updated_at DESC LIMIT 50`;
 }
 
 export async function getClientLocationStats(){
@@ -417,9 +419,9 @@ export async function getClientExportRows(){
   await ensureClinicTables();
   return client()`SELECT c.id,c.full_name,c.mobile,c.email,c.dob,c.address,c.customer_group,c.clinic_location,c.lead_source,
     COALESCE(m.status,'inactive') AS membership_status,COALESCE(m.balance,0) AS membership_balance,
-    COALESCE(m.amount_paid,0) AS membership_amount_paid,COUNT(a.id)::int AS appointment_count,MAX(a.requested_date) AS last_visit
+    COUNT(a.id)::int AS appointment_count,MAX(a.requested_date) AS last_visit
     FROM venux_clients c LEFT JOIN venux_memberships m ON m.client_id=c.id LEFT JOIN venux_appointments a ON a.client_id=c.id
-    GROUP BY c.id,m.status,m.balance,m.amount_paid ORDER BY c.full_name`;
+    GROUP BY c.id,m.status,m.balance ORDER BY c.full_name`;
 }
 
 export async function getClientForBooking(clientId: number) {
@@ -504,7 +506,10 @@ export async function updateAppointment(id: number, status: AppointmentStatus, t
       staff_wage_amount=CASE WHEN ${status}='completed' THEN CASE WHEN started_at IS NULL THEN ${projectWage} ELSE COALESCE(NULLIF(wage_project_rate,0),${projectWage}) END WHEN ${status}='in_progress' THEN 0 ELSE staff_wage_amount END,updated_at=NOW() WHERE id=${id}`;
   }
   if(["completed","no_show"].includes(status))await sql`DELETE FROM venux_booking_slots WHERE appointment_id=${id}`;
-  if(status==="completed"&&before[0].status!=="completed")await consumeAppointmentPackageSession(id);
+  if(status==="completed"&&before[0].status!=="completed"){
+    const packageSessionUsed=await consumeAppointmentPackageSession(id);
+    if(!packageSessionUsed)await deductMembershipBalanceForAppointment(id);
+  }
   if(status==="confirmed"&&before[0].status!=="confirmed"&&before[0].service_sms_consent)await queueAppointmentConfirmation(id);
   if(String(before[0].status)!==status||Number(before[0].staff_id??0)!==Number(staffId??0)||Number(before[0].total_amount)!==totalAmount||String(before[0].deposit_status)!==depositStatus){
     await audit("appointment_updated","client",Number(before[0].client_id),`${before[0].treatment} · ${String(before[0].requested_date).slice(0,10)} ${before[0].requested_time} · status ${status} · deposit ${depositStatus}`);
@@ -586,6 +591,32 @@ async function consumeAppointmentPackageSession(appointmentId:number){
   await audit("auto_deduct","client_package_item",Number(changed[0].id),`Appointment ${appointmentId} completed`);return true;
 }
 
+async function deductMembershipBalanceForAppointment(appointmentId:number){
+  const sql=client();const debited=await sql`WITH charge AS (
+      SELECT a.id AS appointment_id,a.client_id,a.treatment,
+        GREATEST(0,a.total_amount-CASE WHEN a.deposit_status='paid' THEN a.deposit_amount ELSE 0 END)::numeric AS amount
+      FROM venux_appointments a JOIN venux_memberships m ON m.client_id=a.client_id
+      WHERE a.id=${appointmentId} AND a.membership_balance_deducted_at IS NULL AND m.status='active'
+        AND m.balance>=GREATEST(0,a.total_amount-CASE WHEN a.deposit_status='paid' THEN a.deposit_amount ELSE 0 END)
+      FOR UPDATE OF a,m
+    ), debit AS (
+      UPDATE venux_memberships m SET balance=m.balance-c.amount,updated_at=NOW() FROM charge c
+      WHERE m.client_id=c.client_id AND c.amount>0 RETURNING m.balance,c.appointment_id,c.client_id,c.treatment,c.amount
+    ), marked AS (
+      UPDATE venux_appointments a SET membership_balance_deducted_amount=d.amount,membership_balance_deducted_at=NOW(),updated_at=NOW()
+      FROM debit d WHERE a.id=d.appointment_id RETURNING d.client_id,d.treatment,d.amount,d.balance
+    ) SELECT * FROM marked`;
+  if(debited[0]){
+    await audit("membership_balance_deducted","client",Number(debited[0].client_id),`${debited[0].treatment}: $${Number(debited[0].amount).toFixed(2)} deducted automatically. Remaining card balance $${Number(debited[0].balance).toFixed(2)}.`);return true;
+  }
+  const skipped=(await sql`SELECT a.client_id,a.treatment,m.balance,
+      GREATEST(0,a.total_amount-CASE WHEN a.deposit_status='paid' THEN a.deposit_amount ELSE 0 END)::numeric AS charge_amount
+    FROM venux_appointments a JOIN venux_memberships m ON m.client_id=a.client_id
+    WHERE a.id=${appointmentId} AND a.membership_balance_deducted_at IS NULL AND m.status='active' LIMIT 1`)[0];
+  if(skipped&&Number(skipped.charge_amount)>Number(skipped.balance))await audit("membership_balance_not_deducted","client",Number(skipped.client_id),`${skipped.treatment}: card balance $${Number(skipped.balance).toFixed(2)} is below the $${Number(skipped.charge_amount).toFixed(2)} amount due.`);
+  return false;
+}
+
 export async function queueAppointmentConfirmation(appointmentId:number){
   await ensureClinicTables();const sql=client();
   const rows=await sql`SELECT a.*,c.full_name,c.mobile FROM venux_appointments a JOIN venux_clients c ON c.id=a.client_id WHERE a.id=${appointmentId}`;
@@ -628,11 +659,11 @@ export async function markSmsOutboxSent(id:number){
   await ensureClinicTables();await client()`UPDATE venux_sms_outbox SET status='sent',sent_at=NOW() WHERE id=${id}`;
 }
 
-export async function saveMembership(clientId: number, balance: number, status: string, amountPaid=0) {
-  await ensureClinicTables();
-  await client()`INSERT INTO venux_memberships (client_id,balance,status,amount_paid,joined_at) VALUES (${clientId},${balance},${status},${amountPaid},CASE WHEN ${status}='active' THEN NOW() ELSE NULL END)
-    ON CONFLICT (client_id) DO UPDATE SET balance=EXCLUDED.balance,status=EXCLUDED.status,amount_paid=EXCLUDED.amount_paid,joined_at=COALESCE(venux_memberships.joined_at,EXCLUDED.joined_at),updated_at=NOW()`;
-  await audit("update","client",clientId,`Membership ${status}; paid $${amountPaid}; balance $${balance}`);
+export async function saveMembership(clientId: number, balance: number, status: string) {
+  await ensureClinicTables();const sql=client();const before=(await sql`SELECT balance,status FROM venux_memberships WHERE client_id=${clientId}`)[0];
+  await sql`INSERT INTO venux_memberships (client_id,balance,status,joined_at) VALUES (${clientId},${balance},${status},CASE WHEN ${status}='active' THEN NOW() ELSE NULL END)
+    ON CONFLICT (client_id) DO UPDATE SET balance=EXCLUDED.balance,status=EXCLUDED.status,joined_at=COALESCE(venux_memberships.joined_at,EXCLUDED.joined_at),updated_at=NOW()`;
+  await audit("membership_balance_updated","client",clientId,`Membership ${status}; balance $${Number(before?.balance??0).toFixed(2)} → $${balance.toFixed(2)}`);
 }
 
 async function audit(action: string, entityType: string, entityId: number, detail = "") {
@@ -643,7 +674,7 @@ export async function getClientClinicalRecord(clientId: number) {
   await ensureClinicTables();
   const sql = client();
   const [clientRows, healthRows, assessments, treatments, followups, courses,packageItems,appointments, audits] = await Promise.all([
-    sql`SELECT c.*,m.balance,m.amount_paid AS membership_amount_paid,m.status AS membership_status,m.joined_at FROM venux_clients c LEFT JOIN venux_memberships m ON m.client_id=c.id WHERE c.id=${clientId}`,
+    sql`SELECT c.*,m.balance,m.status AS membership_status,m.joined_at FROM venux_clients c LEFT JOIN venux_memberships m ON m.client_id=c.id WHERE c.id=${clientId}`,
     sql`SELECT * FROM venux_health_profiles WHERE client_id=${clientId}`,
     sql`SELECT * FROM venux_skin_assessments WHERE client_id=${clientId} ORDER BY created_at DESC`,
     sql`SELECT * FROM venux_treatment_records WHERE client_id=${clientId} ORDER BY treated_at DESC`,
