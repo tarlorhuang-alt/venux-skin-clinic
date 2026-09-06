@@ -12,7 +12,7 @@ export default async function AdminDashboard({searchParams}:{searchParams:Promis
   const params=await searchParams;
   if(!(await isAdminAuthenticated())) return <AdminLogin error={params.error}/>;
   const role=await getAdminRole();
-  const {stats,upcoming,recent}=await getClinicDashboard();
+  const {stats,upcoming,recent}=await getClinicDashboard(role==="staff"?"Top Ryde":"");
   return <AdminShell active="Dashboard"><header className="clinic-admin-head"><div><p>{role==="owner"?"Live clinic overview":"Staff booking workspace"}</p><h1>Good morning, VenuX.</h1></div><span>{new Date().toLocaleDateString("en-AU",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</span></header>
     {params.error==="restricted"?<div className="clinic-alert error">Owner access is required for payroll, revenue and expenses.</div>:null}
     <section className="metric-grid"><article className="metric-card"><small>Appointments this month</small><Change now={stats.appointmentsNow} last={stats.appointmentsLast}/></article><article className="metric-card"><small>New clients this month</small><Change now={stats.clientsNow} last={stats.clientsLast}/></article>{role==="owner"?<article className="metric-card"><small>Completed revenue</small><Change now={stats.revenueNow} last={stats.revenueLast} money/></article>:<article className="metric-card"><small>Account access</small><strong>Staff</strong><span>Bookings, clients, packages and clinical follow-up</span></article>}<article className="metric-card"><small>No-shows this month</small><strong>{stats.noShowsNow}</strong><span>Keep status updated for accurate reporting</span></article></section>
