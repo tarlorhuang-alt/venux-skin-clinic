@@ -71,7 +71,7 @@ export async function createCityAppointment(data:FormData){
 
 export async function settleCityAppointment(data:FormData){
   await requireOwner();const id=Number(data.get("id")),date=ownerDate(data),staffId=Number(data.get("staffId")),amount=Number(data.get("amount")),status=text(data,"status") as AppointmentStatus;
-  if(!Number.isInteger(id)||id<=0||!date||!Number.isInteger(staffId)||staffId<=0||!Number.isFinite(amount)||amount<0||!["requested","confirmed","in_progress","completed","cancelled","no_show"].includes(status))redirect(`/owner?date=${date}&error=settlement`);
+  if(!Number.isInteger(id)||id<=0||!date||!Number.isInteger(staffId)||staffId<=0||!Number.isFinite(amount)||amount<0||!["confirmed","in_progress","completed","cancelled","no_show"].includes(status))redirect(`/owner?date=${date}&error=settlement`);
   await updateAppointment(id,status,amount,"paid",staffId);revalidatePath("/owner");redirect(`/owner?date=${date}&settled=1`);
 }
 

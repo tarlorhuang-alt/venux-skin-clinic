@@ -2,8 +2,8 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { clearAdminSession, createAdminSession, isAdminAuthenticated, isOwnerAuthenticated, roleForPassword } from "../../lib/admin-auth";
-import { assignPackageToClient,BookingConflictError,completeFollowup,createBookingRequest,createClientCourse,createExpense,createPackageTemplate,createSkinAssessment,createStaff,createSupplier,createTreatmentRecord,finishAppointment,getOwnerService,importClientRows,markSmsOutboxSent,queueBirthdayMessages,queueReturnInvite,saveClientProfile,saveHealthProfile,saveMembership,startAppointment,toggleStaffClock,updateAppointment,useClientCourseSession,useClientPackageItem,type AppointmentStatus,type ClientImportRow } from "../../lib/clinic-admin";
+import { clearAdminSession, createAdminSession, getAdminRole,isAdminAuthenticated, isOwnerAuthenticated, roleForPassword } from "../../lib/admin-auth";
+import { assignPackageToClient,BookingConflictError,completeFollowup,createBookingRequest,createClientCourse,createExpense,createPackageTemplate,createSkinAssessment,createStaff,createSupplier,createTreatmentRecord,finishAppointment,getAppointmentClinic,getOwnerService,importClientRows,markSmsOutboxSent,queueBirthdayMessages,queueReturnInvite,saveClientProfile,saveHealthProfile,saveMembership,startAppointment,toggleStaffClock,updateAppointment,useClientCourseSession,useClientPackageItem,type AppointmentStatus,type ClientImportRow } from "../../lib/clinic-admin";
 
 export async function adminLogin(formData: FormData) {
   const role=roleForPassword(String(formData.get("password") ?? ""));
@@ -21,7 +21,8 @@ export async function changeAppointment(formData: FormData) {
   const totalAmount = Number(formData.get("totalAmount") ?? 0);
   const depositStatus = String(formData.get("depositStatus") ?? "unpaid");
   const staffIdRaw=Number(formData.get("staffId")??0);const staffId=staffIdRaw>0?staffIdRaw:null;
-  if (!Number.isInteger(id) || id <= 0 || !["requested","confirmed","in_progress","completed","cancelled","no_show"].includes(status) || !Number.isFinite(totalAmount) || totalAmount < 0 || !["unpaid","paid","refunded","forfeited"].includes(depositStatus)) redirect("/admin/bookings?error=invalid");
+  if (!Number.isInteger(id) || id <= 0 || !["confirmed","in_progress","completed","cancelled","no_show"].includes(status) || !Number.isFinite(totalAmount) || totalAmount < 0 || !["unpaid","paid","refunded","forfeited"].includes(depositStatus)) redirect("/admin/bookings?error=invalid");
+  if(await staffCannotAccessAppointment(id))redirect("/admin?error=restricted");
   try{await updateAppointment(id,status,totalAmount,depositStatus,staffId);}catch(error){if(error instanceof BookingConflictError)redirect("/admin/bookings?error=conflict");throw error;}
   revalidatePath("/admin"); revalidatePath("/admin/bookings");
   redirect("/admin/bookings?saved=1");
@@ -30,12 +31,14 @@ export async function changeAppointment(formData: FormData) {
 export async function startAppointmentAction(formData:FormData){
   if(!(await isAdminAuthenticated()))redirect("/admin?error=session");const id=Number(formData.get("id")),staffId=Number(formData.get("staffId"));
   if(!Number.isInteger(id)||id<=0||!Number.isInteger(staffId)||staffId<=0)redirect("/admin/bookings?error=staff");
+  if(await staffCannotAccessAppointment(id))redirect("/admin?error=restricted");
   const started=await startAppointment(id,staffId);revalidatePath("/admin");revalidatePath("/admin/bookings");revalidatePath("/admin/reports");redirect(`/admin/bookings?${started?"started=1":"error=start"}`);
 }
 
 export async function finishAppointmentAction(formData:FormData){
   if(!(await isAdminAuthenticated()))redirect("/admin?error=session");const id=Number(formData.get("id")),staffId=Number(formData.get("staffId")),comment=String(formData.get("comment")??"").trim(),manualFee=Number(formData.get("manualFee"));
   if(!Number.isInteger(id)||id<=0||!Number.isInteger(staffId)||staffId<=0||!comment||!Number.isFinite(manualFee)||manualFee<0)redirect("/admin/bookings?error=finish");
+  if(await staffCannotAccessAppointment(id))redirect("/admin?error=restricted");
   const finished=await finishAppointment(id,staffId,comment,manualFee);revalidatePath("/admin");revalidatePath("/admin/bookings");revalidatePath("/admin/reports");revalidatePath("/admin/payroll");redirect(`/admin/bookings?${finished?"finished=1":"error=finish"}`);
 }
 
@@ -45,6 +48,7 @@ export async function createAdminAppointment(formData:FormData){
   const enteredTotal=String(formData.get("totalAmount")??"").trim();
   const totalAmount=enteredTotal===""?(service?Number(service.regular_price):0):Number(enteredTotal);
   const input={clientId:clientIdRaw>0?clientIdRaw:undefined,serviceId:service?serviceId:undefined,staffId:staffId>0?staffId:undefined,durationMinutes:service?Number(service.duration_minutes):60,totalAmount,name:String(formData.get("name")??"").trim(),mobile:String(formData.get("mobile")??"").trim(),email:String(formData.get("email")??"").trim().toLowerCase(),treatment:service?String(service.service_name):String(formData.get("treatment")??"").trim(),clinic:String(formData.get("clinic")??"").trim(),date:String(formData.get("date")??"").trim(),time:String(formData.get("time")??"").trim(),notes:String(formData.get("notes")??"").trim(),source:"admin" as const,serviceSmsConsent:formData.get("serviceSmsConsent")==="yes",marketingSmsConsent:formData.get("marketingSmsConsent")==="yes"};
+  if((await getAdminRole())==="staff"&&!/top ryde/i.test(input.clinic))redirect("/admin?error=restricted");
   if(!input.name||!input.mobile||!input.treatment||!input.clinic||!/^\d{4}-\d{2}-\d{2}$/.test(input.date)||!input.time||!Number.isFinite(totalAmount)||totalAmount<0)redirect("/admin/bookings?error=invalid");
   try{await createBookingRequest(input);}catch(error){if(error instanceof BookingConflictError)redirect("/admin/bookings?error=conflict");throw error;}
   revalidatePath("/admin");revalidatePath("/admin/bookings");redirect("/admin/bookings?created=1");
@@ -58,7 +62,7 @@ export async function queueBirthdaysAction(){if(!(await isAdminAuthenticated()))
 
 export async function createPackageAction(formData:FormData){
   if(!(await isOwnerAuthenticated()))redirect("/admin?error=restricted");const name=textValue(formData,"name"),price=Number(formData.get("price")),validityDays=Number(formData.get("validityDays"));
-  const combined=new Map<number,number>();for(let index=1;index<=4;index++){const serviceId=Number(formData.get(`serviceId${index}`)),sessions=Number(formData.get(`sessions${index}`));if(serviceId>0&&Number.isInteger(sessions)&&sessions>0)combined.set(serviceId,(combined.get(serviceId)??0)+sessions);}
+  const combined=new Map<number,number>();for(let index=1;index<=8;index++){const serviceId=Number(formData.get(`serviceId${index}`)),sessions=Number(formData.get(`sessions${index}`));if(serviceId>0&&Number.isInteger(sessions)&&sessions>0)combined.set(serviceId,(combined.get(serviceId)??0)+sessions);}
   const items=[...combined].map(([serviceId,sessions])=>({serviceId,sessions}));if(!name||!Number.isFinite(price)||price<0||!Number.isInteger(validityDays)||validityDays<1||!items.length)redirect("/admin/packages?error=template");
   await createPackageTemplate({name,price,validityDays,items});revalidatePath("/admin/packages");redirect("/admin/packages?created=1");
 }
@@ -70,8 +74,8 @@ export async function assignPackageAction(formData:FormData){
 }
 
 export async function usePackageSessionAction(formData:FormData){
-  if(!(await isAdminAuthenticated()))redirect("/admin?error=session");const clientId=Number(formData.get("clientId")),itemId=Number(formData.get("itemId"));if(!Number.isInteger(clientId)||clientId<1||!Number.isInteger(itemId)||itemId<1)redirect("/admin/packages?error=session");
-  const saved=await useClientPackageItem(clientId,itemId);revalidatePath("/admin/packages");redirect(`/admin/packages?${saved?"used=1":"error=session"}`);
+  if(!(await isAdminAuthenticated()))redirect("/admin?error=session");const clientId=Number(formData.get("clientId")),itemId=Number(formData.get("itemId")),returnTo=textValue(formData,"returnTo");if(!Number.isInteger(clientId)||clientId<1||!Number.isInteger(itemId)||itemId<1)redirect("/admin/packages?error=session");
+  const saved=await useClientPackageItem(clientId,itemId);revalidatePath("/admin/packages");revalidatePath(clientPath(clientId));redirect(returnTo==="record"?`${clientPath(clientId)}?${saved?"used=1":"error=session"}#courses`:`/admin/packages?${saved?"used=1":"error=session"}`);
 }
 
 export async function addStaffAction(formData:FormData){
@@ -145,6 +149,7 @@ export async function importClients(formData: FormData) {
 const textValue=(formData:FormData,name:string)=>String(formData.get(name)??"").trim();
 const positiveInt=(formData:FormData,name:string,nullable=false)=>{const raw=textValue(formData,name);if(!raw&&nullable)return null;const value=Number(raw);return Number.isFinite(value)&&value>=0?Math.round(value):null;};
 const clientPath=(id:number)=>`/admin/clients/${id}`;
+const staffCannotAccessAppointment=async(id:number)=>(await getAdminRole())==="staff"&&!/top ryde/i.test((await getAppointmentClinic(id))??"");
 
 async function authorisedClient(formData:FormData){
   if(!(await isAdminAuthenticated())) redirect("/admin?error=session");

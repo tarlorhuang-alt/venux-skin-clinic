@@ -2,7 +2,7 @@ import "server-only";
 import { neon } from "@neondatabase/serverless";
 import { randomBytes } from "node:crypto";
 
-export type AppointmentStatus = "requested" | "confirmed" | "in_progress" | "completed" | "cancelled" | "no_show";
+export type AppointmentStatus = "confirmed" | "in_progress" | "completed" | "cancelled" | "no_show";
 
 export type BookingInput = {
   clientId?: number;
@@ -116,7 +116,7 @@ export function ensureClinicTables() {
         treatment TEXT NOT NULL,
         requested_date DATE NOT NULL,
         requested_time TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'requested',
+        status TEXT NOT NULL DEFAULT 'confirmed',
         deposit_status TEXT NOT NULL DEFAULT 'unpaid',
         deposit_amount INTEGER NOT NULL DEFAULT 45,
         total_amount INTEGER NOT NULL DEFAULT 0 CHECK (total_amount >= 0),
@@ -124,6 +124,8 @@ export function ensureClinicTables() {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )`;
+      await sql`ALTER TABLE venux_appointments ALTER COLUMN status SET DEFAULT 'confirmed'`;
+      await sql`UPDATE venux_appointments SET status='confirmed' WHERE status='requested'`;
       await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'website'`;
       await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS confirmation_token TEXT`;
       await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS customer_confirmation_status TEXT NOT NULL DEFAULT 'pending'`;
@@ -134,7 +136,7 @@ export function ensureClinicTables() {
         slot_key TEXT PRIMARY KEY, appointment_id BIGINT UNIQUE REFERENCES venux_appointments(id) ON DELETE CASCADE,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )`;
-      await sql`INSERT INTO venux_booking_slots (slot_key,appointment_id) SELECT clinic||'|'||requested_date::text||'|'||requested_time,id FROM venux_appointments WHERE status IN ('requested','confirmed','in_progress') ORDER BY id ON CONFLICT DO NOTHING`;
+      await sql`INSERT INTO venux_booking_slots (slot_key,appointment_id) SELECT clinic||'|'||requested_date::text||'|'||requested_time,id FROM venux_appointments WHERE status IN ('confirmed','in_progress') ORDER BY id ON CONFLICT DO NOTHING`;
       await sql`CREATE INDEX IF NOT EXISTS venux_clients_email_idx ON venux_clients (LOWER(email))`;
       await sql`CREATE INDEX IF NOT EXISTS venux_clients_mobile_idx ON venux_clients (mobile)`;
       await sql`CREATE INDEX IF NOT EXISTS venux_appointments_date_idx ON venux_appointments (requested_date)`;
@@ -306,7 +308,7 @@ export async function createBookingRequest(input: BookingInput) {
   const startMinute=timeToMinutes(input.time);
   if(input.staffId&&startMinute!==null){
     const overlap=await sql`SELECT id FROM venux_appointments WHERE staff_id=${input.staffId}
-      AND requested_date=${input.date} AND status IN ('requested','confirmed','in_progress') AND start_minute IS NOT NULL
+      AND requested_date=${input.date} AND status IN ('confirmed','in_progress') AND start_minute IS NOT NULL
       AND start_minute < ${startMinute+(input.durationMinutes??60)}
       AND start_minute+duration_minutes > ${startMinute} LIMIT 1`;
     if(overlap[0])throw new BookingConflictError("This beautician already has an overlapping appointment.");
@@ -321,10 +323,11 @@ export async function createBookingRequest(input: BookingInput) {
       AND (cp.expires_on IS NULL OR cp.expires_on>=${input.date}) AND cpi.used_sessions<cpi.included_sessions
     ORDER BY cp.expires_on NULLS LAST,cp.created_at LIMIT 1) WHERE id=${appointmentId}`;}
   if(input.serviceSmsConsent)await queueAppointmentConfirmation(appointmentId);
+  await audit("appointment_created","client",clientId,`${input.treatment} booked for ${input.date} ${input.time} at ${input.clinic}`);
   return appointmentId;
 }
 
-export async function getClinicDashboard() {
+export async function getClinicDashboard(location="") {
   await ensureClinicTables();
   const sql = client();
   const [stats, upcoming, recent] = await Promise.all([
@@ -332,21 +335,21 @@ export async function getClinicDashboard() {
       SELECT date_trunc('month', CURRENT_DATE)::date AS this_month,
              (date_trunc('month', CURRENT_DATE) - interval '1 month')::date AS last_month
     ) SELECT
-      (SELECT COUNT(*) FROM venux_appointments a WHERE a.requested_date >= b.this_month) AS appointments_now,
-      (SELECT COUNT(*) FROM venux_appointments a WHERE a.requested_date >= b.last_month AND a.requested_date < b.this_month) AS appointments_last,
+      (SELECT COUNT(*) FROM venux_appointments a WHERE a.requested_date >= b.this_month AND (${location}='' OR a.clinic ILIKE ${`%${location}%`})) AS appointments_now,
+      (SELECT COUNT(*) FROM venux_appointments a WHERE a.requested_date >= b.last_month AND a.requested_date < b.this_month AND (${location}='' OR a.clinic ILIKE ${`%${location}%`})) AS appointments_last,
       (SELECT COUNT(*) FROM venux_clients c WHERE c.created_at >= b.this_month) AS clients_now,
       (SELECT COUNT(*) FROM venux_clients c WHERE c.created_at >= b.last_month AND c.created_at < b.this_month) AS clients_last,
-      (SELECT COALESCE(SUM(a.recognised_revenue),0) FROM venux_appointments a WHERE a.status IN ('in_progress','completed') AND a.requested_date >= b.this_month) AS revenue_now,
-      (SELECT COALESCE(SUM(a.recognised_revenue),0) FROM venux_appointments a WHERE a.status IN ('in_progress','completed') AND a.requested_date >= b.last_month AND a.requested_date < b.this_month) AS revenue_last,
-      (SELECT COUNT(*) FROM venux_appointments a WHERE a.status='no_show' AND a.requested_date >= b.this_month) AS no_shows_now
+      (SELECT COALESCE(SUM(a.recognised_revenue),0) FROM venux_appointments a WHERE a.status IN ('in_progress','completed') AND a.requested_date >= b.this_month AND (${location}='' OR a.clinic ILIKE ${`%${location}%`})) AS revenue_now,
+      (SELECT COALESCE(SUM(a.recognised_revenue),0) FROM venux_appointments a WHERE a.status IN ('in_progress','completed') AND a.requested_date >= b.last_month AND a.requested_date < b.this_month AND (${location}='' OR a.clinic ILIKE ${`%${location}%`})) AS revenue_last,
+      (SELECT COUNT(*) FROM venux_appointments a WHERE a.status='no_show' AND a.requested_date >= b.this_month AND (${location}='' OR a.clinic ILIKE ${`%${location}%`})) AS no_shows_now
     FROM bounds b`,
     sql`SELECT a.id,a.requested_date,a.requested_time,a.treatment,a.clinic,a.status,c.full_name,c.mobile
         FROM venux_appointments a JOIN venux_clients c ON c.id=a.client_id
-        WHERE a.requested_date >= CURRENT_DATE AND a.status NOT IN ('cancelled','completed')
+        WHERE a.requested_date >= CURRENT_DATE AND a.status NOT IN ('cancelled','completed') AND (${location}='' OR a.clinic ILIKE ${`%${location}%`})
         ORDER BY a.requested_date,a.requested_time LIMIT 8`,
     sql`SELECT a.id,a.requested_date,a.requested_time,a.treatment,a.status,c.full_name
         FROM venux_appointments a JOIN venux_clients c ON c.id=a.client_id
-        ORDER BY a.created_at DESC LIMIT 8`,
+        WHERE (${location}='' OR a.clinic ILIKE ${`%${location}%`}) ORDER BY a.created_at DESC LIMIT 8`,
   ]);
   const row = stats[0] ?? {};
   return {
@@ -359,23 +362,25 @@ export async function getClinicDashboard() {
   };
 }
 
-export async function getAppointments(date = "") {
+export async function getAppointments(date = "",location="") {
   await ensureClinicTables();
   return client()`SELECT a.*,a.requested_date::text AS requested_date,c.full_name,c.mobile,c.email,c.clinic_location,s.full_name AS staff_name
     FROM venux_appointments a JOIN venux_clients c ON c.id=a.client_id
     LEFT JOIN venux_staff s ON s.id=a.staff_id
-    WHERE (${date}='' OR a.requested_date=${date || null})
+    WHERE (${date}='' OR a.requested_date=${date || null}) AND (${location}='' OR a.clinic ILIKE ${`%${location}%`})
     ORDER BY a.requested_date DESC,a.requested_time DESC LIMIT 500`;
 }
 
-export async function getAppointmentsRange(from:string,to:string) {
+export async function getAppointmentsRange(from:string,to:string,location="") {
   await ensureClinicTables();
   return client()`SELECT a.*,a.requested_date::text AS requested_date,c.full_name,c.mobile,c.email,c.clinic_location,s.full_name AS staff_name
     FROM venux_appointments a JOIN venux_clients c ON c.id=a.client_id
     LEFT JOIN venux_staff s ON s.id=a.staff_id
-    WHERE a.requested_date BETWEEN ${from} AND ${to}
+    WHERE a.requested_date BETWEEN ${from} AND ${to} AND (${location}='' OR a.clinic ILIKE ${`%${location}%`})
     ORDER BY a.requested_date,a.start_minute NULLS LAST,a.requested_time,a.id LIMIT 1000`;
 }
+
+export async function getAppointmentClinic(id:number){await ensureClinicTables();const row=(await client()`SELECT clinic FROM venux_appointments WHERE id=${id} LIMIT 1`)[0];return row?String(row.clinic):null;}
 
 export async function getClients(search = "",location = "") {
   await ensureClinicTables();
@@ -466,8 +471,12 @@ export async function updateAppointment(id: number, status: AppointmentStatus, t
   const sql=client();
   const before=await sql`SELECT a.*,c.full_name,c.mobile,c.service_sms_consent,COALESCE(v.category,'') AS service_category,COALESCE(v.service_name,a.treatment) AS service_name FROM venux_appointments a JOIN venux_clients c ON c.id=a.client_id LEFT JOIN venux_services v ON v.id=a.service_id OR (a.service_id IS NULL AND LOWER(v.service_name)=LOWER(a.treatment)) WHERE a.id=${id} ORDER BY v.id LIMIT 1`;
   if(!before[0])return;
+  if(status==="cancelled"){
+    await audit("appointment_cancelled","client",Number(before[0].client_id),`${before[0].treatment} on ${String(before[0].requested_date).slice(0,10)} at ${before[0].requested_time}, ${before[0].clinic}. Appointment removed from calendar.`);
+    await sql`DELETE FROM venux_appointments WHERE id=${id}`;return;
+  }
   const projectWage=projectWageFor(String(before[0].service_name),String(before[0].service_category));
-  if(["requested","confirmed","in_progress"].includes(status)&&!["requested","confirmed","in_progress"].includes(String(before[0].status))){
+  if(["confirmed","in_progress"].includes(status)&&!["confirmed","in_progress"].includes(String(before[0].status))){
     const claimed=await sql`INSERT INTO venux_booking_slots (slot_key,appointment_id)
       SELECT clinic||'|'||requested_date::text||'|'||requested_time,id FROM venux_appointments WHERE id=${id}
       ON CONFLICT DO NOTHING RETURNING slot_key`;
@@ -494,9 +503,12 @@ export async function updateAppointment(id: number, status: AppointmentStatus, t
       recognised_revenue=CASE WHEN ${status} IN ('in_progress','completed') THEN ${totalAmount} ELSE recognised_revenue END,
       staff_wage_amount=CASE WHEN ${status}='completed' THEN CASE WHEN started_at IS NULL THEN ${projectWage} ELSE COALESCE(NULLIF(wage_project_rate,0),${projectWage}) END WHEN ${status}='in_progress' THEN 0 ELSE staff_wage_amount END,updated_at=NOW() WHERE id=${id}`;
   }
-  if(["cancelled","completed","no_show"].includes(status))await sql`DELETE FROM venux_booking_slots WHERE appointment_id=${id}`;
+  if(["completed","no_show"].includes(status))await sql`DELETE FROM venux_booking_slots WHERE appointment_id=${id}`;
   if(status==="completed"&&before[0].status!=="completed")await consumeAppointmentPackageSession(id);
   if(status==="confirmed"&&before[0].status!=="confirmed"&&before[0].service_sms_consent)await queueAppointmentConfirmation(id);
+  if(String(before[0].status)!==status||Number(before[0].staff_id??0)!==Number(staffId??0)||Number(before[0].total_amount)!==totalAmount||String(before[0].deposit_status)!==depositStatus){
+    await audit("appointment_updated","client",Number(before[0].client_id),`${before[0].treatment} · ${String(before[0].requested_date).slice(0,10)} ${before[0].requested_time} · status ${status} · deposit ${depositStatus}`);
+  }
 }
 
 export async function startAppointment(id:number,staffId:number){
@@ -504,7 +516,7 @@ export async function startAppointment(id:number,staffId:number){
   const sql=client();
   const rows=await sql`SELECT total_amount,deposit_status,status FROM venux_appointments WHERE id=${id}`;
   const row=rows[0];
-  if(!row||!["requested","confirmed"].includes(String(row.status)))return false;
+  if(!row||String(row.status)!=="confirmed")return false;
   await updateAppointment(id,"in_progress",Number(row.total_amount),String(row.deposit_status),staffId);
   return true;
 }
@@ -593,7 +605,8 @@ export async function getBookingByToken(token:string){
 }
 
 export async function respondToBooking(token:string,response:"confirmed"|"change_requested"){
-  await ensureClinicTables();const rows=await client()`UPDATE venux_appointments SET customer_confirmation_status=${response},confirmed_by_client_at=CASE WHEN ${response}='confirmed' THEN NOW() ELSE NULL END,status=CASE WHEN ${response}='change_requested' THEN 'requested' ELSE status END,updated_at=NOW() WHERE confirmation_token=${token} AND status NOT IN ('cancelled','completed','in_progress') RETURNING id`;
+  await ensureClinicTables();const rows=await client()`UPDATE venux_appointments SET customer_confirmation_status=${response},confirmed_by_client_at=CASE WHEN ${response}='confirmed' THEN NOW() ELSE NULL END,updated_at=NOW() WHERE confirmation_token=${token} AND status NOT IN ('completed','in_progress') RETURNING id,client_id,treatment,requested_date,requested_time`;
+  if(rows[0])await audit(response==="confirmed"?"appointment_confirmed":"appointment_change_requested","client",Number(rows[0].client_id),`${rows[0].treatment} · ${String(rows[0].requested_date).slice(0,10)} ${rows[0].requested_time}`);
   return Boolean(rows[0]);
 }
 
@@ -629,18 +642,23 @@ async function audit(action: string, entityType: string, entityId: number, detai
 export async function getClientClinicalRecord(clientId: number) {
   await ensureClinicTables();
   const sql = client();
-  const [clientRows, healthRows, assessments, treatments, followups, courses, appointments, audits] = await Promise.all([
+  const [clientRows, healthRows, assessments, treatments, followups, courses,packageItems,appointments, audits] = await Promise.all([
     sql`SELECT c.*,m.balance,m.amount_paid AS membership_amount_paid,m.status AS membership_status,m.joined_at FROM venux_clients c LEFT JOIN venux_memberships m ON m.client_id=c.id WHERE c.id=${clientId}`,
     sql`SELECT * FROM venux_health_profiles WHERE client_id=${clientId}`,
     sql`SELECT * FROM venux_skin_assessments WHERE client_id=${clientId} ORDER BY created_at DESC`,
     sql`SELECT * FROM venux_treatment_records WHERE client_id=${clientId} ORDER BY treated_at DESC`,
     sql`SELECT * FROM venux_followups WHERE client_id=${clientId} ORDER BY status DESC,due_date`,
     sql`SELECT * FROM venux_client_courses WHERE client_id=${clientId} ORDER BY created_at DESC`,
+    sql`SELECT cp.id AS client_package_id,cp.purchased_on,cp.expires_on,cp.amount_paid,cp.status,p.package_name,
+      cpi.id AS item_id,cpi.included_sessions,cpi.used_sessions,s.service_name,s.category
+      FROM venux_client_packages cp JOIN venux_packages p ON p.id=cp.package_id
+      JOIN venux_client_package_items cpi ON cpi.client_package_id=cp.id JOIN venux_services s ON s.id=cpi.service_id
+      WHERE cp.client_id=${clientId} ORDER BY cp.created_at DESC,cpi.id`,
     sql`SELECT * FROM venux_appointments WHERE client_id=${clientId} ORDER BY requested_date DESC,requested_time DESC LIMIT 20`,
     sql`SELECT * FROM venux_audit_log WHERE entity_type='client' AND entity_id=${clientId} ORDER BY created_at DESC LIMIT 20`,
   ]);
   if (clientRows[0]) await audit("view", "client", clientId, "Clinical record opened");
-  return { client: clientRows[0] ?? null, health: healthRows[0] ?? null, assessments, treatments, followups, courses, appointments, audits };
+  return { client: clientRows[0] ?? null, health: healthRows[0] ?? null, assessments, treatments, followups, courses,packageItems, appointments, audits };
 }
 
 export async function saveClientProfile(clientId: number, values: Record<string,string>) {
