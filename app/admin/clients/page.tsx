@@ -3,7 +3,7 @@ import { isAdminAuthenticated } from "../../../lib/admin-auth";
 import { getClientLocationStats,getClients } from "../../../lib/clinic-admin";
 import { changeMembership, importClients } from "../actions";
 import { MembershipBalanceForm } from "./membership-balance-form";
-import { AdminLogin,AdminShell,statusLabel } from "../admin-ui";
+import { AdminLogin,AdminShell } from "../admin-ui";
 import "../admin.css";
 import "./import.css";
 import "./clinical-list.css";
@@ -26,11 +26,11 @@ export default async function ClientsAdmin({searchParams}:{searchParams:Promise<
     <form method="get" className="client-search-form">{location?<input type="hidden" name="location" value={location}/>:null}<label>Search all client information<input name="q" defaultValue={params.q??""} placeholder="Mobile, name or email"/></label><button>Search</button>{params.q||location?<a href="/admin/clients">Clear</a>:null}</form>
     <form action={importClients} className="client-import-form"><div><strong>Import or export customer records</strong><span>Choose City or Top Ryde before importing. CSV columns: Group, Name, DOB, Mobile, Email, Address.</span><a className="client-export-link" href="/admin/clients/export">Export all clients CSV</a></div><label>Client location<select name="clinicLocation" required defaultValue=""><option value="" disabled>Select location</option><option>Top Ryde</option><option>City</option></select></label><input type="file" name="clientsFile" accept=".csv,text/csv" required/><button type="submit">Import CSV</button></form>
     <section className="client-grid">{clients.length?clients.map(client=><article className="client-card" key={String(client.id)}>
-      <header><div><h2>{String(client.full_name)} <span className={`clinic-location-badge ${String(client.clinic_location)==="City"?"city":"ryde"}`}>{String(client.clinic_location??"Top Ryde")}</span></h2><span>Card VX{String(client.id).padStart(6,"0")} · {String(client.customer_group??"General")}</span></div><span className={`status-pill ${client.membership_status??"inactive"}`}>{statusLabel(client.membership_status??"non-member")}</span></header>
+      <header><div><h2>{String(client.full_name)} <span className={`clinic-location-badge ${String(client.clinic_location)==="City"?"city":"ryde"}`}>{String(client.clinic_location??"Top Ryde")}</span></h2><span>Card VX{String(client.id).padStart(6,"0")} · {String(client.customer_group??"General")}</span></div>{client.is_premium?<span className="premium-client-badge">✦ Premium</span>:null}</header>
       <div className="client-contact"><a href={`tel:${client.mobile}`}>{String(client.mobile)}</a><a href={`mailto:${client.email}`}>{client.email?String(client.email):"No email"}</a>{client.dob?<span>DOB: {new Date(String(client.dob)).toLocaleDateString("en-AU")}</span>:null}{client.address?<span>{String(client.address)}</span>:null}</div>
       <div className="client-meta"><span>{Number(client.visit_count)} appointments</span><span>{client.last_visit?`Last: ${new Date(String(client.last_visit)).toLocaleDateString("en-AU")}`:"No visits"}</span></div>
       <a className="clinical-record-link" href={`/admin/clients/${client.id}`}>Open clinical record →</a>
-      <MembershipBalanceForm action={changeMembership} clientId={Number(client.id)} balance={Number(client.balance??0)} status={String(client.membership_status??"inactive")} existing={client.membership_status!=null} className="membership-form" compactLabels/>
+      <MembershipBalanceForm action={changeMembership} clientId={Number(client.id)} balance={Number(client.balance??0)} existing={client.membership_status!=null} className="membership-form" compactLabels/>
     </article>):<div className="empty-admin">No clients yet. A profile is created when a customer submits an online booking request.</div>}</section>
   </AdminShell>;
 }
