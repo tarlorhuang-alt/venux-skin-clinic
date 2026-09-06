@@ -112,11 +112,10 @@ export async function changeMembership(formData: FormData) {
   if (!(await isAdminAuthenticated())) redirect("/admin?error=session");
   const clientId = Number(formData.get("clientId"));
   const balance = Number(formData.get("balance"));
-  const amountPaid = Number(formData.get("amountPaid")??0);
   const status = String(formData.get("status"));
   const returnTo=String(formData.get("returnTo")??"");
-  if (!Number.isInteger(clientId) || clientId <= 0 || !Number.isFinite(balance) || balance < 0 || !Number.isFinite(amountPaid) || amountPaid < 0 || !["active","inactive","paused"].includes(status)) redirect("/admin/clients?error=invalid");
-  await saveMembership(clientId,balance,status,amountPaid);
+  if (!Number.isInteger(clientId) || clientId <= 0 || !Number.isFinite(balance) || balance < 0 || !["active","inactive","paused"].includes(status)) redirect("/admin/clients?error=invalid");
+  await saveMembership(clientId,balance,status);
   revalidatePath("/admin"); revalidatePath("/admin/clients");revalidatePath(clientPath(clientId));
   redirect(returnTo==="record"?`${clientPath(clientId)}?saved=membership`:"/admin/clients?saved=1");
 }

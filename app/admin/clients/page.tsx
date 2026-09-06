@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { isAdminAuthenticated } from "../../../lib/admin-auth";
 import { getClientLocationStats,getClients } from "../../../lib/clinic-admin";
 import { changeMembership, importClients } from "../actions";
+import { MembershipBalanceForm } from "./membership-balance-form";
 import { AdminLogin,AdminShell,statusLabel } from "../admin-ui";
 import "../admin.css";
 import "./import.css";
@@ -29,7 +30,7 @@ export default async function ClientsAdmin({searchParams}:{searchParams:Promise<
       <div className="client-contact"><a href={`tel:${client.mobile}`}>{String(client.mobile)}</a><a href={`mailto:${client.email}`}>{client.email?String(client.email):"No email"}</a>{client.dob?<span>DOB: {new Date(String(client.dob)).toLocaleDateString("en-AU")}</span>:null}{client.address?<span>{String(client.address)}</span>:null}</div>
       <div className="client-meta"><span>{Number(client.visit_count)} appointments</span><span>{client.last_visit?`Last: ${new Date(String(client.last_visit)).toLocaleDateString("en-AU")}`:"No visits"}</span></div>
       <a className="clinical-record-link" href={`/admin/clients/${client.id}`}>Open clinical record →</a>
-      <form action={changeMembership} className="membership-form"><input type="hidden" name="clientId" value={String(client.id)}/><label><span>Card balance</span><input name="balance" type="number" min="0" step="0.01" defaultValue={Number(client.balance??0)}/></label><label><span>Membership price / paid</span><input name="amountPaid" type="number" min="0" step="0.01" defaultValue={Number(client.membership_amount_paid??0)}/></label><label><span>Membership</span><select name="status" defaultValue={String(client.membership_status??"inactive")}><option value="inactive">Inactive</option><option value="active">Active</option><option value="paused">Paused</option></select></label><button type="submit">Save membership card</button></form>
+      <MembershipBalanceForm action={changeMembership} clientId={Number(client.id)} balance={Number(client.balance??0)} status={String(client.membership_status??"inactive")} existing={client.membership_status!=null} className="membership-form" compactLabels/>
     </article>):<div className="empty-admin">No clients yet. A profile is created when a customer submits an online booking request.</div>}</section>
   </AdminShell>;
 }
