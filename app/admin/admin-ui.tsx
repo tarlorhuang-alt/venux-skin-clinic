@@ -7,7 +7,7 @@ export function AdminLogin({ error }: { error?: string }) {
 
 export async function AdminShell({ active, children }: { active: string; children: React.ReactNode }) {
   const role=await getAdminRole();
-  const links = [["Dashboard","/admin",false],["Bookings","/admin/bookings",false],["Clients & membership","/admin/clients",false],["Packages","/admin/packages",false],["Payroll","/admin/payroll",true],["Revenue & performance","/admin/reports",true],["Expenses","/admin/expenses",true],["Staff & time clock","/admin/staff",false],["Client retention","/admin/retention",false],["Messages","/admin/messages",false],["Follow-ups","/admin/follow-ups",false]] as const;
+  const links = [["Dashboard","/admin",false],["Bookings","/admin/bookings",false],["Clients & membership","/admin/clients",false],["Packages","/admin/packages",false],["Payroll","/admin/payroll",true],["Revenue & performance","/admin/reports",true],["Expenses","/admin/expenses",true],["Staff & time clock","/admin/staff",false],["Client retention","/admin/retention",false],["Messages","/admin/messages",false]] as const;
   return <main className="clinic-admin"><aside><a className="clinic-admin-logo" href="/admin"><span>✦</span><strong>VenuX</strong><small>{role==="owner"?"Owner system":"Staff system"}</small></a><nav>{links.filter(([, ,ownerOnly])=>!ownerOnly||role==="owner").map(([label,href])=><a className={active===label?"active":""} href={href} key={href}>{label}</a>)}</nav><form action={adminLogout}><button type="submit">Sign out</button></form></aside><div className="clinic-admin-main">{children}</div></main>;
 }
 

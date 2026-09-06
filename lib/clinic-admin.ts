@@ -316,7 +316,15 @@ export async function createBookingRequest(input: BookingInput) {
     if(overlap[0])throw new BookingConflictError("This beautician already has an overlapping appointment.");
   }
   const slotKey=input.staffId?`${input.clinic}|${input.date}|${input.time}|staff:${input.staffId}`:`${input.clinic}|${input.date}|${input.time}`;
-  const created = await sql`WITH claimed AS (INSERT INTO venux_booking_slots (slot_key) VALUES (${slotKey}) ON CONFLICT DO NOTHING RETURNING slot_key), booked AS (INSERT INTO venux_appointments (client_id,clinic,treatment,requested_date,requested_time,notes,source,confirmation_token,staff_id,service_id,duration_minutes,start_minute,total_amount) SELECT ${clientId},${input.clinic},${input.treatment},${input.date},${input.time},${input.notes ?? ""},${input.source??"website"},${token},${input.staffId??null},${input.serviceId??null},${input.durationMinutes??60},${startMinute},${input.totalAmount??0} FROM claimed RETURNING id) UPDATE venux_booking_slots s SET appointment_id=b.id FROM booked b WHERE s.slot_key=${slotKey} RETURNING b.id`;
+  const created = await sql`WITH premium AS (
+      SELECT EXISTS(SELECT 1 FROM venux_memberships m WHERE m.client_id=${clientId})
+        OR EXISTS(SELECT 1 FROM venux_client_packages cp JOIN venux_client_package_items cpi ON cpi.client_package_id=cp.id
+          WHERE cp.client_id=${clientId} AND cp.status='active' AND (cp.expires_on IS NULL OR cp.expires_on>=${input.date})
+          AND cpi.used_sessions<cpi.included_sessions) AS is_premium
+    ), claimed AS (INSERT INTO venux_booking_slots (slot_key) VALUES (${slotKey}) ON CONFLICT DO NOTHING RETURNING slot_key),
+    booked AS (INSERT INTO venux_appointments (client_id,clinic,treatment,requested_date,requested_time,notes,source,confirmation_token,staff_id,service_id,duration_minutes,start_minute,total_amount,deposit_status,deposit_amount)
+      SELECT ${clientId},${input.clinic},${input.treatment},${input.date},${input.time},${input.notes ?? ""},${input.source??"website"},${token},${input.staffId??null},${input.serviceId??null},${input.durationMinutes??60},${startMinute},${input.totalAmount??0},CASE WHEN premium.is_premium THEN 'waived' ELSE 'unpaid' END,CASE WHEN premium.is_premium THEN 0 ELSE 45 END FROM claimed CROSS JOIN premium RETURNING id)
+    UPDATE venux_booking_slots s SET appointment_id=b.id FROM booked b WHERE s.slot_key=${slotKey} RETURNING b.id`;
   if(!created[0])throw new BookingConflictError("This time is no longer available.");
   const appointmentId=Number(created[0].id);
   if(input.serviceId){await sql`UPDATE venux_appointments SET client_package_item_id=(
@@ -366,18 +374,20 @@ export async function getClinicDashboard(location="") {
 
 export async function getAppointments(date = "",location="") {
   await ensureClinicTables();
-  return client()`SELECT a.*,a.requested_date::text AS requested_date,c.full_name,c.mobile,c.email,c.clinic_location,s.full_name AS staff_name
+  return client()`SELECT a.*,a.requested_date::text AS requested_date,c.full_name,c.mobile,c.email,c.clinic_location,s.full_name AS staff_name,
+    (m.client_id IS NOT NULL OR EXISTS(SELECT 1 FROM venux_client_packages cp JOIN venux_client_package_items cpi ON cpi.client_package_id=cp.id WHERE cp.client_id=c.id AND cp.status='active' AND (cp.expires_on IS NULL OR cp.expires_on>=CURRENT_DATE) AND cpi.used_sessions<cpi.included_sessions)) AS is_premium
     FROM venux_appointments a JOIN venux_clients c ON c.id=a.client_id
-    LEFT JOIN venux_staff s ON s.id=a.staff_id
+    LEFT JOIN venux_staff s ON s.id=a.staff_id LEFT JOIN venux_memberships m ON m.client_id=c.id
     WHERE (${date}='' OR a.requested_date=${date || null}) AND (${location}='' OR a.clinic ILIKE ${`%${location}%`})
     ORDER BY a.requested_date DESC,a.requested_time DESC LIMIT 500`;
 }
 
 export async function getAppointmentsRange(from:string,to:string,location="") {
   await ensureClinicTables();
-  return client()`SELECT a.*,a.requested_date::text AS requested_date,c.full_name,c.mobile,c.email,c.clinic_location,s.full_name AS staff_name
+  return client()`SELECT a.*,a.requested_date::text AS requested_date,c.full_name,c.mobile,c.email,c.clinic_location,s.full_name AS staff_name,
+    (m.client_id IS NOT NULL OR EXISTS(SELECT 1 FROM venux_client_packages cp JOIN venux_client_package_items cpi ON cpi.client_package_id=cp.id WHERE cp.client_id=c.id AND cp.status='active' AND (cp.expires_on IS NULL OR cp.expires_on>=CURRENT_DATE) AND cpi.used_sessions<cpi.included_sessions)) AS is_premium
     FROM venux_appointments a JOIN venux_clients c ON c.id=a.client_id
-    LEFT JOIN venux_staff s ON s.id=a.staff_id
+    LEFT JOIN venux_staff s ON s.id=a.staff_id LEFT JOIN venux_memberships m ON m.client_id=c.id
     WHERE a.requested_date BETWEEN ${from} AND ${to} AND (${location}='' OR a.clinic ILIKE ${`%${location}%`})
     ORDER BY a.requested_date,a.start_minute NULLS LAST,a.requested_time,a.id LIMIT 1000`;
 }
@@ -388,6 +398,7 @@ export async function getClients(search = "",location = "") {
   await ensureClinicTables();
   const term=search.trim(),like=`%${term}%`,digits=normaliseMobile(term),localDigits=digits.replace(/^61/,"0");
   return client()`SELECT c.*,m.balance,m.status AS membership_status,m.joined_at,
+    (m.client_id IS NOT NULL OR EXISTS(SELECT 1 FROM venux_client_packages cp JOIN venux_client_package_items cpi ON cpi.client_package_id=cp.id WHERE cp.client_id=c.id AND cp.status='active' AND (cp.expires_on IS NULL OR cp.expires_on>=CURRENT_DATE) AND cpi.used_sessions<cpi.included_sessions)) AS is_premium,
     COUNT(a.id)::int AS visit_count,MAX(a.requested_date) AS last_visit
     FROM venux_clients c LEFT JOIN venux_memberships m ON m.client_id=c.id
     LEFT JOIN venux_appointments a ON a.client_id=c.id
@@ -402,6 +413,7 @@ export async function getClientsForBookingSearch(search:string){
   if(term.length<2&&digits.length<3)return [];
   const alternate=digits.startsWith("0")?`61${digits.slice(1)}`:digits.startsWith("61")?`0${digits.slice(2)}`:"";
   return client()`SELECT c.*,m.balance,m.status AS membership_status,m.joined_at,
+    (m.client_id IS NOT NULL OR EXISTS(SELECT 1 FROM venux_client_packages cp JOIN venux_client_package_items cpi ON cpi.client_package_id=cp.id WHERE cp.client_id=c.id AND cp.status='active' AND (cp.expires_on IS NULL OR cp.expires_on>=CURRENT_DATE) AND cpi.used_sessions<cpi.included_sessions)) AS is_premium,
     COUNT(a.id)::int AS visit_count,MAX(a.requested_date) AS last_visit
     FROM venux_clients c LEFT JOIN venux_memberships m ON m.client_id=c.id
     LEFT JOIN venux_appointments a ON a.client_id=c.id
@@ -426,6 +438,7 @@ export async function getClientExportRows(){
 export async function getClientForBooking(clientId: number) {
   await ensureClinicTables();
   return (await client()`SELECT c.*,m.balance,m.status AS membership_status,
+    (m.client_id IS NOT NULL OR EXISTS(SELECT 1 FROM venux_client_packages cp JOIN venux_client_package_items cpi ON cpi.client_package_id=cp.id WHERE cp.client_id=c.id AND cp.status='active' AND (cp.expires_on IS NULL OR cp.expires_on>=CURRENT_DATE) AND cpi.used_sessions<cpi.included_sessions)) AS is_premium,
     COUNT(a.id)::int AS visit_count,MAX(a.requested_date) AS last_visit
     FROM venux_clients c LEFT JOIN venux_memberships m ON m.client_id=c.id
     LEFT JOIN venux_appointments a ON a.client_id=c.id WHERE c.id=${clientId}
@@ -536,15 +549,25 @@ export async function finishAppointment(id:number,staffId:number,comment:string,
   return true;
 }
 
-export type PackageTemplateInput={name:string;price:number;validityDays:number;items:Array<{serviceId:number;sessions:number}>};
+export type PackageTemplateInput={id?:number;name:string;price:number;validityDays:number;items:Array<{serviceId:number;sessions:number}>};
 
 export async function createPackageTemplate(input:PackageTemplateInput){
   await ensureClinicTables();const sql=client();
-  const saved=await sql`INSERT INTO venux_packages (package_name,package_price,validity_days) VALUES (${input.name},${input.price},${input.validityDays})
-    ON CONFLICT (package_name) DO UPDATE SET package_price=EXCLUDED.package_price,validity_days=EXCLUDED.validity_days,active=TRUE,updated_at=NOW() RETURNING id`;
+  const saved=input.id
+    ?await sql`UPDATE venux_packages SET package_name=${input.name},package_price=${input.price},validity_days=${input.validityDays},active=TRUE,updated_at=NOW() WHERE id=${input.id} RETURNING id`
+    :await sql`INSERT INTO venux_packages (package_name,package_price,validity_days) VALUES (${input.name},${input.price},${input.validityDays})
+      ON CONFLICT (package_name) DO UPDATE SET package_price=EXCLUDED.package_price,validity_days=EXCLUDED.validity_days,active=TRUE,updated_at=NOW() RETURNING id`;
+  if(!saved[0])return 0;
   const packageId=Number(saved[0].id);await sql`DELETE FROM venux_package_items WHERE package_id=${packageId}`;
   for(const item of input.items)await sql`INSERT INTO venux_package_items (package_id,service_id,included_sessions) VALUES (${packageId},${item.serviceId},${item.sessions})`;
   await audit("save","package",packageId,`${input.name}: ${input.items.length} treatment types`);return packageId;
+}
+
+export async function deletePackageTemplate(packageId:number){
+  await ensureClinicTables();const sql=client();
+  const changed=await sql`UPDATE venux_packages SET active=FALSE,updated_at=NOW() WHERE id=${packageId} RETURNING package_name`;
+  if(!changed[0])return false;
+  await audit("delete","package",packageId,`Package template archived: ${changed[0].package_name}`);return true;
 }
 
 export async function assignPackageToClient(clientId:number,packageId:number,amountPaid:number,purchasedOn:string,expiresOn:string){
@@ -553,6 +576,7 @@ export async function assignPackageToClient(clientId:number,packageId:number,amo
     VALUES (${clientId},${packageId},${purchasedOn},COALESCE(${expiresOn||null}::date,${purchasedOn}::date+${Number(template[0].validity_days)}),${amountPaid}) RETURNING id`;
   const clientPackageId=Number(assigned[0].id);await sql`INSERT INTO venux_client_package_items (client_package_id,service_id,included_sessions)
     SELECT ${clientPackageId},service_id,included_sessions FROM venux_package_items WHERE package_id=${packageId}`;
+  await sql`UPDATE venux_appointments SET deposit_status='waived',deposit_amount=0,updated_at=NOW() WHERE client_id=${clientId} AND requested_date>=CURRENT_DATE AND deposit_status='unpaid'`;
   await audit("assign","client_package",clientPackageId,`Package ${template[0].package_name} assigned to client ${clientId}`);return true;
 }
 
@@ -595,7 +619,7 @@ async function deductMembershipBalanceForAppointment(appointmentId:number){
       SELECT a.id AS appointment_id,a.client_id,a.treatment,
         GREATEST(0,a.total_amount-CASE WHEN a.deposit_status='paid' THEN a.deposit_amount ELSE 0 END)::numeric AS amount
       FROM venux_appointments a JOIN venux_memberships m ON m.client_id=a.client_id
-      WHERE a.id=${appointmentId} AND a.membership_balance_deducted_at IS NULL AND m.status='active'
+      WHERE a.id=${appointmentId} AND a.membership_balance_deducted_at IS NULL
         AND m.balance>=GREATEST(0,a.total_amount-CASE WHEN a.deposit_status='paid' THEN a.deposit_amount ELSE 0 END)
       FOR UPDATE OF a,m
     ), debit AS (
@@ -611,7 +635,7 @@ async function deductMembershipBalanceForAppointment(appointmentId:number){
   const skipped=(await sql`SELECT a.client_id,a.treatment,m.balance,
       GREATEST(0,a.total_amount-CASE WHEN a.deposit_status='paid' THEN a.deposit_amount ELSE 0 END)::numeric AS charge_amount
     FROM venux_appointments a JOIN venux_memberships m ON m.client_id=a.client_id
-    WHERE a.id=${appointmentId} AND a.membership_balance_deducted_at IS NULL AND m.status='active' LIMIT 1`)[0];
+    WHERE a.id=${appointmentId} AND a.membership_balance_deducted_at IS NULL LIMIT 1`)[0];
   if(skipped&&Number(skipped.charge_amount)>Number(skipped.balance))await audit("membership_balance_not_deducted","client",Number(skipped.client_id),`${skipped.treatment}: card balance $${Number(skipped.balance).toFixed(2)} is below the $${Number(skipped.charge_amount).toFixed(2)} amount due.`);
   return false;
 }
@@ -658,11 +682,12 @@ export async function markSmsOutboxSent(id:number){
   await ensureClinicTables();await client()`UPDATE venux_sms_outbox SET status='sent',sent_at=NOW() WHERE id=${id}`;
 }
 
-export async function saveMembership(clientId: number, balance: number, status: string) {
-  await ensureClinicTables();const sql=client();const before=(await sql`SELECT balance,status FROM venux_memberships WHERE client_id=${clientId}`)[0];
-  await sql`INSERT INTO venux_memberships (client_id,balance,status,joined_at) VALUES (${clientId},${balance},${status},CASE WHEN ${status}='active' THEN NOW() ELSE NULL END)
-    ON CONFLICT (client_id) DO UPDATE SET balance=EXCLUDED.balance,status=EXCLUDED.status,joined_at=COALESCE(venux_memberships.joined_at,EXCLUDED.joined_at),updated_at=NOW()`;
-  await audit("membership_balance_updated","client",clientId,`Membership ${status}; balance $${Number(before?.balance??0).toFixed(2)} → $${balance.toFixed(2)}`);
+export async function rechargeMembership(clientId: number, amount: number) {
+  await ensureClinicTables();const sql=client();
+  const changed=await sql`INSERT INTO venux_memberships (client_id,balance,status,joined_at) VALUES (${clientId},${amount},'active',NOW())
+    ON CONFLICT (client_id) DO UPDATE SET balance=venux_memberships.balance+EXCLUDED.balance,status='active',joined_at=COALESCE(venux_memberships.joined_at,NOW()),updated_at=NOW() RETURNING balance`;
+  await sql`UPDATE venux_appointments SET deposit_status='waived',deposit_amount=0,updated_at=NOW() WHERE client_id=${clientId} AND requested_date>=CURRENT_DATE AND deposit_status='unpaid'`;
+  await audit("membership_recharged","client",clientId,`Membership card recharged $${amount.toFixed(2)}. Balance $${Number(changed[0].balance).toFixed(2)}.`);
 }
 
 async function audit(action: string, entityType: string, entityId: number, detail = "") {
@@ -672,12 +697,11 @@ async function audit(action: string, entityType: string, entityId: number, detai
 export async function getClientClinicalRecord(clientId: number) {
   await ensureClinicTables();
   const sql = client();
-  const [clientRows, healthRows, assessments, treatments, followups, courses,packageItems,appointments, audits] = await Promise.all([
+  const [clientRows, healthRows, assessments, treatments, courses,packageItems,appointments, audits] = await Promise.all([
     sql`SELECT c.*,m.balance,m.status AS membership_status,m.joined_at FROM venux_clients c LEFT JOIN venux_memberships m ON m.client_id=c.id WHERE c.id=${clientId}`,
     sql`SELECT * FROM venux_health_profiles WHERE client_id=${clientId}`,
     sql`SELECT * FROM venux_skin_assessments WHERE client_id=${clientId} ORDER BY created_at DESC`,
     sql`SELECT * FROM venux_treatment_records WHERE client_id=${clientId} ORDER BY treated_at DESC`,
-    sql`SELECT * FROM venux_followups WHERE client_id=${clientId} ORDER BY status DESC,due_date`,
     sql`SELECT * FROM venux_client_courses WHERE client_id=${clientId} ORDER BY created_at DESC`,
     sql`SELECT cp.id AS client_package_id,cp.purchased_on,cp.expires_on,cp.amount_paid,cp.status,p.package_name,
       cpi.id AS item_id,cpi.included_sessions,cpi.used_sessions,s.service_name,s.category
@@ -688,7 +712,7 @@ export async function getClientClinicalRecord(clientId: number) {
     sql`SELECT * FROM venux_audit_log WHERE entity_type='client' AND entity_id=${clientId} ORDER BY created_at DESC LIMIT 20`,
   ]);
   if (clientRows[0]) await audit("view", "client", clientId, "Clinical record opened");
-  return { client: clientRows[0] ?? null, health: healthRows[0] ?? null, assessments, treatments, followups, courses,packageItems, appointments, audits };
+  return { client: clientRows[0] ?? null, health: healthRows[0] ?? null, assessments, treatments, courses,packageItems, appointments, audits };
 }
 
 export async function saveClientProfile(clientId: number, values: Record<string,string>) {
@@ -712,24 +736,11 @@ export async function createSkinAssessment(clientId: number, values: Record<stri
   await audit("create", "client", clientId, "Skin assessment added");
 }
 
-function followupSchedule(service: string) {
-  const value=service.toLowerCase();
-  if(/botox|anti-wrinkle/.test(value)) return [[14,"2-week review"]] as const;
-  if(/skin booster|rejuran|水光/.test(value)) return [[3,"3-day recovery check"],[7,"1-week review"]] as const;
-  if(/ipl|pico|lutronic|皮秒/.test(value)) return [[1,"24-hour safety check"],[7,"1-week review"]] as const;
-  if(/hifu|ultherapy|ultrasound/.test(value)) return [[30,"1-month review"],[90,"3-month review"]] as const;
-  return [] as const;
-}
-
 export async function createTreatmentRecord(clientId: number, values: Record<string,string|number|null>) {
   await ensureClinicTables();
   const sql=client();
-  const rows=await sql`INSERT INTO venux_treatment_records (client_id,service,treated_at,operator_name,treatment_area,products,brand,batch_number,dosage,parameters,shot_count,unit_count,treatment_map,immediate_response,adverse_reaction,adverse_management,operator_signature)
-    VALUES (${clientId},${values.service},${values.treatedAt},${values.operator},${values.area},${values.products},${values.brand},${values.batchNumber},${values.dosage},${values.parameters},${values.shotCount},${values.unitCount},${values.treatmentMap},${values.immediateResponse},${values.adverseReaction},${values.adverseManagement},${values.signature}) RETURNING id,treated_at`;
-  const treatmentId=Number(rows[0].id);
-  for(const [days,label] of followupSchedule(String(values.service))){
-    await sql`INSERT INTO venux_followups (client_id,treatment_record_id,due_date,followup_type) VALUES (${clientId},${treatmentId},(${String(values.treatedAt)}::timestamptz + (${days} || ' days')::interval)::date,${label})`;
-  }
+  await sql`INSERT INTO venux_treatment_records (client_id,service,treated_at,operator_name,treatment_area,products,brand,batch_number,dosage,parameters,shot_count,unit_count,treatment_map,immediate_response,adverse_reaction,adverse_management,operator_signature)
+    VALUES (${clientId},${values.service},${values.treatedAt},${values.operator},${values.area},${values.products},${values.brand},${values.batchNumber},${values.dosage},${values.parameters},${values.shotCount},${values.unitCount},${values.treatmentMap},${values.immediateResponse},${values.adverseReaction},${values.adverseManagement},${values.signature})`;
   await audit("create", "client", clientId, `Treatment record added: ${values.service}`);
 }
 
@@ -747,17 +758,6 @@ export async function useClientCourseSession(clientId:number,courseId:number){
   if(!changed[0])return false;
   await audit("update","client",clientId,`Session used: ${changed[0].course_name} (${changed[0].used_sessions}/${changed[0].purchased_sessions})`);
   return true;
-}
-
-export async function completeFollowup(followupId: number, clientId: number, values: Record<string,string|number|boolean|null>) {
-  await ensureClinicTables();
-  await client()`UPDATE venux_followups SET status='completed',recovery_notes=${values.notes},satisfaction=${values.satisfaction},abnormal_reaction=${values.abnormal},review_required=${values.reviewRequired},completed_at=NOW() WHERE id=${followupId} AND client_id=${clientId}`;
-  await audit("update", "client", clientId, `Follow-up ${followupId} completed`);
-}
-
-export async function getFollowups() {
-  await ensureClinicTables();
-  return client()`SELECT f.*,c.full_name,c.mobile,t.service FROM venux_followups f JOIN venux_clients c ON c.id=f.client_id LEFT JOIN venux_treatment_records t ON t.id=f.treatment_record_id ORDER BY CASE WHEN f.status='pending' THEN 0 ELSE 1 END,f.due_date LIMIT 300`;
 }
 
 export async function getStaff() {
@@ -786,6 +786,17 @@ export async function getStaffClockHistory(){
   return client()`SELECT t.*,s.full_name,s.role,
     CASE WHEN t.clock_out IS NULL THEN NULL ELSE ROUND(EXTRACT(EPOCH FROM (t.clock_out-t.clock_in))/3600,2) END AS hours
     FROM venux_time_clock t JOIN venux_staff s ON s.id=t.staff_id ORDER BY t.clock_in DESC LIMIT 200`;
+}
+
+export async function updateStaffClockEntry(id:number,clockIn:string,clockOut:string,note:string){
+  await ensureClinicTables();const sql=client();
+  const changed=await sql`UPDATE venux_time_clock SET
+    clock_in=${clockIn}::timestamp AT TIME ZONE 'Australia/Sydney',
+    clock_out=CASE WHEN ${clockOut}='' THEN NULL ELSE ${clockOut}::timestamp AT TIME ZONE 'Australia/Sydney' END,
+    note=${note}
+    WHERE id=${id} AND (${clockOut}='' OR ${clockOut}::timestamp>=${clockIn}::timestamp) RETURNING staff_id`;
+  if(!changed[0])return false;
+  await audit("time_clock_updated","time_clock",id,"Owner corrected staff clock history in Sydney time");return true;
 }
 
 export async function getOperationsReport(from:string,to:string){

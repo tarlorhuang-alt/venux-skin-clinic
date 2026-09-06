@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { clearAdminSession, createAdminSession, getAdminRole,isAdminAuthenticated, isOwnerAuthenticated, roleForPassword } from "../../lib/admin-auth";
-import { assignPackageToClient,BookingConflictError,completeFollowup,createBookingRequest,createClientCourse,createExpense,createPackageTemplate,createSkinAssessment,createStaff,createSupplier,createTreatmentRecord,finishAppointment,getAppointmentClinic,getOwnerService,importClientRows,markSmsOutboxSent,queueBirthdayMessages,queueReturnInvite,saveClientProfile,saveHealthProfile,saveMembership,startAppointment,toggleStaffClock,updateAppointment,useClientCourseSession,useClientPackageItem,type AppointmentStatus,type ClientImportRow } from "../../lib/clinic-admin";
+import { assignPackageToClient,BookingConflictError,createBookingRequest,createClientCourse,createExpense,createPackageTemplate,createSkinAssessment,createStaff,createSupplier,createTreatmentRecord,deletePackageTemplate,finishAppointment,getAppointmentClinic,getOwnerService,importClientRows,markSmsOutboxSent,queueBirthdayMessages,queueReturnInvite,rechargeMembership,saveClientProfile,saveHealthProfile,startAppointment,toggleStaffClock,updateAppointment,updateStaffClockEntry,useClientCourseSession,useClientPackageItem,type AppointmentStatus,type ClientImportRow } from "../../lib/clinic-admin";
 
 export async function adminLogin(formData: FormData) {
   const role=roleForPassword(String(formData.get("password") ?? ""));
@@ -21,7 +21,7 @@ export async function changeAppointment(formData: FormData) {
   const totalAmount = Number(formData.get("totalAmount") ?? 0);
   const depositStatus = String(formData.get("depositStatus") ?? "unpaid");
   const staffIdRaw=Number(formData.get("staffId")??0);const staffId=staffIdRaw>0?staffIdRaw:null;
-  if (!Number.isInteger(id) || id <= 0 || !["confirmed","in_progress","completed","cancelled","no_show"].includes(status) || !Number.isFinite(totalAmount) || totalAmount < 0 || !["unpaid","paid","refunded","forfeited"].includes(depositStatus)) redirect("/admin/bookings?error=invalid");
+  if (!Number.isInteger(id) || id <= 0 || !["confirmed","in_progress","completed","cancelled","no_show"].includes(status) || !Number.isFinite(totalAmount) || totalAmount < 0 || !["unpaid","paid","refunded","forfeited","waived"].includes(depositStatus)) redirect("/admin/bookings?error=invalid");
   if(await staffCannotAccessAppointment(id))redirect("/admin?error=restricted");
   try{await updateAppointment(id,status,totalAmount,depositStatus,staffId);}catch(error){if(error instanceof BookingConflictError)redirect("/admin/bookings?error=conflict");throw error;}
   revalidatePath("/admin"); revalidatePath("/admin/bookings");
@@ -61,10 +61,16 @@ export async function markSmsSentAction(formData:FormData){
 export async function queueBirthdaysAction(){if(!(await isAdminAuthenticated()))redirect("/admin?error=session");const result=await queueBirthdayMessages();revalidatePath("/admin/messages");redirect(`/admin/messages?birthdays=${result.queued}`);}
 
 export async function createPackageAction(formData:FormData){
-  if(!(await isOwnerAuthenticated()))redirect("/admin?error=restricted");const name=textValue(formData,"name"),price=Number(formData.get("price")),validityDays=Number(formData.get("validityDays"));
+  if(!(await isOwnerAuthenticated()))redirect("/admin?error=restricted");const packageId=Number(formData.get("packageId")??0),name=textValue(formData,"name"),price=Number(formData.get("price")),validityDays=Number(formData.get("validityDays"));
   const combined=new Map<number,number>();for(let index=1;index<=5;index++){const serviceId=Number(formData.get(`serviceId${index}`)),sessions=Number(formData.get(`sessions${index}`));if(serviceId>0&&Number.isInteger(sessions)&&sessions>0)combined.set(serviceId,(combined.get(serviceId)??0)+sessions);}
   const items=[...combined].map(([serviceId,sessions])=>({serviceId,sessions}));if(!name||!Number.isFinite(price)||price<0||!Number.isInteger(validityDays)||validityDays<1||!items.length)redirect("/admin/packages?error=template");
-  await createPackageTemplate({name,price,validityDays,items});revalidatePath("/admin/packages");redirect("/admin/packages?created=1");
+  await createPackageTemplate({id:packageId>0?packageId:undefined,name,price,validityDays,items});revalidatePath("/admin/packages");redirect("/admin/packages?created=1");
+}
+
+export async function deletePackageAction(formData:FormData){
+  if(!(await isOwnerAuthenticated()))redirect("/admin?error=restricted");const packageId=Number(formData.get("packageId"));
+  if(!Number.isInteger(packageId)||packageId<1)redirect("/admin/packages?error=template");
+  const deleted=await deletePackageTemplate(packageId);revalidatePath("/admin/packages");redirect(`/admin/packages?${deleted?"deleted=1":"error=template"}`);
 }
 
 export async function assignPackageAction(formData:FormData){
@@ -86,6 +92,12 @@ export async function addStaffAction(formData:FormData){
 export async function toggleStaffClockAction(formData:FormData){
   if(!(await isAdminAuthenticated()))redirect("/admin?error=session");const staffId=Number(formData.get("staffId"));
   if(!Number.isInteger(staffId)||staffId<=0)redirect("/admin/staff?error=invalid");await toggleStaffClock(staffId,textValue(formData,"note"));revalidatePath("/admin/staff");redirect("/admin/staff?clock=1");
+}
+
+export async function updateStaffClockAction(formData:FormData){
+  if(!(await isOwnerAuthenticated()))redirect("/admin?error=restricted");const id=Number(formData.get("id")),clockIn=textValue(formData,"clockIn"),clockOut=textValue(formData,"clockOut");
+  if(!Number.isInteger(id)||id<1||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(clockIn)||(clockOut&&!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(clockOut)))redirect("/admin/staff?error=clock");
+  const updated=await updateStaffClockEntry(id,clockIn,clockOut,textValue(formData,"note"));revalidatePath("/admin/staff");redirect(`/admin/staff?${updated?"edited=1":"error=clock"}`);
 }
 
 export async function queueReturnInviteAction(formData:FormData){
@@ -111,11 +123,10 @@ export async function addExpenseAction(formData:FormData){
 export async function changeMembership(formData: FormData) {
   if (!(await isAdminAuthenticated())) redirect("/admin?error=session");
   const clientId = Number(formData.get("clientId"));
-  const balance = Number(formData.get("balance"));
-  const status = String(formData.get("status"));
+  const amount = Number(formData.get("amount"));
   const returnTo=String(formData.get("returnTo")??"");
-  if (!Number.isInteger(clientId) || clientId <= 0 || !Number.isFinite(balance) || balance < 0 || !["active","inactive","paused"].includes(status)) redirect("/admin/clients?error=invalid");
-  await saveMembership(clientId,balance,status);
+  if (!Number.isInteger(clientId) || clientId <= 0 || !Number.isFinite(amount) || amount < 0) redirect("/admin/clients?error=invalid");
+  await rechargeMembership(clientId,amount);
   revalidatePath("/admin"); revalidatePath("/admin/clients");revalidatePath(clientPath(clientId));
   redirect(returnTo==="record"?`${clientPath(clientId)}?saved=membership`:"/admin/clients?saved=1");
 }
@@ -200,12 +211,4 @@ export async function useClientCourseSessionAction(formData:FormData){
   const clientId=await authorisedClient(formData),courseId=Number(formData.get("courseId"));
   if(!Number.isInteger(courseId)||courseId<=0)redirect(`${clientPath(clientId)}?error=course`);
   const used=await useClientCourseSession(clientId,courseId);revalidatePath(clientPath(clientId));redirect(`${clientPath(clientId)}?${used?"saved=session":"error=course"}`);
-}
-
-export async function completeFollowupAction(formData:FormData){
-  const clientId=await authorisedClient(formData),followupId=Number(formData.get("followupId"));
-  const satisfaction=positiveInt(formData,"satisfaction",true);
-  if(!Number.isInteger(followupId)||followupId<=0||(satisfaction!==null&&(satisfaction<1||satisfaction>5))) redirect(`${clientPath(clientId)}?error=followup`);
-  await completeFollowup(followupId,clientId,{notes:textValue(formData,"notes"),satisfaction,abnormal:formData.get("abnormal")==="yes",reviewRequired:formData.get("reviewRequired")==="yes"});
-  revalidatePath(clientPath(clientId));revalidatePath("/admin/follow-ups");redirect(`${clientPath(clientId)}?saved=followup`);
 }
