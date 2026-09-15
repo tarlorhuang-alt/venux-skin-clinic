@@ -394,18 +394,34 @@ export async function getAppointmentsRange(from:string,to:string,location="") {
 
 export async function getAppointmentClinic(id:number){await ensureClinicTables();const row=(await client()`SELECT clinic FROM venux_appointments WHERE id=${id} LIMIT 1`)[0];return row?String(row.clinic):null;}
 
-export async function getClients(search = "",location = "") {
+export async function getClients(search = "",location = "",page = 1,pageSize = 50) {
   await ensureClinicTables();
   const term=search.trim(),like=`%${term}%`,digits=normaliseMobile(term),localDigits=digits.replace(/^61/,"0");
-  return client()`SELECT c.*,m.balance,m.status AS membership_status,m.joined_at,
-    (m.client_id IS NOT NULL OR EXISTS(SELECT 1 FROM venux_client_packages cp JOIN venux_client_package_items cpi ON cpi.client_package_id=cp.id WHERE cp.client_id=c.id AND cp.status='active' AND (cp.expires_on IS NULL OR cp.expires_on>=CURRENT_DATE) AND cpi.used_sessions<cpi.included_sessions)) AS is_premium,
-    COUNT(a.id)::int AS visit_count,MAX(a.requested_date) AS last_visit
-    FROM venux_clients c LEFT JOIN venux_memberships m ON m.client_id=c.id
-    LEFT JOIN venux_appointments a ON a.client_id=c.id
-    WHERE (${location}='' OR c.clinic_location=${location}) AND (${term}='' OR c.full_name ILIKE ${like} OR c.email ILIKE ${like}
-      OR (${digits}<>'' AND (REGEXP_REPLACE(c.mobile,'[^0-9]','','g') LIKE ${`%${digits}%`}
-        OR REGEXP_REPLACE(c.mobile,'[^0-9]','','g') LIKE ${`%${localDigits}%`})))
-    GROUP BY c.id,m.balance,m.status,m.joined_at ORDER BY c.updated_at DESC LIMIT 500`;
+  const safePage=Number.isInteger(page)&&page>0?page:1,safePageSize=Math.min(100,Math.max(10,pageSize)),offset=(safePage-1)*safePageSize;
+  return client()`WITH appointment_stats AS (
+      SELECT client_id,COUNT(*)::int AS visit_count,MAX(requested_date) AS last_visit
+      FROM venux_appointments GROUP BY client_id
+    ), premium_clients AS (
+      SELECT client_id FROM venux_memberships
+      UNION
+      SELECT cp.client_id FROM venux_client_packages cp
+      JOIN venux_client_package_items cpi ON cpi.client_package_id=cp.id
+      WHERE cp.status='active' AND (cp.expires_on IS NULL OR cp.expires_on>=CURRENT_DATE)
+        AND cpi.used_sessions<cpi.included_sessions
+    ), filtered_clients AS (
+      SELECT c.*,m.balance,m.status AS membership_status,m.joined_at,
+        (p.client_id IS NOT NULL) AS is_premium,
+        COALESCE(a.visit_count,0)::int AS visit_count,a.last_visit
+      FROM venux_clients c
+      LEFT JOIN venux_memberships m ON m.client_id=c.id
+      LEFT JOIN appointment_stats a ON a.client_id=c.id
+      LEFT JOIN premium_clients p ON p.client_id=c.id
+      WHERE (${location}='' OR c.clinic_location=${location}) AND (${term}='' OR c.full_name ILIKE ${like} OR c.email ILIKE ${like}
+        OR (${digits}<>'' AND (REGEXP_REPLACE(c.mobile,'[^0-9]','','g') LIKE ${`%${digits}%`}
+          OR REGEXP_REPLACE(c.mobile,'[^0-9]','','g') LIKE ${`%${localDigits}%`})))
+    )
+    SELECT *,COUNT(*) OVER()::int AS filtered_count FROM filtered_clients
+    ORDER BY updated_at DESC LIMIT ${safePageSize} OFFSET ${offset}`;
 }
 
 export async function getClientsForBookingSearch(search:string){
