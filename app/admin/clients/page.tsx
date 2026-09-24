@@ -29,7 +29,7 @@ export default async function ClientsAdmin({searchParams}:{searchParams:Promise<
   const requestedPage=Number(params.page??"1"),page=Number.isInteger(requestedPage)&&requestedPage>0?requestedPage:1;
   const [clients,locationStats]=await loadClientPage(search,location,page);
   const total=Number(clients[0]?.filtered_count??0),totalPages=Math.max(1,Math.ceil(total/50));
-  return <AdminShell active="Clients & membership">
+  return <AdminShell active="Clients">
     <header className="clinic-admin-head"><div><p>Profiles & prepaid cards</p><h1>Clients & membership</h1></div><span>{total} matching clients · page {page} of {totalPages}</span></header>
     {params.saved?<div className="clinic-alert">Membership card updated.</div>:null}
     {params.imported!==undefined?<div className="clinic-alert">Import complete: {params.processed} valid records processed, {params.imported} new clients added{Number(params.duplicates)>0?`, ${params.duplicates} exact duplicates combined`:""}.</div>:null}
