@@ -1,4 +1,5 @@
 import type {Metadata} from "next";
+import {redirect} from "next/navigation";
 import {getAdminRole,isAdminAuthenticated} from "../../../lib/admin-auth";
 import {getStaff,getStaffClockHistory,getStaffClockSummary} from "../../../lib/clinic-admin";
 import {addStaffAction,toggleStaffClockAction,updateStaffClockAction} from "../actions";
@@ -17,9 +18,10 @@ const weekBounds=(date:string)=>{const selected=new Date(`${date}T00:00:00Z`),da
 
 export default async function StaffPage({searchParams}:{searchParams:Promise<{created?:string;clock?:string;edited?:string;error?:string;from?:string;to?:string}>}){
   const params=await searchParams;if(!(await isAdminAuthenticated()))return <AdminLogin error={params.error}/>;
+  if((await getAdminRole())!=="owner")redirect("/admin?error=restricted");
   const defaults=weekBounds(todaySydney()),requestedFrom=/^\d{4}-\d{2}-\d{2}$/.test(params.from??"")?String(params.from):defaults.from,requestedTo=/^\d{4}-\d{2}-\d{2}$/.test(params.to??"")?String(params.to):defaults.to;
   const from=requestedFrom<=requestedTo?requestedFrom:requestedTo,to=requestedFrom<=requestedTo?requestedTo:requestedFrom;
-  const role=await getAdminRole(),[staff,history,summary]=await Promise.all([getStaff(),getStaffClockHistory(from,to),getStaffClockSummary(from,to)]);
+  const role="owner",[staff,history,summary]=await Promise.all([getStaff(),getStaffClockHistory(from,to),getStaffClockSummary(from,to)]);
   return <AdminShell active="Staff & time clock"><header className="clinic-admin-head"><div><p>Team operations</p><h1>Staff & time clock</h1></div><span>{staff.filter(row=>row.active).length} active team members</span></header>
     <LiveClockStatus/>
     {params.created?<div className="clinic-alert">Team member added.</div>:null}{params.clock||params.edited?<div className="clinic-alert">Time clock updated in Sydney time.</div>:null}{params.error?<div className="clinic-alert error">The time entry could not be updated. Clock out must be after clock in.</div>:null}
