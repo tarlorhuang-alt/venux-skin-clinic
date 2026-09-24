@@ -1,11 +1,11 @@
-import {isAdminAuthenticated} from "../../../../lib/admin-auth";
+import {isOwnerAuthenticated} from "../../../../lib/admin-auth";
 import {getClientExportRows} from "../../../../lib/clinic-admin";
 
 export const dynamic="force-dynamic";
 const csv=(value:unknown)=>`"${String(value??"").replaceAll('"','""')}"`;
 
 export async function GET(){
-  if(!(await isAdminAuthenticated()))return new Response("Unauthorized",{status:401});
+  if(!(await isOwnerAuthenticated()))return new Response("Unauthorized",{status:401});
   const rows=await getClientExportRows();
   const headers=["Client ID","Name","Mobile","Email","DOB","Address","Group","Clinic Location","Source","Membership","Card Balance","Appointments","Last Visit"];
   const body=[headers.map(csv).join(","),...rows.map(row=>[row.id,row.full_name,row.mobile,row.email,row.dob,row.address,row.customer_group,row.clinic_location,row.lead_source,row.membership_status,row.membership_balance,row.appointment_count,row.last_visit].map(csv).join(","))].join("\r\n");

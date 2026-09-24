@@ -21,6 +21,7 @@ export type BookingInput = {
   source?: "website"|"admin";
   serviceSmsConsent?: boolean;
   marketingSmsConsent?: boolean;
+  allowOverlap?: boolean;
 };
 
 export class BookingConflictError extends Error {}
@@ -308,14 +309,15 @@ export async function createBookingRequest(input: BookingInput) {
   }
   const token=randomBytes(24).toString("base64url");
   const startMinute=timeToMinutes(input.time);
-  if(input.staffId&&startMinute!==null){
+  if(!input.allowOverlap&&input.staffId&&startMinute!==null){
     const overlap=await sql`SELECT id FROM venux_appointments WHERE staff_id=${input.staffId}
       AND requested_date=${input.date} AND status IN ('confirmed','in_progress') AND start_minute IS NOT NULL
       AND start_minute < ${startMinute+(input.durationMinutes??60)}
       AND start_minute+duration_minutes > ${startMinute} LIMIT 1`;
     if(overlap[0])throw new BookingConflictError("This beautician already has an overlapping appointment.");
   }
-  const slotKey=input.staffId?`${input.clinic}|${input.date}|${input.time}|staff:${input.staffId}`:`${input.clinic}|${input.date}|${input.time}`;
+  const standardSlotKey=input.staffId?`${input.clinic}|${input.date}|${input.time}|staff:${input.staffId}`:`${input.clinic}|${input.date}|${input.time}`;
+  const slotKey=input.allowOverlap?`${standardSlotKey}|overlap:${token.slice(0,12)}`:standardSlotKey;
   const created = await sql`WITH premium AS (
       SELECT EXISTS(SELECT 1 FROM venux_memberships m WHERE m.client_id=${clientId})
         OR EXISTS(SELECT 1 FROM venux_client_packages cp JOIN venux_client_package_items cpi ON cpi.client_package_id=cp.id
@@ -393,6 +395,7 @@ export async function getAppointmentsRange(from:string,to:string,location="") {
 }
 
 export async function getAppointmentClinic(id:number){await ensureClinicTables();const row=(await client()`SELECT clinic FROM venux_appointments WHERE id=${id} LIMIT 1`)[0];return row?String(row.clinic):null;}
+export async function getAppointmentDate(id:number){await ensureClinicTables();const row=(await client()`SELECT requested_date::text AS requested_date FROM venux_appointments WHERE id=${id} LIMIT 1`)[0];return row?String(row.requested_date).slice(0,10):"";}
 
 export async function getClients(search = "",location = "",page = 1,pageSize = 50) {
   await ensureClinicTables();
@@ -424,7 +427,7 @@ export async function getClients(search = "",location = "",page = 1,pageSize = 5
     ORDER BY updated_at DESC LIMIT ${safePageSize} OFFSET ${offset}`;
 }
 
-export async function getClientsForBookingSearch(search:string){
+export async function getClientsForBookingSearch(search:string,location=""){
   await ensureClinicTables();const term=search.trim().slice(0,80),digits=normaliseMobile(term).slice(0,20);
   if(term.length<2&&digits.length<3)return [];
   const alternate=digits.startsWith("0")?`61${digits.slice(1)}`:digits.startsWith("61")?`0${digits.slice(2)}`:"";
@@ -446,9 +449,9 @@ export async function getClientsForBookingSearch(search:string){
     LEFT JOIN venux_memberships m ON m.client_id=c.id
     LEFT JOIN appointment_stats a ON a.client_id=c.id
     LEFT JOIN premium_clients p ON p.client_id=c.id
-    WHERE c.full_name ILIKE ${`%${term}%`}
+    WHERE (${location}='' OR c.clinic_location=${location}) AND (c.full_name ILIKE ${`%${term}%`}
       OR (${digits}<>'' AND REGEXP_REPLACE(c.mobile,'[^0-9]','','g') LIKE ${`%${digits}%`})
-      OR (${alternate}<>'' AND REGEXP_REPLACE(c.mobile,'[^0-9]','','g') LIKE ${`%${alternate}%`})
+      OR (${alternate}<>'' AND REGEXP_REPLACE(c.mobile,'[^0-9]','','g') LIKE ${`%${alternate}%`}))
     ORDER BY c.updated_at DESC LIMIT 20`;
 }
 
@@ -513,6 +516,16 @@ export async function getClientForBooking(clientId: number) {
     GROUP BY c.id,m.balance,m.status LIMIT 1`)[0]??null;
 }
 
+export async function createClientProfile(input:{fullName:string;mobile:string;email:string;dob:string;clinicLocation:"City"|"Top Ryde";leadSource:string}){
+  await ensureClinicTables();const sql=client(),digits=normaliseMobile(input.mobile),localDigits=digits.replace(/^61/,"0");
+  const existing=await sql`SELECT id FROM venux_clients WHERE REGEXP_REPLACE(mobile,'[^0-9]','','g') IN (${digits},${localDigits}) ORDER BY updated_at DESC LIMIT 1`;
+  if(existing[0])return {id:Number(existing[0].id),created:false};
+  const rows=await sql`INSERT INTO venux_clients (full_name,mobile,email,dob,clinic_location,location_source,lead_source)
+    VALUES (${input.fullName},${input.mobile},${input.email},${input.dob||null},${input.clinicLocation},'manual',${input.leadSource||'Clinic'}) RETURNING id`;
+  await audit("client_created","client",Number(rows[0].id),`New ${input.clinicLocation} client created manually.`);
+  return {id:Number(rows[0].id),created:true};
+}
+
 export async function importClientRows(rows: ClientImportRow[],clinicLocation:"City"|"Top Ryde"="Top Ryde") {
   await ensureClinicTables();
   const sql = client();
@@ -563,10 +576,6 @@ export async function updateAppointment(id: number, status: AppointmentStatus, t
       SELECT clinic||'|'||requested_date::text||'|'||requested_time||CASE WHEN staff_id IS NULL THEN '' ELSE '|staff:'||staff_id::text END,id FROM venux_appointments WHERE id=${id}
       ON CONFLICT DO NOTHING RETURNING slot_key`;
     if(!claimed[0])throw new BookingConflictError("This time is already reserved.");
-  }
-  if(status==="confirmed"){
-    const conflict=await sql`SELECT id FROM venux_appointments WHERE id<>${id} AND clinic=${before[0].clinic} AND requested_date=${before[0].requested_date} AND requested_time=${before[0].requested_time} AND status='confirmed' LIMIT 1`;
-    if(conflict[0])throw new BookingConflictError("Another confirmed appointment already uses this time.");
   }
   await sql`UPDATE venux_appointments a SET status=${status},total_amount=${totalAmount},deposit_status=${depositStatus},staff_id=${staffId},
     started_at=CASE WHEN ${status}='in_progress' THEN COALESCE(a.started_at,NOW()) ELSE a.started_at END,

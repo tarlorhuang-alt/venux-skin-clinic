@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 
 const COOKIE_NAME = "venux_admin_session";
 export type AdminRole = "owner" | "staff";
-const DEFAULT_STAFF_PASSWORD_HASH = "4869bf74921453f4a47fe507213c7037b1795d3c14656f4641ad4f6a6740e78d";
+const DEFAULT_STAFF_PASSWORD_HASH = "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92";
 
 function secret() {
   return process.env.ADMIN_SESSION_SECRET || "";

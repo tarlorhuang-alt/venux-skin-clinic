@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { isAdminAuthenticated } from "../../../../lib/admin-auth";
+import { getAdminRole,isAdminAuthenticated } from "../../../../lib/admin-auth";
 import { getClientClinicalRecord } from "../../../../lib/clinic-admin";
 import { AdminLogin,AdminShell,statusLabel } from "../../admin-ui";
 import { addClientCourseAction,addSkinAssessmentAction,addTreatmentRecordAction,changeMembership,updateClientProfileAction,updateHealthProfileAction,useClientCourseSessionAction,usePackageSessionAction } from "../../actions";
@@ -21,6 +21,7 @@ export default async function ClientRecord({params,searchParams}:{params:Promise
   const clientId=Number((await params).id);if(!Number.isInteger(clientId)||clientId<=0)notFound();
   const record=await getClientClinicalRecord(clientId);if(!record.client)notFound();
   const c=record.client,h=record.health??{};
+  if((await getAdminRole())==="staff"&&value(c.clinic_location)==="City")notFound();
   const structuredPackages=new Map<number,typeof record.packageItems>();for(const item of record.packageItems){const id=Number(item.client_package_id);structuredPackages.set(id,[...(structuredPackages.get(id)??[]),item]);}
   return <AdminShell active="Clients">
     <header className="clinic-admin-head clinical-head"><div><p>Private clinical record · VX{String(clientId).padStart(6,"0")}</p><h1>{value(c.full_name)} <span className={`clinic-location-badge ${value(c.clinic_location)==="City"?"city":"ryde"}`}>{value(c.clinic_location)||"Top Ryde"}</span> {c.membership_status!=null||record.packageItems.some(item=>value(item.status)==="active"&&Number(item.used_sessions)<Number(item.included_sessions))?<span className="premium-client-badge">✦ Premium</span>:null}</h1></div><div className="record-actions"><a href={`tel:${value(c.mobile)}`}>Call</a><a href={`https://wa.me/${value(c.mobile).replace(/^0/,"61").replace(/\D/g,"")}`} target="_blank" rel="noreferrer">WhatsApp</a><a href="/admin/clients">← Clients</a></div></header>
