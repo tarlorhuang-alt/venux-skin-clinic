@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { clearAdminSession, createAdminSession, getAdminRole,isAdminAuthenticated, isOwnerAuthenticated, roleForPassword } from "../../lib/admin-auth";
-import { assignPackageToClient,BookingConflictError,createBookingRequest,createClientCourse,createExpense,createPackageTemplate,createSkinAssessment,createStaff,createSupplier,createTreatmentRecord,deletePackageTemplate,finishAppointment,getAppointmentClinic,getOwnerService,importClientRows,markSmsOutboxSent,queueBirthdayMessages,queueReturnInvite,rechargeMembership,saveClientProfile,saveHealthProfile,startAppointment,toggleStaffClock,updateAppointment,updateStaffClockEntry,useClientCourseSession,useClientPackageItem,type AppointmentStatus,type ClientImportRow } from "../../lib/clinic-admin";
+import { assignPackageToClient,BookingConflictError,createBookingRequest,createClientCourse,createExpense,createPackageTemplate,createSkinAssessment,createStaff,createSupplier,createTreatmentRecord,deletePackageTemplate,findClientIdForPackage,finishAppointment,getAppointmentClinic,getOwnerService,importClientRows,markSmsOutboxSent,queueBirthdayMessages,queueReturnInvite,rechargeMembership,saveClientProfile,saveHealthProfile,startAppointment,toggleStaffClock,updateAppointment,updateStaffClockEntry,useClientCourseSession,useClientPackageItem,type AppointmentStatus,type ClientImportRow } from "../../lib/clinic-admin";
 
 export async function adminLogin(formData: FormData) {
   const role=roleForPassword(String(formData.get("password") ?? ""));
@@ -74,9 +74,10 @@ export async function deletePackageAction(formData:FormData){
 }
 
 export async function assignPackageAction(formData:FormData){
-  if(!(await isAdminAuthenticated()))redirect("/admin?error=session");const clientId=Number(formData.get("clientId")),packageId=Number(formData.get("packageId")),amountPaid=Number(formData.get("amountPaid")),purchasedOn=textValue(formData,"purchasedOn"),expiresOn=textValue(formData,"expiresOn");
+  if(!(await isAdminAuthenticated()))redirect("/admin?error=session");let clientId=Number(formData.get("clientId"));const packageId=Number(formData.get("packageId")),amountPaid=Number(formData.get("amountPaid")),purchasedOn=textValue(formData,"purchasedOn"),expiresOn=textValue(formData,"expiresOn");
+  if(!Number.isInteger(clientId)||clientId<1)clientId=await findClientIdForPackage(textValue(formData,"name"),textValue(formData,"mobile"));
   if(!Number.isInteger(clientId)||clientId<1||!Number.isInteger(packageId)||packageId<1||!Number.isFinite(amountPaid)||amountPaid<0||!/^\d{4}-\d{2}-\d{2}$/.test(purchasedOn))redirect("/admin/packages?error=assign");
-  const saved=await assignPackageToClient(clientId,packageId,amountPaid,purchasedOn,expiresOn);revalidatePath("/admin/packages");redirect(`/admin/packages?${saved?"assigned=1":"error=assign"}`);
+  const saved=await assignPackageToClient(clientId,packageId,amountPaid,purchasedOn,expiresOn);revalidatePath("/admin/packages");revalidatePath("/admin/client-packages");redirect(`/admin/packages?${saved?"assigned=1":"error=assign"}`);
 }
 
 export async function usePackageSessionAction(formData:FormData){

@@ -452,6 +452,44 @@ export async function getClientsForBookingSearch(search:string){
     ORDER BY c.updated_at DESC LIMIT 20`;
 }
 
+export async function findClientIdForPackage(name:string,mobile:string){
+  await ensureClinicTables();
+  const cleanName=name.trim(),digits=normaliseMobile(mobile).slice(0,20);
+  if(!cleanName&&!digits)return 0;
+  const rows=await client()`SELECT id FROM venux_clients
+    WHERE (${digits}<>'' AND CASE
+      WHEN REGEXP_REPLACE(mobile,'[^0-9]','','g') LIKE '04________' THEN '61'||SUBSTRING(REGEXP_REPLACE(mobile,'[^0-9]','','g') FROM 2)
+      ELSE REGEXP_REPLACE(mobile,'[^0-9]','','g') END=${digits})
+      OR (${cleanName}<>'' AND LOWER(TRIM(full_name))=LOWER(${cleanName}))
+    ORDER BY CASE WHEN ${digits}<>'' AND CASE
+      WHEN REGEXP_REPLACE(mobile,'[^0-9]','','g') LIKE '04________' THEN '61'||SUBSTRING(REGEXP_REPLACE(mobile,'[^0-9]','','g') FROM 2)
+      ELSE REGEXP_REPLACE(mobile,'[^0-9]','','g') END=${digits} THEN 0 ELSE 1 END,updated_at DESC LIMIT 1`;
+  return rows[0]?Number(rows[0].id):0;
+}
+
+export async function getMembershipBalanceClients(search=""){
+  await ensureClinicTables();const term=search.trim(),like=`%${term}%`,digits=normaliseMobile(term);
+  return client()`SELECT c.id,c.full_name,c.mobile,c.email,c.clinic_location,m.balance,m.joined_at,m.updated_at,
+    COUNT(a.id) FILTER (WHERE a.status='completed')::int AS completed_visits,MAX(a.requested_date) FILTER (WHERE a.status='completed') AS last_visit
+    FROM venux_memberships m JOIN venux_clients c ON c.id=m.client_id LEFT JOIN venux_appointments a ON a.client_id=c.id
+    WHERE ${term}='' OR c.full_name ILIKE ${like} OR c.email ILIKE ${like}
+      OR (${digits}<>'' AND REGEXP_REPLACE(c.mobile,'[^0-9]','','g') LIKE ${`%${digits.replace(/^61/,"")}%`})
+    GROUP BY c.id,m.balance,m.joined_at,m.updated_at ORDER BY m.balance DESC,c.full_name LIMIT 500`;
+}
+
+export async function getClientPackageBalances(search=""){
+  await ensureClinicTables();const term=search.trim(),like=`%${term}%`,digits=normaliseMobile(term);
+  return client()`SELECT cp.id AS client_package_id,cp.client_id,cp.purchased_on,cp.expires_on,cp.amount_paid,cp.status,
+    c.full_name,c.mobile,c.clinic_location,p.package_name,
+    SUM(cpi.included_sessions)::int AS included_sessions,SUM(cpi.used_sessions)::int AS used_sessions,
+    SUM(GREATEST(cpi.included_sessions-cpi.used_sessions,0))::int AS remaining_sessions
+    FROM venux_client_packages cp JOIN venux_clients c ON c.id=cp.client_id JOIN venux_packages p ON p.id=cp.package_id
+    JOIN venux_client_package_items cpi ON cpi.client_package_id=cp.id
+    WHERE ${term}='' OR c.full_name ILIKE ${like} OR p.package_name ILIKE ${like}
+      OR (${digits}<>'' AND REGEXP_REPLACE(c.mobile,'[^0-9]','','g') LIKE ${`%${digits.replace(/^61/,"")}%`})
+    GROUP BY cp.id,c.id,p.id ORDER BY CASE WHEN cp.status='active' THEN 0 ELSE 1 END,cp.created_at DESC LIMIT 500`;
+}
+
 export async function getClientLocationStats(){
   await ensureClinicTables();return client()`SELECT clinic_location,COUNT(*)::int AS clients FROM venux_clients GROUP BY clinic_location ORDER BY clinic_location`;
 }
@@ -522,7 +560,7 @@ export async function updateAppointment(id: number, status: AppointmentStatus, t
   const projectWage=projectWageFor(String(before[0].service_name),String(before[0].service_category));
   if(["confirmed","in_progress"].includes(status)&&!["confirmed","in_progress"].includes(String(before[0].status))){
     const claimed=await sql`INSERT INTO venux_booking_slots (slot_key,appointment_id)
-      SELECT clinic||'|'||requested_date::text||'|'||requested_time,id FROM venux_appointments WHERE id=${id}
+      SELECT clinic||'|'||requested_date::text||'|'||requested_time||CASE WHEN staff_id IS NULL THEN '' ELSE '|staff:'||staff_id::text END,id FROM venux_appointments WHERE id=${id}
       ON CONFLICT DO NOTHING RETURNING slot_key`;
     if(!claimed[0])throw new BookingConflictError("This time is already reserved.");
   }
@@ -811,11 +849,23 @@ export async function toggleStaffClock(staffId:number,note:string){
   else await sql`INSERT INTO venux_time_clock (staff_id,note) VALUES (${staffId},${note})`;
 }
 
-export async function getStaffClockHistory(){
+export async function getStaffClockHistory(from:string,to:string){
   await ensureClinicTables();
   return client()`SELECT t.*,s.full_name,s.role,
     CASE WHEN t.clock_out IS NULL THEN NULL ELSE ROUND(EXTRACT(EPOCH FROM (t.clock_out-t.clock_in))/3600,2) END AS hours
-    FROM venux_time_clock t JOIN venux_staff s ON s.id=t.staff_id ORDER BY t.clock_in DESC LIMIT 200`;
+    FROM venux_time_clock t JOIN venux_staff s ON s.id=t.staff_id
+    WHERE (t.clock_in AT TIME ZONE 'Australia/Sydney')::date BETWEEN ${from}::date AND ${to}::date
+    ORDER BY t.clock_in DESC LIMIT 500`;
+}
+
+export async function getStaffClockSummary(from:string,to:string){
+  await ensureClinicTables();
+  return client()`SELECT s.id,s.full_name,s.role,COUNT(t.id)::int AS shifts,
+    ROUND(COALESCE(SUM(EXTRACT(EPOCH FROM (COALESCE(t.clock_out,NOW())-t.clock_in))),0)/3600,2) AS total_hours,
+    MIN(t.clock_in) AS first_clock_in,MAX(COALESCE(t.clock_out,NOW())) AS last_clock_out
+    FROM venux_staff s LEFT JOIN venux_time_clock t ON t.staff_id=s.id
+      AND (t.clock_in AT TIME ZONE 'Australia/Sydney')::date BETWEEN ${from}::date AND ${to}::date
+    WHERE s.active=TRUE GROUP BY s.id ORDER BY s.full_name`;
 }
 
 export async function updateStaffClockEntry(id:number,clockIn:string,clockOut:string,note:string){
