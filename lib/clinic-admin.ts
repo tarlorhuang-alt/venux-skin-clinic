@@ -1,6 +1,6 @@
 import "server-only";
 import { neon } from "@neondatabase/serverless";
-import { randomBytes } from "node:crypto";
+import { randomBytes,scryptSync,timingSafeEqual } from "node:crypto";
 
 export type AppointmentStatus = "confirmed" | "in_progress" | "completed" | "cancelled" | "no_show";
 
@@ -208,6 +208,7 @@ export function ensureClinicTables() {
         active BOOLEAN NOT NULL DEFAULT TRUE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )`;
+      await sql`ALTER TABLE venux_staff ADD COLUMN IF NOT EXISTS clock_pin_hash TEXT NOT NULL DEFAULT ''`;
       await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS staff_id BIGINT REFERENCES venux_staff(id) ON DELETE SET NULL`;
       await sql`CREATE TABLE IF NOT EXISTS venux_time_clock (
         id BIGSERIAL PRIMARY KEY, staff_id BIGINT NOT NULL REFERENCES venux_staff(id) ON DELETE CASCADE,
@@ -839,11 +840,37 @@ export async function useClientCourseSession(clientId:number,courseId:number){
 
 export async function getStaff() {
   await ensureClinicTables();
-  return client()`SELECT s.*,
+  return client()`SELECT s.id,s.full_name,s.role,s.active,s.created_at,s.updated_at,s.city_enabled,
+    (s.clock_pin_hash<>'') AS has_clock_pin,
     EXISTS(SELECT 1 FROM venux_time_clock t WHERE t.staff_id=s.id AND t.clock_out IS NULL) AS clocked_in,
     (SELECT t.clock_in FROM venux_time_clock t WHERE t.staff_id=s.id ORDER BY t.clock_in DESC LIMIT 1) AS last_clock_in,
     (SELECT t.clock_out FROM venux_time_clock t WHERE t.staff_id=s.id ORDER BY t.clock_in DESC LIMIT 1) AS last_clock_out
     FROM venux_staff s ORDER BY s.active DESC,s.full_name`;
+}
+
+function staffPinHash(pin:string){
+  const salt=randomBytes(16).toString("hex"),hash=scryptSync(pin,salt,32).toString("hex");
+  return `${salt}:${hash}`;
+}
+
+function staffPinMatches(pin:string,stored:string){
+  const [salt,expected]=stored.split(":");
+  if(!salt||!/^[a-f0-9]{64}$/i.test(expected??""))return false;
+  const actual=scryptSync(pin,salt,32),expectedBuffer=Buffer.from(expected,"hex");
+  return actual.length===expectedBuffer.length&&timingSafeEqual(actual,expectedBuffer);
+}
+
+export async function setStaffClockPin(staffId:number,pin:string){
+  await ensureClinicTables();
+  const changed=await client()`UPDATE venux_staff SET clock_pin_hash=${staffPinHash(pin)},updated_at=NOW() WHERE id=${staffId} AND active=TRUE RETURNING id`;
+  return Boolean(changed[0]);
+}
+
+export async function toggleStaffClockWithPin(staffId:number,pin:string,note:string){
+  await ensureClinicTables();const sql=client();
+  const rows=await sql`SELECT clock_pin_hash FROM venux_staff WHERE id=${staffId} AND active=TRUE LIMIT 1`;
+  if(!rows[0]||!staffPinMatches(pin,String(rows[0].clock_pin_hash??"")))return false;
+  await toggleStaffClock(staffId,note);return true;
 }
 
 export async function createStaff(fullName:string,role:string){
@@ -875,6 +902,20 @@ export async function getStaffClockSummary(from:string,to:string){
     FROM venux_staff s LEFT JOIN venux_time_clock t ON t.staff_id=s.id
       AND (t.clock_in AT TIME ZONE 'Australia/Sydney')::date BETWEEN ${from}::date AND ${to}::date
     WHERE s.active=TRUE GROUP BY s.id ORDER BY s.full_name`;
+}
+
+export async function getStaffRevenue(from:string,to:string,location="Top Ryde"){
+  await ensureClinicTables();
+  return client()`SELECT s.id,s.full_name,s.role,
+    COUNT(a.id) FILTER (WHERE a.status IN ('in_progress','completed'))::int AS started,
+    COUNT(a.id) FILTER (WHERE a.status='completed')::int AS completed,
+    COALESCE(SUM(a.recognised_revenue) FILTER (WHERE a.status IN ('in_progress','completed')),0) AS revenue
+    FROM venux_staff s LEFT JOIN venux_appointments a ON a.staff_id=s.id
+      AND a.requested_date BETWEEN ${from} AND ${to}
+      AND (${location}='' OR a.clinic ILIKE ${`%${location}%`})
+    WHERE s.active=TRUE
+    GROUP BY s.id,s.full_name,s.role
+    ORDER BY revenue DESC,s.full_name`;
 }
 
 export async function updateStaffClockEntry(id:number,clockIn:string,clockOut:string,note:string){

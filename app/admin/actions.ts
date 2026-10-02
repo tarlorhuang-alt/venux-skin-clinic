@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { clearAdminSession, createAdminSession, getAdminRole,isAdminAuthenticated, isOwnerAuthenticated, roleForPassword } from "../../lib/admin-auth";
-import { assignPackageToClient,BookingConflictError,createBookingRequest,createClientCourse,createClientProfile,createExpense,createPackageTemplate,createSkinAssessment,createStaff,createSupplier,createTreatmentRecord,deletePackageTemplate,findClientIdForPackage,finishAppointment,getAppointmentClinic,getAppointmentDate,getOwnerService,importClientRows,markSmsOutboxSent,queueBirthdayMessages,queueReturnInvite,rechargeMembership,saveClientProfile,saveHealthProfile,startAppointment,toggleStaffClock,updateAppointment,updateStaffClockEntry,useClientCourseSession,useClientPackageItem,type AppointmentStatus,type ClientImportRow } from "../../lib/clinic-admin";
+import { assignPackageToClient,BookingConflictError,createBookingRequest,createClientCourse,createClientProfile,createExpense,createPackageTemplate,createSkinAssessment,createStaff,createSupplier,createTreatmentRecord,deletePackageTemplate,findClientIdForPackage,finishAppointment,getAppointmentClinic,getAppointmentDate,getOwnerService,importClientRows,markSmsOutboxSent,queueBirthdayMessages,queueReturnInvite,rechargeMembership,saveClientProfile,saveHealthProfile,setStaffClockPin,startAppointment,toggleStaffClock,toggleStaffClockWithPin,updateAppointment,updateStaffClockEntry,useClientCourseSession,useClientPackageItem,type AppointmentStatus,type ClientImportRow } from "../../lib/clinic-admin";
 
 export async function adminLogin(formData: FormData) {
   const role=roleForPassword(String(formData.get("password") ?? ""));
@@ -103,6 +103,21 @@ export async function addStaffAction(formData:FormData){
 export async function toggleStaffClockAction(formData:FormData){
   if(!(await isAdminAuthenticated()))redirect("/admin?error=session");const staffId=Number(formData.get("staffId"));
   if(!Number.isInteger(staffId)||staffId<=0)redirect("/admin/staff?error=invalid");await toggleStaffClock(staffId,textValue(formData,"note"));revalidatePath("/admin/staff");redirect("/admin/staff?clock=1");
+}
+
+export async function staffClockAction(formData:FormData){
+  if(!(await isAdminAuthenticated()))redirect("/admin?error=session");
+  const staffId=Number(formData.get("staffId")),pin=textValue(formData,"pin");
+  if(!Number.isInteger(staffId)||staffId<=0||!/^\d{4,8}$/.test(pin))redirect("/admin/team?error=pin");
+  const updated=await toggleStaffClockWithPin(staffId,pin,textValue(formData,"note"));
+  revalidatePath("/admin/team");revalidatePath("/admin/staff");redirect(`/admin/team?${updated?"clock=1":"error=pin"}`);
+}
+
+export async function setStaffClockPinAction(formData:FormData){
+  if(!(await isOwnerAuthenticated()))redirect("/admin?error=restricted");
+  const staffId=Number(formData.get("staffId")),pin=textValue(formData,"pin");
+  if(!Number.isInteger(staffId)||staffId<=0||!/^\d{4,8}$/.test(pin))redirect("/admin/staff?error=pin");
+  const updated=await setStaffClockPin(staffId,pin);revalidatePath("/admin/staff");revalidatePath("/admin/team");redirect(`/admin/staff?${updated?"pin=1":"error=pin"}`);
 }
 
 export async function updateStaffClockAction(formData:FormData){
