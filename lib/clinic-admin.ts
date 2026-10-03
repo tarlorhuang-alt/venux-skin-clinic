@@ -425,7 +425,20 @@ export async function getClients(search = "",location = "",page = 1,pageSize = 5
           OR REGEXP_REPLACE(c.mobile,'[^0-9]','','g') LIKE ${`%${localDigits}%`})))
     )
     SELECT *,COUNT(*) OVER()::int AS filtered_count FROM filtered_clients
-    ORDER BY updated_at DESC LIMIT ${safePageSize} OFFSET ${offset}`;
+    ORDER BY LOWER(TRIM(full_name)),id LIMIT ${safePageSize} OFFSET ${offset}`;
+}
+
+export async function getClientInitialStats(search="",location=""){
+  await ensureClinicTables();
+  const term=search.trim(),like=`%${term}%`,digits=normaliseMobile(term),localDigits=digits.replace(/^61/,"0");
+  return client()`SELECT CASE WHEN UPPER(LEFT(TRIM(full_name),1)) BETWEEN 'A' AND 'Z'
+      THEN UPPER(LEFT(TRIM(full_name),1)) ELSE '#' END AS initial,COUNT(*)::int AS clients
+    FROM venux_clients
+    WHERE (${location}='' OR clinic_location=${location}) AND (${term}='' OR full_name ILIKE ${like} OR email ILIKE ${like}
+      OR (${digits}<>'' AND (REGEXP_REPLACE(mobile,'[^0-9]','','g') LIKE ${`%${digits}%`}
+        OR REGEXP_REPLACE(mobile,'[^0-9]','','g') LIKE ${`%${localDigits}%`})))
+    GROUP BY initial ORDER BY CASE WHEN CASE WHEN UPPER(LEFT(TRIM(full_name),1)) BETWEEN 'A' AND 'Z'
+      THEN UPPER(LEFT(TRIM(full_name),1)) ELSE '#' END='#' THEN 1 ELSE 0 END,initial`;
 }
 
 export async function getClientsForBookingSearch(search:string,location=""){
@@ -471,17 +484,17 @@ export async function findClientIdForPackage(name:string,mobile:string){
   return rows[0]?Number(rows[0].id):0;
 }
 
-export async function getMembershipBalanceClients(search=""){
+export async function getMembershipBalanceClients(search="",location=""){
   await ensureClinicTables();const term=search.trim(),like=`%${term}%`,digits=normaliseMobile(term);
   return client()`SELECT c.id,c.full_name,c.mobile,c.email,c.clinic_location,m.balance,m.joined_at,m.updated_at,
     COUNT(a.id) FILTER (WHERE a.status='completed')::int AS completed_visits,MAX(a.requested_date) FILTER (WHERE a.status='completed') AS last_visit
     FROM venux_memberships m JOIN venux_clients c ON c.id=m.client_id LEFT JOIN venux_appointments a ON a.client_id=c.id
-    WHERE ${term}='' OR c.full_name ILIKE ${like} OR c.email ILIKE ${like}
-      OR (${digits}<>'' AND REGEXP_REPLACE(c.mobile,'[^0-9]','','g') LIKE ${`%${digits.replace(/^61/,"")}%`})
+    WHERE (${location}='' OR c.clinic_location=${location}) AND (${term}='' OR c.full_name ILIKE ${like} OR c.email ILIKE ${like}
+      OR (${digits}<>'' AND REGEXP_REPLACE(c.mobile,'[^0-9]','','g') LIKE ${`%${digits.replace(/^61/,"")}%`}))
     GROUP BY c.id,m.balance,m.joined_at,m.updated_at ORDER BY m.balance DESC,c.full_name LIMIT 500`;
 }
 
-export async function getClientPackageBalances(search=""){
+export async function getClientPackageBalances(search="",location=""){
   await ensureClinicTables();const term=search.trim(),like=`%${term}%`,digits=normaliseMobile(term);
   return client()`SELECT cp.id AS client_package_id,cp.client_id,cp.purchased_on,cp.expires_on,cp.amount_paid,cp.status,
     c.full_name,c.mobile,c.clinic_location,p.package_name,
@@ -489,8 +502,8 @@ export async function getClientPackageBalances(search=""){
     SUM(GREATEST(cpi.included_sessions-cpi.used_sessions,0))::int AS remaining_sessions
     FROM venux_client_packages cp JOIN venux_clients c ON c.id=cp.client_id JOIN venux_packages p ON p.id=cp.package_id
     JOIN venux_client_package_items cpi ON cpi.client_package_id=cp.id
-    WHERE ${term}='' OR c.full_name ILIKE ${like} OR p.package_name ILIKE ${like}
-      OR (${digits}<>'' AND REGEXP_REPLACE(c.mobile,'[^0-9]','','g') LIKE ${`%${digits.replace(/^61/,"")}%`})
+    WHERE (${location}='' OR c.clinic_location=${location}) AND (${term}='' OR c.full_name ILIKE ${like} OR p.package_name ILIKE ${like}
+      OR (${digits}<>'' AND REGEXP_REPLACE(c.mobile,'[^0-9]','','g') LIKE ${`%${digits.replace(/^61/,"")}%`}))
     GROUP BY cp.id,c.id,p.id ORDER BY CASE WHEN cp.status='active' THEN 0 ELSE 1 END,cp.created_at DESC LIMIT 500`;
 }
 
@@ -786,7 +799,7 @@ export async function getClientClinicalRecord(clientId: number) {
       FROM venux_client_packages cp JOIN venux_packages p ON p.id=cp.package_id
       JOIN venux_client_package_items cpi ON cpi.client_package_id=cp.id JOIN venux_services s ON s.id=cpi.service_id
       WHERE cp.client_id=${clientId} ORDER BY cp.created_at DESC,cpi.id`,
-    sql`SELECT * FROM venux_appointments WHERE client_id=${clientId} ORDER BY requested_date DESC,requested_time DESC LIMIT 20`,
+    sql`SELECT a.*,s.full_name AS staff_name FROM venux_appointments a LEFT JOIN venux_staff s ON s.id=a.staff_id WHERE a.client_id=${clientId} ORDER BY a.requested_date DESC,a.requested_time DESC LIMIT 50`,
     sql`SELECT * FROM venux_audit_log WHERE entity_type='client' AND entity_id=${clientId} ORDER BY created_at DESC LIMIT 20`,
   ]);
   if (clientRows[0]) await audit("view", "client", clientId, "Clinical record opened");
@@ -916,6 +929,20 @@ export async function getStaffRevenue(from:string,to:string,location="Top Ryde")
     WHERE s.active=TRUE
     GROUP BY s.id,s.full_name,s.role
     ORDER BY revenue DESC,s.full_name`;
+}
+
+export async function getStaffDailyRevenue(from:string,to:string,location="Top Ryde"){
+  await ensureClinicTables();
+  return client()`SELECT a.requested_date::text AS revenue_date,s.id AS staff_id,s.full_name,s.role,
+    COUNT(a.id) FILTER (WHERE a.status IN ('in_progress','completed'))::int AS started,
+    COUNT(a.id) FILTER (WHERE a.status='completed')::int AS completed,
+    COALESCE(SUM(a.recognised_revenue) FILTER (WHERE a.status IN ('in_progress','completed')),0) AS revenue
+    FROM venux_appointments a JOIN venux_staff s ON s.id=a.staff_id
+    WHERE a.requested_date BETWEEN ${from} AND ${to}
+      AND (${location}='' OR a.clinic ILIKE ${`%${location}%`})
+      AND a.status IN ('in_progress','completed')
+    GROUP BY a.requested_date,s.id,s.full_name,s.role
+    ORDER BY a.requested_date DESC,s.full_name`;
 }
 
 export async function updateStaffClockEntry(id:number,clockIn:string,clockOut:string,note:string){
