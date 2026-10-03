@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { clearAdminSession, createAdminSession, getAdminRole,isAdminAuthenticated, isOwnerAuthenticated, roleForPassword } from "../../lib/admin-auth";
-import { assignPackageToClient,BookingConflictError,createBookingRequest,createClientCourse,createClientProfile,createExpense,createPackageTemplate,createSkinAssessment,createStaff,createSupplier,createTreatmentRecord,deletePackageTemplate,findClientIdForPackage,finishAppointment,getAppointmentClinic,getAppointmentDate,getOwnerService,importClientRows,markSmsOutboxSent,queueBirthdayMessages,queueReturnInvite,rechargeMembership,saveClientProfile,saveHealthProfile,setStaffClockPin,startAppointment,toggleStaffClock,toggleStaffClockWithPin,updateAppointment,updateStaffClockEntry,useClientCourseSession,useClientPackageItem,type AppointmentStatus,type ClientImportRow } from "../../lib/clinic-admin";
+import { assignPackageToClient,BookingConflictError,createBookingRequest,createClientCourse,createClientProfile,createExpense,createPackageTemplate,createSkinAssessment,createStaff,createSupplier,createTreatmentRecord,deletePackageTemplate,findClientIdForPackage,finishAppointment,getAppointmentClinic,getAppointmentDate,getClientForBooking,getOwnerService,importClientRows,markSmsOutboxSent,queueBirthdayMessages,queueReturnInvite,rechargeMembership,saveClientProfile,saveHealthProfile,setStaffClockPin,startAppointment,toggleStaffClock,toggleStaffClockWithPin,updateAppointment,updateStaffClockEntry,useClientCourseSession,useClientPackageItem,type AppointmentStatus,type ClientImportRow } from "../../lib/clinic-admin";
 
 export async function adminLogin(formData: FormData) {
   const role=roleForPassword(String(formData.get("password") ?? ""));
@@ -191,6 +191,7 @@ async function authorisedClient(formData:FormData){
   if(!(await isAdminAuthenticated())) redirect("/admin?error=session");
   const clientId=Number(formData.get("clientId"));
   if(!Number.isInteger(clientId)||clientId<=0) redirect("/admin/clients?error=invalid");
+  if((await getAdminRole())==="staff"&&String((await getClientForBooking(clientId))?.clinic_location)==="City")redirect("/admin?error=restricted");
   return clientId;
 }
 
@@ -198,7 +199,7 @@ export async function updateClientProfileAction(formData:FormData){
   const clientId=await authorisedClient(formData);
   const fullName=textValue(formData,"fullName"),mobile=textValue(formData,"mobile");
   if(!fullName||!mobile) redirect(`${clientPath(clientId)}?error=profile`);
-  const clinicLocation=textValue(formData,"clinicLocation");if(!["City","Top Ryde"].includes(clinicLocation))redirect(`${clientPath(clientId)}?error=profile`);
+  const role=await getAdminRole(),clinicLocation=role==="staff"?"Top Ryde":textValue(formData,"clinicLocation");if(!["City","Top Ryde"].includes(clinicLocation))redirect(`${clientPath(clientId)}?error=profile`);
   await saveClientProfile(clientId,{fullName,mobile,email:textValue(formData,"email").toLowerCase(),dob:textValue(formData,"dob"),address:textValue(formData,"address"),gender:textValue(formData,"gender"),occupation:textValue(formData,"occupation"),emergencyName:textValue(formData,"emergencyName"),emergencyPhone:textValue(formData,"emergencyPhone"),leadSource:textValue(formData,"leadSource"),clinicLocation});
   revalidatePath(clientPath(clientId));revalidatePath("/admin/clients");redirect(`${clientPath(clientId)}?saved=profile`);
 }

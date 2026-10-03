@@ -1,6 +1,6 @@
 import type {Metadata} from "next";
 import {isAdminAuthenticated} from "../../../lib/admin-auth";
-import {getStaff,getStaffRevenue} from "../../../lib/clinic-admin";
+import {getStaff,getStaffDailyRevenue,getStaffRevenue} from "../../../lib/clinic-admin";
 import {staffClockAction} from "../actions";
 import {AdminLogin,AdminShell} from "../admin-ui";
 import "../admin.css";
@@ -19,7 +19,7 @@ export default async function TeamPage({searchParams}:{searchParams:Promise<{clo
   const requestedFrom=/^\d{4}-\d{2}-\d{2}$/.test(params.from??"")?String(params.from):monthStart;
   const requestedTo=/^\d{4}-\d{2}-\d{2}$/.test(params.to??"")?String(params.to):today;
   const from=requestedFrom<=requestedTo?requestedFrom:requestedTo,to=requestedFrom<=requestedTo?requestedTo:requestedFrom;
-  const [staff,revenue]=await Promise.all([getStaff(),getStaffRevenue(from,to)]),activeStaff=staff.filter(person=>person.active);
+  const [staff,revenue,dailyRevenue]=await Promise.all([getStaff(),getStaffRevenue(from,to),getStaffDailyRevenue(from,to)]),activeStaff=staff.filter(person=>person.active);
   const totalRevenue=revenue.reduce((sum,row)=>sum+Number(row.revenue??0),0);
   return <AdminShell active="Team clock & revenue">
     <header className="clinic-admin-head"><div><p>Top Ryde team workspace</p><h1>Clock & staff revenue</h1></div><span>Australia/Sydney live time</span></header>
@@ -32,5 +32,6 @@ export default async function TeamPage({searchParams}:{searchParams:Promise<{clo
       <form method="get" className="report-filter"><label>From<input type="date" name="from" defaultValue={from}/></label><label>To<input type="date" name="to" defaultValue={to}/></label><button>Update</button></form>
       <div className="rank-list">{revenue.map((row,index)=><div key={String(row.id)}><b>{String(index+1).padStart(2,"0")}</b><span><strong>{String(row.full_name)}</strong><small>{String(row.role)} · {Number(row.completed)} completed</small></span><span>{Number(row.started)} started</span><em>${Number(row.revenue).toLocaleString("en-AU")}</em></div>)}</div>
     </section>
+    <section className="ops-card ops-section"><header><div><h2>Daily staff revenue</h2><p>Each employee’s recognised revenue for every active day in the selected range.</p></div><span>{dailyRevenue.length} staff-day entries</span></header><div className="daily-revenue">{dailyRevenue.length?dailyRevenue.map(row=><div key={`${row.revenue_date}-${row.staff_id}`}><time>{new Date(`${String(row.revenue_date).slice(0,10)}T00:00:00Z`).toLocaleDateString("en-AU",{day:"2-digit",month:"short",timeZone:"UTC"})}</time><strong>{String(row.full_name)}</strong><span>{Number(row.started)} started · {Number(row.completed)} completed</span><b>${Number(row.revenue).toLocaleString("en-AU")}</b></div>):<div><strong>No revenue yet</strong><span>No started or completed services in this range.</span></div>}</div></section>
   </AdminShell>;
 }
