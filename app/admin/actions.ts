@@ -34,11 +34,13 @@ export async function startAppointmentAction(formData:FormData){
   if(!Number.isInteger(id)||id<=0||!Number.isInteger(staffId)||staffId<=0)redirect("/admin/bookings?error=staff");
   if(await staffCannotAccessAppointment(id))redirect("/admin?error=restricted");
   const photo=formData.get("beforePhoto"),returnDate=String(formData.get("returnDate")??"");
+  const recordingConfirmed=formData.get("handyRecording")==="yes";
+  if(!recordingConfirmed)redirect(`/admin/bookings?${/^\d{4}-\d{2}-\d{2}$/.test(returnDate)?`date=${returnDate}&`:""}error=recording#appointment-${id}`);
   const allowed=new Set(["image/jpeg","image/png","image/webp","image/heic","image/heif"]);
   if(!(photo instanceof File)||photo.size===0||photo.size>4*1024*1024||!allowed.has(photo.type))redirect(`/admin/bookings?${/^\d{4}-\d{2}-\d{2}$/.test(returnDate)?`date=${returnDate}&`:""}error=photo#appointment-${id}`);
   const dataUrl=`data:${photo.type};base64,${Buffer.from(await photo.arrayBuffer()).toString("base64")}`;
   const clientId=await getAppointmentClientId(id);
-  const started=await startAppointment(id,staffId,{dataUrl,name:photo.name||`before-${id}.jpg`});revalidatePath("/admin");revalidatePath("/admin/bookings");revalidatePath("/admin/reports");
+  const started=await startAppointment(id,staffId,{dataUrl,name:photo.name||`before-${id}.jpg`},recordingConfirmed);revalidatePath("/admin");revalidatePath("/admin/bookings");revalidatePath("/admin/reports");
   if(started&&clientId){revalidatePath(`/admin/clients/${clientId}`);redirect(`/admin/clients/${clientId}?started=1&appointment=${id}#treatments`);}
   redirect(`/admin/bookings?${/^\d{4}-\d{2}-\d{2}$/.test(returnDate)?`date=${returnDate}&`:""}error=start#appointment-${id}`);
 }
@@ -47,7 +49,11 @@ export async function finishAppointmentAction(formData:FormData){
   if(!(await isAdminAuthenticated()))redirect("/admin?error=session");const id=Number(formData.get("id")),staffId=Number(formData.get("staffId")),comment=String(formData.get("comment")??"").trim();
   if(!Number.isInteger(id)||id<=0||!Number.isInteger(staffId)||staffId<=0||!comment)redirect("/admin/bookings?error=finish");
   if(await staffCannotAccessAppointment(id))redirect("/admin?error=restricted");
-  const finished=await finishAppointment(id,staffId,comment),returnDate=String(formData.get("returnDate")??"");revalidatePath("/admin");revalidatePath("/admin/bookings");revalidatePath("/admin/reports");revalidatePath("/admin/payroll");revalidatePath("/admin/follow-ups");redirect(`/admin/bookings?${/^\d{4}-\d{2}-\d{2}$/.test(returnDate)?`date=${returnDate}&`:""}${finished?"finished=1":"error=finish"}#appointment-${id}`);
+  const photo=formData.get("afterPhoto"),returnDate=String(formData.get("returnDate")??"");
+  const allowed=new Set(["image/jpeg","image/png","image/webp","image/heic","image/heif"]);
+  if(!(photo instanceof File)||photo.size===0||photo.size>4*1024*1024||!allowed.has(photo.type))redirect(`/admin/bookings?${/^\d{4}-\d{2}-\d{2}$/.test(returnDate)?`date=${returnDate}&`:""}error=after-photo#appointment-${id}`);
+  const afterPhoto={dataUrl:`data:${photo.type};base64,${Buffer.from(await photo.arrayBuffer()).toString("base64")}`,name:photo.name||`after-${id}.jpg`};
+  const finished=await finishAppointment(id,staffId,comment,afterPhoto),clientId=await getAppointmentClientId(id);revalidatePath("/admin");revalidatePath("/admin/bookings");revalidatePath("/admin/reports");revalidatePath("/admin/payroll");revalidatePath("/admin/follow-ups");if(clientId)revalidatePath(`/admin/clients/${clientId}`);redirect(`/admin/bookings?${/^\d{4}-\d{2}-\d{2}$/.test(returnDate)?`date=${returnDate}&`:""}${finished?"finished=1":"error=finish"}#appointment-${id}`);
 }
 
 export async function deleteCancelledAppointmentAction(formData:FormData){
@@ -109,7 +115,8 @@ export async function assignPackageAction(formData:FormData){
   if(!(await isAdminAuthenticated()))redirect("/admin?error=session");let clientId=Number(formData.get("clientId"));const packageId=Number(formData.get("packageId")),amountPaid=Number(formData.get("amountPaid")),purchasedOn=textValue(formData,"purchasedOn"),expiresOn=textValue(formData,"expiresOn");
   if(!Number.isInteger(clientId)||clientId<1)clientId=await findClientIdForPackage(textValue(formData,"name"),textValue(formData,"mobile"));
   if(!Number.isInteger(clientId)||clientId<1||!Number.isInteger(packageId)||packageId<1||!Number.isFinite(amountPaid)||amountPaid<0||!/^\d{4}-\d{2}-\d{2}$/.test(purchasedOn))redirect("/admin/packages?error=assign");
-  const saved=await assignPackageToClient(clientId,packageId,amountPaid,purchasedOn,expiresOn);revalidatePath("/admin/packages");revalidatePath("/admin/client-packages");redirect(`/admin/packages?${saved?"assigned=1":"error=assign"}`);
+  let saved=false;try{saved=await assignPackageToClient(clientId,packageId,amountPaid,purchasedOn,expiresOn);}catch{redirect("/admin/packages?error=assign");}
+  revalidatePath("/admin/packages");revalidatePath("/admin/client-packages");revalidatePath(`/admin/clients/${clientId}`);redirect(saved?`/admin/clients/${clientId}?saved=1#courses`:"/admin/packages?error=assign");
 }
 
 export async function usePackageSessionAction(formData:FormData){
