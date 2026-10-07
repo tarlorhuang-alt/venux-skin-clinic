@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { clearAdminSession, createAdminSession, getAdminRole,isAdminAuthenticated, isOwnerAuthenticated, roleForPassword } from "../../lib/admin-auth";
-import { assignPackageToClient,BookingConflictError,createBookingRequest,createClientCourse,createClientProfile,createExpense,createPackageTemplate,createSkinAssessment,createStaff,createSupplier,createTreatmentRecord,deletePackageTemplate,findClientIdForPackage,finishAppointment,getAppointmentClinic,getAppointmentDate,getClientForBooking,getOwnerService,importClientRows,markSmsOutboxSent,queueBirthdayMessages,queueReturnInvite,rechargeMembership,saveClientProfile,saveHealthProfile,setStaffClockPin,startAppointment,toggleStaffClock,toggleStaffClockWithPin,updateAppointment,updateStaffClockEntry,useClientCourseSession,useClientPackageItem,type AppointmentStatus,type ClientImportRow } from "../../lib/clinic-admin";
+import { assignPackageToClient,BookingConflictError,completeFollowup,createBookingRequest,createClientCourse,createClientProfile,createExpense,createPackageTemplate,createSkinAssessment,createStaff,createSupplier,createTreatmentRecord,deleteCancelledAppointment,deletePackageTemplate,findClientIdForPackage,finishAppointment,getAppointmentClinic,getAppointmentDate,getClientForBooking,getOwnerService,importClientRows,markSmsOutboxSent,queueBirthdayMessages,queueReturnInvite,rechargeMembership,saveClientProfile,saveHealthProfile,setStaffClockPin,startAppointment,toggleStaffClock,toggleStaffClockWithPin,updateAppointment,updateStaffClockEntry,useClientCourseSession,useClientPackageItem,type AppointmentStatus,type ClientImportRow } from "../../lib/clinic-admin";
 
 export async function adminLogin(formData: FormData) {
   const role=roleForPassword(String(formData.get("password") ?? ""));
@@ -33,14 +33,33 @@ export async function startAppointmentAction(formData:FormData){
   if(!(await isAdminAuthenticated()))redirect("/admin?error=session");const id=Number(formData.get("id")),staffId=Number(formData.get("staffId"));
   if(!Number.isInteger(id)||id<=0||!Number.isInteger(staffId)||staffId<=0)redirect("/admin/bookings?error=staff");
   if(await staffCannotAccessAppointment(id))redirect("/admin?error=restricted");
-  const started=await startAppointment(id,staffId),returnDate=String(formData.get("returnDate")??"");revalidatePath("/admin");revalidatePath("/admin/bookings");revalidatePath("/admin/reports");redirect(`/admin/bookings?${/^\d{4}-\d{2}-\d{2}$/.test(returnDate)?`date=${returnDate}&`:""}${started?"started=1":"error=start"}#appointment-${id}`);
+  const photo=formData.get("beforePhoto"),returnDate=String(formData.get("returnDate")??"");
+  const allowed=new Set(["image/jpeg","image/png","image/webp","image/heic","image/heif"]);
+  if(!(photo instanceof File)||photo.size===0||photo.size>4*1024*1024||!allowed.has(photo.type))redirect(`/admin/bookings?${/^\d{4}-\d{2}-\d{2}$/.test(returnDate)?`date=${returnDate}&`:""}error=photo#appointment-${id}`);
+  const dataUrl=`data:${photo.type};base64,${Buffer.from(await photo.arrayBuffer()).toString("base64")}`;
+  const started=await startAppointment(id,staffId,{dataUrl,name:photo.name||`before-${id}.jpg`});revalidatePath("/admin");revalidatePath("/admin/bookings");revalidatePath("/admin/reports");redirect(`/admin/bookings?${/^\d{4}-\d{2}-\d{2}$/.test(returnDate)?`date=${returnDate}&`:""}${started?"started=1":"error=start"}#appointment-${id}`);
 }
 
 export async function finishAppointmentAction(formData:FormData){
-  if(!(await isAdminAuthenticated()))redirect("/admin?error=session");const id=Number(formData.get("id")),staffId=Number(formData.get("staffId")),comment=String(formData.get("comment")??"").trim(),manualFee=Number(formData.get("manualFee"));
-  if(!Number.isInteger(id)||id<=0||!Number.isInteger(staffId)||staffId<=0||!comment||!Number.isFinite(manualFee)||manualFee<0)redirect("/admin/bookings?error=finish");
+  if(!(await isAdminAuthenticated()))redirect("/admin?error=session");const id=Number(formData.get("id")),staffId=Number(formData.get("staffId")),comment=String(formData.get("comment")??"").trim();
+  if(!Number.isInteger(id)||id<=0||!Number.isInteger(staffId)||staffId<=0||!comment)redirect("/admin/bookings?error=finish");
   if(await staffCannotAccessAppointment(id))redirect("/admin?error=restricted");
-  const finished=await finishAppointment(id,staffId,comment,manualFee),returnDate=String(formData.get("returnDate")??"");revalidatePath("/admin");revalidatePath("/admin/bookings");revalidatePath("/admin/reports");revalidatePath("/admin/payroll");redirect(`/admin/bookings?${/^\d{4}-\d{2}-\d{2}$/.test(returnDate)?`date=${returnDate}&`:""}${finished?"finished=1":"error=finish"}#appointment-${id}`);
+  const finished=await finishAppointment(id,staffId,comment),returnDate=String(formData.get("returnDate")??"");revalidatePath("/admin");revalidatePath("/admin/bookings");revalidatePath("/admin/reports");revalidatePath("/admin/payroll");revalidatePath("/admin/follow-ups");redirect(`/admin/bookings?${/^\d{4}-\d{2}-\d{2}$/.test(returnDate)?`date=${returnDate}&`:""}${finished?"finished=1":"error=finish"}#appointment-${id}`);
+}
+
+export async function deleteCancelledAppointmentAction(formData:FormData){
+  if(!(await isOwnerAuthenticated()))redirect("/admin?error=restricted");
+  const id=Number(formData.get("id")),returnDate=String(formData.get("returnDate")??"");
+  if(!Number.isInteger(id)||id<=0)redirect("/admin/bookings?error=invalid");
+  const deleted=await deleteCancelledAppointment(id);revalidatePath("/admin/bookings");revalidatePath("/admin");
+  redirect(`/admin/bookings?${/^\d{4}-\d{2}-\d{2}$/.test(returnDate)?`date=${returnDate}&`:""}${deleted?"deleted=1":"error=delete"}`);
+}
+
+export async function completeFollowupAction(formData:FormData){
+  if(!(await isAdminAuthenticated()))redirect("/admin?error=session");
+  const id=Number(formData.get("id")),notes=String(formData.get("notes")??"").trim();
+  if(!Number.isInteger(id)||id<=0)redirect("/admin/follow-ups?error=invalid");
+  const saved=await completeFollowup(id,notes);revalidatePath("/admin/follow-ups");redirect(`/admin/follow-ups?${saved?"saved=1":"error=invalid"}`);
 }
 
 export async function createAdminAppointment(formData:FormData){

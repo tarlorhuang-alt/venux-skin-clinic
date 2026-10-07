@@ -43,6 +43,8 @@ function projectWageFor(treatment:string,category:string){
   return value.includes("dmk")||value.includes("facial")||((value.includes("ayko")||value.includes("german"))&&value.includes("hifu"))?32:25;
 }
 
+const FOLLOWUP_DAYS=7;
+
 export type ClientImportRow = {
   group: string;
   name: string;
@@ -135,6 +137,9 @@ export function ensureClinicTables() {
       await sql`CREATE UNIQUE INDEX IF NOT EXISTS venux_appointments_confirmation_token_idx ON venux_appointments (confirmation_token) WHERE confirmation_token IS NOT NULL`;
       await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS membership_balance_deducted_amount NUMERIC(10,2) NOT NULL DEFAULT 0 CHECK (membership_balance_deducted_amount >= 0)`;
       await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS membership_balance_deducted_at TIMESTAMPTZ`;
+      await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS before_photo_data_url TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS before_photo_name TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS before_photo_uploaded_at TIMESTAMPTZ`;
       await sql`CREATE TABLE IF NOT EXISTS venux_booking_slots (
         slot_key TEXT PRIMARY KEY, appointment_id BIGINT UNIQUE REFERENCES venux_appointments(id) ON DELETE CASCADE,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -181,6 +186,8 @@ export function ensureClinicTables() {
         abnormal_reaction BOOLEAN NOT NULL DEFAULT FALSE, review_required BOOLEAN NOT NULL DEFAULT FALSE,
         completed_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )`;
+      await sql`ALTER TABLE venux_followups ADD COLUMN IF NOT EXISTS appointment_id BIGINT REFERENCES venux_appointments(id) ON DELETE CASCADE`;
+      await sql`CREATE UNIQUE INDEX IF NOT EXISTS venux_followups_appointment_idx ON venux_followups (appointment_id) WHERE appointment_id IS NOT NULL`;
       await sql`CREATE TABLE IF NOT EXISTS venux_client_courses (
         id BIGSERIAL PRIMARY KEY, client_id BIGINT NOT NULL REFERENCES venux_clients(id) ON DELETE CASCADE,
         course_name TEXT NOT NULL, purchased_sessions INTEGER NOT NULL CHECK (purchased_sessions > 0),
@@ -209,6 +216,9 @@ export function ensureClinicTables() {
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )`;
       await sql`ALTER TABLE venux_staff ADD COLUMN IF NOT EXISTS clock_pin_hash TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE venux_staff ADD COLUMN IF NOT EXISTS hourly_rate NUMERIC(10,2) NOT NULL DEFAULT 0 CHECK (hourly_rate >= 0)`;
+      await sql`UPDATE venux_staff SET hourly_rate=32 WHERE LOWER(full_name) LIKE '%dannie%' AND hourly_rate=0`;
+      await sql`UPDATE venux_staff SET hourly_rate=35 WHERE LOWER(full_name) LIKE '%mei%' AND hourly_rate=0`;
       await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS staff_id BIGINT REFERENCES venux_staff(id) ON DELETE SET NULL`;
       await sql`CREATE TABLE IF NOT EXISTS venux_time_clock (
         id BIGSERIAL PRIMARY KEY, staff_id BIGINT NOT NULL REFERENCES venux_staff(id) ON DELETE CASCADE,
@@ -581,8 +591,10 @@ export async function updateAppointment(id: number, status: AppointmentStatus, t
   const before=await sql`SELECT a.*,c.full_name,c.mobile,c.service_sms_consent,COALESCE(v.category,'') AS service_category,COALESCE(v.service_name,a.treatment) AS service_name FROM venux_appointments a JOIN venux_clients c ON c.id=a.client_id LEFT JOIN venux_services v ON v.id=a.service_id OR (a.service_id IS NULL AND LOWER(v.service_name)=LOWER(a.treatment)) WHERE a.id=${id} ORDER BY v.id LIMIT 1`;
   if(!before[0])return;
   if(status==="cancelled"){
-    await audit("appointment_cancelled","client",Number(before[0].client_id),`${before[0].treatment} on ${String(before[0].requested_date).slice(0,10)} at ${before[0].requested_time}, ${before[0].clinic}. Appointment removed from calendar.`);
-    await sql`DELETE FROM venux_appointments WHERE id=${id}`;return;
+    await sql`UPDATE venux_appointments SET status='cancelled',updated_at=NOW() WHERE id=${id}`;
+    await sql`DELETE FROM venux_booking_slots WHERE appointment_id=${id}`;
+    if(String(before[0].status)!=="cancelled")await audit("appointment_cancelled","client",Number(before[0].client_id),`${before[0].treatment} on ${String(before[0].requested_date).slice(0,10)} at ${before[0].requested_time}, ${before[0].clinic}. Cancelled appointment retained for owner review.`);
+    return;
   }
   const projectWage=projectWageFor(String(before[0].service_name),String(before[0].service_category));
   if(["confirmed","in_progress"].includes(status)&&!["confirmed","in_progress"].includes(String(before[0].status))){
@@ -619,25 +631,44 @@ export async function updateAppointment(id: number, status: AppointmentStatus, t
   }
 }
 
-export async function startAppointment(id:number,staffId:number){
+export async function deleteCancelledAppointment(id:number){
+  await ensureClinicTables();const sql=client();
+  const rows=await sql`SELECT client_id,treatment,requested_date,requested_time FROM venux_appointments WHERE id=${id} AND status='cancelled' LIMIT 1`;
+  if(!rows[0])return false;
+  await audit("appointment_deleted","client",Number(rows[0].client_id),`${rows[0].treatment} · ${String(rows[0].requested_date).slice(0,10)} ${rows[0].requested_time} · deleted by owner after cancellation`);
+  await sql`DELETE FROM venux_appointments WHERE id=${id} AND status='cancelled'`;
+  return true;
+}
+
+export async function startAppointment(id:number,staffId:number,beforePhoto:{dataUrl:string;name:string}){
   await ensureClinicTables();
   const sql=client();
   const rows=await sql`SELECT total_amount,deposit_status,status FROM venux_appointments WHERE id=${id}`;
   const row=rows[0];
-  if(!row||String(row.status)!=="confirmed")return false;
+  if(!row||String(row.status)!=="confirmed"||!beforePhoto.dataUrl.startsWith("data:image/"))return false;
+  await sql`UPDATE venux_appointments SET before_photo_data_url=${beforePhoto.dataUrl},before_photo_name=${beforePhoto.name},before_photo_uploaded_at=NOW(),updated_at=NOW() WHERE id=${id}`;
   await updateAppointment(id,"in_progress",Number(row.total_amount),String(row.deposit_status),staffId);
   return true;
 }
 
-export async function finishAppointment(id:number,staffId:number,comment:string,manualFee:number){
+export async function finishAppointment(id:number,staffId:number,comment:string){
   await ensureClinicTables();
   const sql=client();
   const rows=await sql`SELECT total_amount,deposit_status,status,staff_id FROM venux_appointments WHERE id=${id}`;
   const row=rows[0];
-  if(!row||String(row.status)!=="in_progress"||Number(row.staff_id)!==staffId||!comment.trim()||!Number.isFinite(manualFee)||manualFee<0)return false;
+  if(!row||String(row.status)!=="in_progress"||Number(row.staff_id)!==staffId||!comment.trim())return false;
   await updateAppointment(id,"completed",Number(row.total_amount),String(row.deposit_status),staffId);
-  await sql`UPDATE venux_appointments SET completion_comment=${comment.trim()},wage_project_rate=${manualFee},staff_wage_amount=${manualFee},updated_at=NOW() WHERE id=${id}`;
+  await sql`UPDATE venux_appointments SET completion_comment=${comment.trim()},wage_project_rate=0,staff_wage_amount=0,updated_at=NOW() WHERE id=${id}`;
+  await sql`INSERT INTO venux_followups (client_id,appointment_id,due_date,followup_type,status)
+    SELECT client_id,id,(NOW() AT TIME ZONE 'Australia/Sydney')::date+${FOLLOWUP_DAYS},'One-week treatment follow-up','pending'
+    FROM venux_appointments WHERE id=${id}
+    ON CONFLICT (appointment_id) WHERE appointment_id IS NOT NULL DO NOTHING`;
   return true;
+}
+
+export async function getAppointmentBeforePhoto(id:number){
+  await ensureClinicTables();
+  return (await client()`SELECT before_photo_data_url,before_photo_name FROM venux_appointments WHERE id=${id} LIMIT 1`)[0]??null;
 }
 
 export type PackageTemplateInput={id?:number;name:string;price:number;validityDays:number;items:Array<{serviceId:number;sessions:number}>};
@@ -993,16 +1024,38 @@ export async function getOperationsReport(from:string,to:string){
 export async function getPayrollReport(from:string,to:string){
   await ensureClinicTables();const sql=client();
   const [summary,rows]=await Promise.all([
-    sql`SELECT s.id AS staff_id,s.full_name,s.role,COUNT(a.id)::int AS projects,COALESCE(SUM(a.staff_wage_amount),0) AS wage
-      FROM venux_staff s LEFT JOIN venux_appointments a ON a.staff_id=s.id AND a.status='completed' AND a.requested_date BETWEEN ${from} AND ${to}
-      WHERE s.active=TRUE GROUP BY s.id,s.full_name,s.role ORDER BY s.full_name`,
-    sql`SELECT a.id,a.client_id,a.requested_date,a.started_at,a.completed_at,a.treatment,a.wage_project_rate,a.staff_wage_amount,a.completion_comment,
-      s.full_name AS staff_name,c.full_name AS client_name
-      FROM venux_appointments a JOIN venux_staff s ON s.id=a.staff_id JOIN venux_clients c ON c.id=a.client_id
-      WHERE a.status='completed' AND a.requested_date BETWEEN ${from} AND ${to}
-      ORDER BY a.requested_date DESC,a.completed_at DESC`,
+    sql`SELECT s.id AS staff_id,s.full_name,s.role,s.hourly_rate,COUNT(t.id)::int AS shifts,
+      ROUND(COALESCE(SUM(EXTRACT(EPOCH FROM (LEAST(COALESCE(t.clock_out,NOW()),(${to}::date+1)::timestamp AT TIME ZONE 'Australia/Sydney')-GREATEST(t.clock_in,${from}::date::timestamp AT TIME ZONE 'Australia/Sydney')))),0)/3600,2) AS hours,
+      ROUND(COALESCE(SUM(EXTRACT(EPOCH FROM (LEAST(COALESCE(t.clock_out,NOW()),(${to}::date+1)::timestamp AT TIME ZONE 'Australia/Sydney')-GREATEST(t.clock_in,${from}::date::timestamp AT TIME ZONE 'Australia/Sydney')))),0)/3600*s.hourly_rate,2) AS wage
+      FROM venux_staff s LEFT JOIN venux_time_clock t ON t.staff_id=s.id
+        AND t.clock_in < (${to}::date+1)::timestamp AT TIME ZONE 'Australia/Sydney'
+        AND COALESCE(t.clock_out,NOW()) > ${from}::date::timestamp AT TIME ZONE 'Australia/Sydney'
+      WHERE s.active=TRUE GROUP BY s.id,s.full_name,s.role,s.hourly_rate ORDER BY s.full_name`,
+    sql`SELECT t.id,t.staff_id,t.clock_in,t.clock_out,t.note,s.full_name AS staff_name,s.role,s.hourly_rate,
+      ROUND(EXTRACT(EPOCH FROM (LEAST(COALESCE(t.clock_out,NOW()),(${to}::date+1)::timestamp AT TIME ZONE 'Australia/Sydney')-GREATEST(t.clock_in,${from}::date::timestamp AT TIME ZONE 'Australia/Sydney')))/3600,2) AS hours,
+      ROUND(EXTRACT(EPOCH FROM (LEAST(COALESCE(t.clock_out,NOW()),(${to}::date+1)::timestamp AT TIME ZONE 'Australia/Sydney')-GREATEST(t.clock_in,${from}::date::timestamp AT TIME ZONE 'Australia/Sydney')))/3600*s.hourly_rate,2) AS wage
+      FROM venux_time_clock t JOIN venux_staff s ON s.id=t.staff_id
+      WHERE t.clock_in < (${to}::date+1)::timestamp AT TIME ZONE 'Australia/Sydney'
+        AND COALESCE(t.clock_out,NOW()) > ${from}::date::timestamp AT TIME ZONE 'Australia/Sydney'
+      ORDER BY t.clock_in DESC`,
   ]);
   return {summary,rows};
+}
+
+export async function getFollowups(status="pending"){
+  await ensureClinicTables();const value=status==="completed"?"completed":"pending";
+  return client()`SELECT f.*,c.full_name,c.mobile,a.treatment,a.requested_date,a.completion_comment,s.full_name AS staff_name,
+    (f.due_date-(NOW() AT TIME ZONE 'Australia/Sydney')::date)::int AS days_until_due
+    FROM venux_followups f JOIN venux_clients c ON c.id=f.client_id
+    LEFT JOIN venux_appointments a ON a.id=f.appointment_id LEFT JOIN venux_staff s ON s.id=a.staff_id
+    WHERE f.status=${value} ORDER BY f.due_date,c.full_name LIMIT 500`;
+}
+
+export async function completeFollowup(id:number,notes:string){
+  await ensureClinicTables();const sql=client();
+  const changed=await sql`UPDATE venux_followups SET status='completed',recovery_notes=${notes},completed_at=NOW() WHERE id=${id} AND status='pending' RETURNING client_id`;
+  if(!changed[0])return false;
+  await audit("followup_completed","client",Number(changed[0].client_id),notes||"One-week follow-up completed");return true;
 }
 
 export async function getDormantClients(days=120,search=""){
