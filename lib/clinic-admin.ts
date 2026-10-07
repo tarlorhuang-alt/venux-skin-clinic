@@ -144,6 +144,10 @@ export function ensureClinicTables() {
       await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS before_photo_data_url TEXT NOT NULL DEFAULT ''`;
       await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS before_photo_name TEXT NOT NULL DEFAULT ''`;
       await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS before_photo_uploaded_at TIMESTAMPTZ`;
+      await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS after_photo_data_url TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS after_photo_name TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS after_photo_uploaded_at TIMESTAMPTZ`;
+      await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS handy_recording_confirmed_at TIMESTAMPTZ`;
       await sql`CREATE TABLE IF NOT EXISTS venux_booking_slots (
         slot_key TEXT PRIMARY KEY, appointment_id BIGINT UNIQUE REFERENCES venux_appointments(id) ON DELETE CASCADE,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -662,25 +666,25 @@ export async function deleteCancelledAppointment(id:number){
   return true;
 }
 
-export async function startAppointment(id:number,staffId:number,beforePhoto:{dataUrl:string;name:string}){
+export async function startAppointment(id:number,staffId:number,beforePhoto:{dataUrl:string;name:string},handyRecordingConfirmed=false){
   await ensureClinicTables();
   const sql=client();
   const rows=await sql`SELECT total_amount,deposit_status,status FROM venux_appointments WHERE id=${id}`;
   const row=rows[0];
-  if(!row||String(row.status)!=="confirmed"||!beforePhoto.dataUrl.startsWith("data:image/"))return false;
-  await sql`UPDATE venux_appointments SET before_photo_data_url=${beforePhoto.dataUrl},before_photo_name=${beforePhoto.name},before_photo_uploaded_at=NOW(),updated_at=NOW() WHERE id=${id}`;
+  if(!row||String(row.status)!=="confirmed"||!beforePhoto.dataUrl.startsWith("data:image/")||!handyRecordingConfirmed)return false;
+  await sql`UPDATE venux_appointments SET before_photo_data_url=${beforePhoto.dataUrl},before_photo_name=${beforePhoto.name},before_photo_uploaded_at=NOW(),handy_recording_confirmed_at=NOW(),updated_at=NOW() WHERE id=${id}`;
   await updateAppointment(id,"in_progress",Number(row.total_amount),String(row.deposit_status),staffId);
   return true;
 }
 
-export async function finishAppointment(id:number,staffId:number,comment:string){
+export async function finishAppointment(id:number,staffId:number,comment:string,afterPhoto?:{dataUrl:string;name:string}){
   await ensureClinicTables();
   const sql=client();
   const rows=await sql`SELECT total_amount,deposit_status,status,staff_id FROM venux_appointments WHERE id=${id}`;
   const row=rows[0];
-  if(!row||String(row.status)!=="in_progress"||Number(row.staff_id)!==staffId||!comment.trim())return false;
+  if(!row||String(row.status)!=="in_progress"||Number(row.staff_id)!==staffId||!comment.trim()||(afterPhoto&&!afterPhoto.dataUrl.startsWith("data:image/")))return false;
   await updateAppointment(id,"completed",Number(row.total_amount),String(row.deposit_status),staffId);
-  await sql`UPDATE venux_appointments SET completion_comment=${comment.trim()},wage_project_rate=0,staff_wage_amount=0,updated_at=NOW() WHERE id=${id}`;
+  await sql`UPDATE venux_appointments SET completion_comment=${comment.trim()},after_photo_data_url=${afterPhoto?.dataUrl??""},after_photo_name=${afterPhoto?.name??""},after_photo_uploaded_at=${afterPhoto?new Date():null},wage_project_rate=0,staff_wage_amount=0,updated_at=NOW() WHERE id=${id}`;
   await sql`INSERT INTO venux_followups (client_id,appointment_id,due_date,followup_type,status)
     SELECT client_id,id,(NOW() AT TIME ZONE 'Australia/Sydney')::date+${FOLLOWUP_DAYS},'One-week treatment follow-up','pending'
     FROM venux_appointments WHERE id=${id}
@@ -691,6 +695,11 @@ export async function finishAppointment(id:number,staffId:number,comment:string)
 export async function getAppointmentBeforePhoto(id:number){
   await ensureClinicTables();
   return (await client()`SELECT before_photo_data_url,before_photo_name FROM venux_appointments WHERE id=${id} LIMIT 1`)[0]??null;
+}
+
+export async function getAppointmentAfterPhoto(id:number){
+  await ensureClinicTables();
+  return (await client()`SELECT after_photo_data_url,after_photo_name FROM venux_appointments WHERE id=${id} LIMIT 1`)[0]??null;
 }
 
 export type PackageTemplateInput={id?:number;name:string;price:number;validityDays:number;items:Array<{serviceId:number;sessions:number}>};
@@ -715,7 +724,13 @@ export async function deletePackageTemplate(packageId:number){
 }
 
 export async function assignPackageToClient(clientId:number,packageId:number,amountPaid:number,purchasedOn:string,expiresOn:string){
-  await ensureClinicTables();const sql=client();const template=await sql`SELECT * FROM venux_packages WHERE id=${packageId} AND active=TRUE LIMIT 1`;if(!template[0])return false;
+  await ensureClinicTables();const sql=client();
+  const [templateRows,clientRows,itemRows]=await Promise.all([
+    sql`SELECT * FROM venux_packages WHERE id=${packageId} AND active=TRUE LIMIT 1`,
+    sql`SELECT id FROM venux_clients WHERE id=${clientId} LIMIT 1`,
+    sql`SELECT id FROM venux_package_items WHERE package_id=${packageId} LIMIT 1`,
+  ]);
+  const template=templateRows;if(!template[0]||!clientRows[0]||!itemRows[0])return false;
   const assigned=await sql`INSERT INTO venux_client_packages (client_id,package_id,purchased_on,expires_on,amount_paid)
     VALUES (${clientId},${packageId},${purchasedOn},COALESCE(${expiresOn||null}::date,${purchasedOn}::date+${Number(template[0].validity_days)}),${amountPaid}) RETURNING id`;
   const clientPackageId=Number(assigned[0].id);await sql`INSERT INTO venux_client_package_items (client_package_id,service_id,included_sessions)

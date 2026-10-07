@@ -81,7 +81,7 @@ export async function startCityAppointment(data:FormData){
   const allowed=new Set(["image/jpeg","image/png","image/webp","image/heic","image/heif"]);
   if(!(photo instanceof File)||photo.size===0||photo.size>4_000_000||!allowed.has(photo.type))redirect(`/owner?date=${date}&error=photo`);
   const beforePhoto={dataUrl:`data:${photo.type};base64,${Buffer.from(await photo.arrayBuffer()).toString("base64")}`,name:photo.name||"before-photo"};
-  const started=await startAppointment(id,staffId,beforePhoto);revalidatePath("/owner");revalidatePath("/admin/bookings");revalidatePath("/admin/reports");redirect(`/owner?date=${date}&${started?"started=1":"error=start"}`);
+  const started=await startAppointment(id,staffId,beforePhoto,true);revalidatePath("/owner");revalidatePath("/admin/bookings");revalidatePath("/admin/reports");redirect(`/owner?date=${date}&${started?"started=1":"error=start"}`);
 }
 
 export async function finishCityAppointment(data:FormData){

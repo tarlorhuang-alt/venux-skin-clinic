@@ -4,7 +4,8 @@ import { cookies } from "next/headers";
 
 const COOKIE_NAME = "venux_admin_session";
 export type AdminRole = "owner" | "staff";
-const DEFAULT_STAFF_PASSWORD_HASH = "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92";
+// STAFF_PASSWORD can add a stronger staff password without changing code.
+const DEFAULT_STAFF_PASSWORD_HASH = "1562206543da764123c21bd524674f0a8aaf49c8a89744c97352fe677f7e4006";
 
 function secret() {
   return process.env.ADMIN_SESSION_SECRET || "";
