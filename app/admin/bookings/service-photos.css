@@ -1,0 +1,32 @@
+.start-service-form .booking-check {
+  display: flex;
+  align-items: center;
+  grid-template-columns: none;
+  flex-direction: row;
+  padding: 7px;
+  border: 1px solid #dec895;
+  border-radius: 7px;
+  background: #fffaf0;
+  text-transform: none;
+}
+
+.start-service-form .booking-check input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+.finish-service-form > label {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 4px !important;
+}
+
+.finish-service-form input[type="file"] {
+  width: 100%;
+  padding: 7px;
+  border: 1px solid var(--os-line);
+  border-radius: 7px;
+  background: #fff;
+  font-size: 8px;
+}
