@@ -1,20 +1,22 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 
 export function BookingForm() {
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [reference, setReference] = useState("");
   const [error, setError] = useState("");
+  const submissionKey = useRef("");
   async function submitBooking(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitting(true); setError("");
     const form = event.currentTarget;
     try {
-      const response = await fetch("/api/bookings", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(Object.fromEntries(new FormData(form))) });
+      if(!submissionKey.current)submissionKey.current=crypto.randomUUID();
+      const response = await fetch("/api/bookings", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({...Object.fromEntries(new FormData(form)),submissionKey:submissionKey.current}) });
       const result = await response.json();
-      if (response.ok) { setSubmitted(true); setReference(result.reference); form.reset(); }
+      if (response.ok) { setSubmitted(true); setReference(result.reference); submissionKey.current=""; form.reset(); }
       else setError(result.error || "Unable to save your request.");
     } catch {
       setError("Unable to connect. Please contact the clinic directly.");
