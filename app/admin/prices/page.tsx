@@ -5,18 +5,18 @@ import { login, logout, savePrices } from "./actions";
 import "./prices-admin.css";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Price Manager | VenuX", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Price Manager | ISA", robots: { index: false, follow: false } };
 
 export default async function PriceAdmin({ searchParams }: { searchParams: Promise<{ error?: string; saved?: string }> }) {
   const params = await searchParams;
   if (!(await isAdminAuthenticated())) {
-    return <main className="admin-login"><section><div className="admin-mark">✦ VenuX</div><p>Private clinic administration</p><h1>Price manager</h1><form action={login}><label>Admin password<input name="password" type="password" autoComplete="current-password" required autoFocus /></label><button type="submit">Sign in</button></form>{params.error ? <p className="admin-error">The password was not accepted. Please try again.</p> : null}<small>This page is not visible in the public navigation.</small></section></main>;
+    return <main className="admin-login"><section><div className="admin-mark">✦ ISA</div><p>Private clinic administration</p><h1>Price manager</h1><form action={login}><label>Admin password<input name="password" type="password" autoComplete="current-password" required autoFocus /></label><button type="submit">Sign in</button></form>{params.error ? <p className="admin-error">The password was not accepted. Please try again.</p> : null}<small>This page is not visible in the public navigation.</small></section></main>;
   }
 
   const prices = await getPriceMap();
   const groups = Map.groupBy(priceCatalogue, (item) => item.group);
   return <main className="price-admin">
-    <header><div><span>✦ VenuX Private Admin</span><h1>Treatment prices</h1><p>Enter the regular price and choose a member discount from 10% to 50% off. DMK member prices can be entered manually. Other member prices are calculated automatically when you save.</p></div><form action={logout}><button className="admin-logout" type="submit">Sign out</button></form></header>
+    <header><div><span>✦ ISA Private Admin</span><h1>Treatment prices</h1><p>Enter the regular price and choose a member discount from 10% to 50% off. DMK member prices can be entered manually. Other member prices are calculated automatically when you save.</p></div><form action={logout}><button className="admin-logout" type="submit">Sign out</button></form></header>
     {params.saved ? <div className="admin-success" role="status">Prices saved. Public treatment pages now use the new values.</div> : null}
     {params.error ? <div className="admin-error" role="alert">A price was invalid or your session expired. No unsafe value was saved.</div> : null}
     <form action={savePrices} className="admin-price-form">

@@ -10,7 +10,7 @@ import "./clinical-list.css";
 import "./export.css";
 
 export const dynamic="force-dynamic";
-export const metadata:Metadata={title:"Clients & Membership | VenuX Clinic OS",robots:{index:false,follow:false}};
+export const metadata:Metadata={title:"Clients & Membership | ISA Clinic OS",robots:{index:false,follow:false}};
 
 function pageHref(page:number,search:string,location:string){
   const query=new URLSearchParams();if(search)query.set("q",search);if(location)query.set("location",location);if(page>1)query.set("page",String(page));

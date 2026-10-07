@@ -121,7 +121,7 @@ export async function getPriceMap(): Promise<Map<string, StoredPrice>> {
       });
     }
   } catch (error) {
-    console.error("VenuX price database unavailable; using verified fallback prices.", error instanceof Error ? error.message : "Unknown error");
+    console.error("ISA price database unavailable; using verified fallback prices.", error instanceof Error ? error.message : "Unknown error");
   }
   return fallback;
 }

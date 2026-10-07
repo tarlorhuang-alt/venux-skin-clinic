@@ -6,7 +6,7 @@ import "../../admin.css";
 import "../[id]/clinical.css";
 
 export const dynamic="force-dynamic";
-export const metadata:Metadata={title:"New Client | VenuX Clinic OS",robots:{index:false,follow:false}};
+export const metadata:Metadata={title:"New Client | ISA Clinic OS",robots:{index:false,follow:false}};
 
 export default async function NewClientPage({searchParams}:{searchParams:Promise<{error?:string}>}){
   const params=await searchParams;if(!(await isAdminAuthenticated()))return <AdminLogin error={params.error}/>;const role=await getAdminRole();

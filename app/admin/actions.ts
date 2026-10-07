@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { clearAdminSession, createAdminSession, getAdminRole,isAdminAuthenticated, isOwnerAuthenticated, roleForPassword } from "../../lib/admin-auth";
-import { assignPackageToClient,BookingConflictError,completeFollowup,createBookingRequest,createClientCourse,createClientProfile,createExpense,createPackageTemplate,createSkinAssessment,createStaff,createSupplier,createTreatmentRecord,deleteCancelledAppointment,deletePackageTemplate,findClientIdForPackage,finishAppointment,getAppointmentClientId,getAppointmentClinic,getAppointmentDate,getClientForBooking,getOwnerService,importClientRows,markSmsOutboxSent,queueBirthdayMessages,queueReturnInvite,rechargeMembership,saveClientProfile,saveHealthProfile,setStaffClockPin,startAppointment,toggleStaffClock,toggleStaffClockWithPin,updateAppointment,updateStaffClockEntry,useClientCourseSession,useClientPackageItem,type AppointmentStatus,type ClientImportRow } from "../../lib/clinic-admin";
+import { assignPackageToClient,BookingConflictError,completeFollowup,createBookingRequest,createClientCourse,createClientProfile,createExpense,createPackageTemplate,createSkinAssessment,createStaff,createSupplier,createTreatmentRecord,deleteCancelledAppointment,deletePackageTemplate,findClientIdForPackage,finishAppointment,getAppointmentClientId,getAppointmentClinic,getAppointmentDate,getClientForBooking,getOwnerService,importClientRows,markSmsOutboxSent,MembershipBalanceError,queueBirthdayMessages,queueReturnInvite,rechargeMembership,saveClientProfile,saveHealthProfile,setStaffClockPin,startAppointment,toggleStaffClock,toggleStaffClockWithPin,updateAppointment,updateStaffClockEntry,useClientCourseSession,useClientPackageItem,type AppointmentStatus,type ClientImportRow } from "../../lib/clinic-admin";
 
 export async function adminLogin(formData: FormData) {
   const role=roleForPassword(String(formData.get("password") ?? ""));
@@ -24,7 +24,7 @@ export async function changeAppointment(formData: FormData) {
   if (!Number.isInteger(id) || id <= 0 || !["confirmed","in_progress","completed","cancelled","no_show"].includes(status) || !Number.isFinite(totalAmount) || totalAmount < 0 || !["unpaid","paid","refunded","forfeited","waived"].includes(depositStatus)) redirect("/admin/bookings?error=invalid");
   if(await staffCannotAccessAppointment(id))redirect("/admin?error=restricted");
   const appointmentDate=await getAppointmentDate(id);
-  try{await updateAppointment(id,status,totalAmount,depositStatus,staffId);}catch(error){if(error instanceof BookingConflictError)redirect("/admin/bookings?error=conflict");throw error;}
+  try{await updateAppointment(id,status,totalAmount,depositStatus,staffId);}catch(error){if(error instanceof BookingConflictError)redirect("/admin/bookings?error=conflict");if(error instanceof MembershipBalanceError)redirect(`/admin/bookings?${/^\d{4}-\d{2}-\d{2}$/.test(appointmentDate)?`date=${appointmentDate}&`:""}error=balance#appointment-${id}`);throw error;}
   revalidatePath("/admin"); revalidatePath("/admin/bookings");
   redirect(`/admin/bookings?${/^\d{4}-\d{2}-\d{2}$/.test(appointmentDate)?`date=${appointmentDate}&`:""}saved=1#appointment-${id}`);
 }
@@ -150,7 +150,7 @@ export async function updateStaffClockAction(formData:FormData){
 
 export async function queueReturnInviteAction(formData:FormData){
   if(!(await isAdminAuthenticated()))redirect("/admin?error=session");const clientId=Number(formData.get("clientId"));
-  if(!Number.isInteger(clientId)||clientId<=0)redirect("/admin/retention?error=invalid");const queued=await queueReturnInvite(clientId);revalidatePath("/admin/retention");revalidatePath("/admin/messages");redirect(`/admin/retention?queued=${queued?1:0}`);
+  if(!Number.isInteger(clientId)||clientId<=0)redirect("/admin/retention?error=invalid");const queued=await queueReturnInvite(clientId),returnTo=String(formData.get("returnTo")??"");revalidatePath("/admin/retention");revalidatePath("/admin/calendar");revalidatePath("/admin/messages");redirect(returnTo.startsWith("/admin/calendar")?`${returnTo}${returnTo.includes("?")?"&":"?"}queued=${queued?1:0}`:`/admin/retention?queued=${queued?1:0}`);
 }
 
 export async function addSupplierAction(formData:FormData){

@@ -6,16 +6,16 @@ import "./paypal.css";
 import "./readability.css";
 
 export const metadata: Metadata = {
-  title: "VenuX Skin Clinic | Personalised Skin Care",
+  title: "ISA Skin Clinic & Aesthetics | Personalised Skin Care",
   description: "Personalised, clinician-led skin treatments and membership care in Australia.",
   openGraph: {
-    title: "VenuX Skin Clinic",
+    title: "ISA Skin Clinic & Aesthetics",
     description: "Modern skin care, beautifully considered.",
-    images: [{ url: "/og.png", width: 1731, height: 909, alt: "VenuX Skin Clinic" }],
+    images: [{ url: "/og.png", width: 1731, height: 909, alt: "ISA Skin Clinic & Aesthetics" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "VenuX Skin Clinic",
+    title: "ISA Skin Clinic & Aesthetics",
     description: "Modern skin care, beautifully considered.",
     images: ["/og.png"],
   },

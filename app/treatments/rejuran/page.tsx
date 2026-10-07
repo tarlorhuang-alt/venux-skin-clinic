@@ -3,8 +3,8 @@ import { Footer, Header, PageHero } from "../../site-chrome";
 import { getPriceMap, resolvePrice } from "../../../lib/pricing";
 
 export const metadata: Metadata = {
-  title: "Rejuran® Skin Rejuvenation | VenuX Skin Clinic",
-  description: "Explore consultation-led Rejuran skin rejuvenation at VenuX, including 2 ml single sessions and three-session courses.",
+  title: "Rejuran® Skin Rejuvenation | ISA Skin Clinic & Aesthetics",
+  description: "Explore consultation-led Rejuran skin rejuvenation at ISA, including 2 ml single sessions and three-session courses.",
 };
 export const dynamic = "force-dynamic";
 
@@ -36,7 +36,7 @@ export default async function RejuranPage() {
         <div className="rejuran-packshot" aria-hidden="true"><i className="rejuran-box"><b>REJURAN</b><small>Classic · 2 mL</small></i><i className="rejuran-vial"><b>R</b></i></div>
         <b className="rejuran-price-pill">2 ml · {currentOptions[0].price} <small>Member price {currentOptions[0].member} · 15% off</small></b>
       </div>
-      <div className="rejuran-poster-copy"><p className="kicker light">Clinical consultation required</p><h2>Repair. Refine.<br />Rejuvenate.</h2><p>A VenuX campaign presentation for Rejuran®. Your practitioner reviews medical history, concerns and goals before confirming product, amount and course.</p><a className="button light-button" href="/book?treatment=Rejuran">Book an assessment</a></div>
+      <div className="rejuran-poster-copy"><p className="kicker light">Clinical consultation required</p><h2>Repair. Refine.<br />Rejuvenate.</h2><p>A ISA campaign presentation for Rejuran®. Your practitioner reviews medical history, concerns and goals before confirming product, amount and course.</p><a className="button light-button" href="/book?treatment=Rejuran">Book an assessment</a></div>
     </section>
 
     <section className="outcome-illustration">
@@ -46,9 +46,9 @@ export default async function RejuranPage() {
     </section>
 
     <section className="course-pricing" id="prices">
-      <div className="section-heading"><div><p className="kicker">Session pricing</p><h2>Choose a single session<br />or planned course.</h2></div><p>All prices are in AUD. Rejuran VenuX member prices are 15% off regular price. The 4 ml and 6 ml options are total course volumes delivered across two and three sessions respectively.</p></div>
-      <div className="course-grid">{currentOptions.map((option,index)=><article key={option.amount}><span>0{index+1}</span><small>{option.amount}</small><h3>{option.name}</h3><strong>{option.price}</strong><em className="member-price-badge">VenuX member price · {option.member} · 15% off</em><p>{option.detail}</p><a href={`/book?treatment=${encodeURIComponent(`Rejuran ${option.name}`)}`}>Request appointment ↗</a></article>)}</div>
-      <div className="clinical-notice"><div><span>French hydration treatment</span><h3>Private consultation</h3></div><p>VenuX also offers a consultation for French skin hydration and remodelling options. Brand, suitability and a personalised quotation are discussed privately with an appropriately qualified practitioner in line with Australian advertising requirements.</p><a href="/book?treatment=French%20Skin%20Hydration%20Consultation" className="text-link">Book consultation ↘</a></div>
+      <div className="section-heading"><div><p className="kicker">Session pricing</p><h2>Choose a single session<br />or planned course.</h2></div><p>All prices are in AUD. Rejuran ISA member prices are 15% off regular price. The 4 ml and 6 ml options are total course volumes delivered across two and three sessions respectively.</p></div>
+      <div className="course-grid">{currentOptions.map((option,index)=><article key={option.amount}><span>0{index+1}</span><small>{option.amount}</small><h3>{option.name}</h3><strong>{option.price}</strong><em className="member-price-badge">ISA member price · {option.member} · 15% off</em><p>{option.detail}</p><a href={`/book?treatment=${encodeURIComponent(`Rejuran ${option.name}`)}`}>Request appointment ↗</a></article>)}</div>
+      <div className="clinical-notice"><div><span>French hydration treatment</span><h3>Private consultation</h3></div><p>ISA also offers a consultation for French skin hydration and remodelling options. Brand, suitability and a personalised quotation are discussed privately with an appropriately qualified practitioner in line with Australian advertising requirements.</p><a href="/book?treatment=French%20Skin%20Hydration%20Consultation" className="text-link">Book consultation ↘</a></div>
     </section>
 
     <section className="faq-section" id="questions">

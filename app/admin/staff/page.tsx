@@ -10,7 +10,7 @@ import "../operations.css";
 import "./staff-workspace.css";
 
 export const dynamic="force-dynamic";
-export const metadata:Metadata={title:"Staff & Time Clock | VenuX",robots:{index:false,follow:false}};
+export const metadata:Metadata={title:"Staff & Time Clock | ISA",robots:{index:false,follow:false}};
 const sydneyDateTime=(input:unknown)=>new Intl.DateTimeFormat("en-AU",{timeZone:"Australia/Sydney",day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit",hour12:true}).format(new Date(String(input)));
 const sydneyInput=(input:unknown)=>{if(!input)return "";const parts=new Intl.DateTimeFormat("en-CA",{timeZone:"Australia/Sydney",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).formatToParts(new Date(String(input)));const get=(type:string)=>parts.find(part=>part.type===type)?.value??"";return `${get("year")}-${get("month")}-${get("day")}T${get("hour").replace("24","00")}:${get("minute")}`;};
 const todaySydney=()=>new Intl.DateTimeFormat("en-CA",{timeZone:"Australia/Sydney",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());

@@ -7,7 +7,7 @@ import "../admin.css";
 import "../operations.css";
 
 export const dynamic="force-dynamic";
-export const metadata:Metadata={title:"Revenue & Performance | VenuX",robots:{index:false,follow:false}};
+export const metadata:Metadata={title:"Revenue & Performance | ISA",robots:{index:false,follow:false}};
 const isoSydney=()=>new Intl.DateTimeFormat("en-CA",{timeZone:"Australia/Sydney",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
 
 export default async function ReportsPage({searchParams}:{searchParams:Promise<{from?:string;to?:string;error?:string}>}){

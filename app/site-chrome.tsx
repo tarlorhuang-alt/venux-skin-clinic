@@ -64,9 +64,9 @@ const navigation = [
 export function Header() {
   return (
     <header className="site-header category-header">
-      <a className="brand" href="/" aria-label="VenuX Skin Clinic home">
-        <span className="brand-mark">V</span>
-        <span className="brand-name"><span className="brand-spark" aria-hidden="true">✦</span> VenuX <span className="brand-subtitle">Skin Clinic</span> <span className="brand-spark brand-spark-tail" aria-hidden="true">✧ ✦</span></span>
+      <a className="brand" href="/" aria-label="ISA Skin Clinic & Aesthetics home">
+        <span className="brand-mark">I</span>
+        <span className="brand-name"><span className="brand-spark" aria-hidden="true">✦</span> ISA <span className="brand-subtitle">Skin Clinic &amp; Aesthetics</span> <span className="brand-spark brand-spark-tail" aria-hidden="true">✧ ✦</span></span>
       </a>
 
       <nav className="category-nav" aria-label="Treatment categories">
@@ -92,9 +92,9 @@ export function Footer() {
   return (
     <footer className="site-footer">
       <div className="footer-identity">
-        <a className="footer-star-brand" href="/" aria-label="VenuX Skin Clinic home">
-          <span className="star-mark" aria-hidden="true"><span>✦</span><b>V</b><span>✦</span></span>
-          <span><strong>VenuX</strong><small>Skin Clinic</small></span>
+        <a className="footer-star-brand" href="/" aria-label="ISA Skin Clinic & Aesthetics home">
+          <span className="star-mark" aria-hidden="true"><span>✦</span><b>I</b><span>✦</span></span>
+          <span><strong>ISA</strong><small>Skin Clinic &amp; Aesthetics</small></span>
         </a>
         <p>Personalised skin care and aesthetic treatments, thoughtfully delivered in Sydney.</p>
       </div>
@@ -110,8 +110,8 @@ export function Footer() {
 
       <div className="footer-column footer-social">
         <span>Connect</span>
-        <a href="https://www.instagram.com/venuxbeautysydney/" target="_blank" rel="noreferrer" aria-label="Follow VenuX Beauty Sydney on Instagram"><b>Instagram ↗</b><small>@VenuxBeautySydney</small></a>
-        <a href="https://wa.me/61432752750" target="_blank" rel="noreferrer" aria-label="Chat with VenuX Skin Clinic on WhatsApp"><b>WhatsApp ↗</b><small>0432 752 750</small></a>
+        <a href="https://www.instagram.com/venuxbeautysydney/" target="_blank" rel="noreferrer" aria-label="Follow ISA Beauty Sydney on Instagram"><b>Instagram ↗</b><small>@VenuxBeautySydney</small></a>
+        <a href="https://wa.me/61432752750" target="_blank" rel="noreferrer" aria-label="Chat with ISA Skin Clinic & Aesthetics on WhatsApp"><b>WhatsApp ↗</b><small>0432 752 750</small></a>
       </div>
 
       <div className="footer-column footer-visit">
@@ -121,7 +121,7 @@ export function Footer() {
       </div>
 
       <div className="footer-bottom">
-        <small>© 2026 VenuX Skin Clinic</small>
+        <small>© 2026 ISA Skin Clinic & Aesthetics</small>
         <small>Treatment suitability varies · Consultation required</small>
       </div>
     </footer>

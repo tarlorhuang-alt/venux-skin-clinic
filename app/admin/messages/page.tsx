@@ -7,7 +7,7 @@ import "../admin.css";
 import "./messages.css";
 
 export const dynamic="force-dynamic";
-export const metadata:Metadata={title:"Messages | VenuX Clinic OS",robots:{index:false,follow:false}};
+export const metadata:Metadata={title:"Messages | ISA Clinic OS",robots:{index:false,follow:false}};
 export default async function MessagesPage({searchParams}:{searchParams:Promise<{saved?:string;birthdays?:string;error?:string}>}){
   const params=await searchParams;if(!(await isAdminAuthenticated()))return <AdminLogin error={params.error}/>;const rows=await getSmsOutbox(),queued=rows.filter(row=>String(row.status)==="queued");
   return <AdminShell active="Messages"><header className="clinic-admin-head"><div><p>Consent-aware communication</p><h1>SMS outbox</h1></div><span>{queued.length} awaiting send</span></header>

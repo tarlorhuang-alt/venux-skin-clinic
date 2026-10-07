@@ -8,7 +8,7 @@ import "../operations.css";
 import "./payroll.css";
 
 export const dynamic="force-dynamic";
-export const metadata:Metadata={title:"Payroll | VenuX Clinic OS",robots:{index:false,follow:false}};
+export const metadata:Metadata={title:"Payroll | ISA Clinic OS",robots:{index:false,follow:false}};
 const isoSydney=()=>new Intl.DateTimeFormat("en-CA",{timeZone:"Australia/Sydney",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
 const weekBounds=(date:string)=>{const value=new Date(`${date}T00:00:00Z`),day=value.getUTCDay()||7,monday=new Date(value);monday.setUTCDate(value.getUTCDate()-day+1);const sunday=new Date(monday);sunday.setUTCDate(monday.getUTCDate()+6);return {from:monday.toISOString().slice(0,10),to:sunday.toISOString().slice(0,10)};};
 

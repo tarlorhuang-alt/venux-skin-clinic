@@ -6,7 +6,7 @@ import "../admin.css";
 import "../premium-overview.css";
 
 export const dynamic="force-dynamic";
-export const metadata:Metadata={title:"Package Sessions | VenuX Clinic OS",robots:{index:false,follow:false}};
+export const metadata:Metadata={title:"Package Sessions | ISA Clinic OS",robots:{index:false,follow:false}};
 
 export default async function ClientPackagesPage({searchParams}:{searchParams:Promise<{q?:string;error?:string}>}){
   const params=await searchParams;if(!(await isAdminAuthenticated()))return <AdminLogin error={params.error}/>;

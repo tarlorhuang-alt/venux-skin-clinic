@@ -5,13 +5,13 @@ export const dynamic = "force-dynamic";
 
 const popularTreatments = [
   {
-    number: "01", label: "Ultrasound lifting", name: "Ultherapy®", detail: "700 lines · full face + upper neck", priceGroup: "Ultherapy", priceName: "Full face + upper neck · approx. 700 lines", standard: 2700, member: 2160, memberLabel: "VenuX member price · 20% off", route: "/treatments/hifu-ultherapy", booking: "Ultherapy 700 lines", image: "/ultherapy-700-lines-machine.jpg", imagePosition: "center center",
+    number: "01", label: "Ultrasound lifting", name: "Ultherapy®", detail: "700 lines · full face + upper neck", priceGroup: "Ultherapy", priceName: "Full face + upper neck · approx. 700 lines", standard: 2700, member: 2160, memberLabel: "ISA member price · 20% off", route: "/treatments/hifu-ultherapy", booking: "Ultherapy 700 lines", image: "/ultherapy-700-lines-machine.jpg", imagePosition: "center center",
   },
   {
-    number: "02", label: "Polynucleotide rejuvenation", name: "Rejuran®", detail: "2 ml · one session", priceGroup: "Rejuran", priceName: "2 ml · Single session", standard: 650, member: 553, memberLabel: "VenuX member price · 15% off", route: "/treatments/rejuran", booking: "Rejuran 2ml", image: "/rejuran-brand-logo.png", imagePosition: "center center",
+    number: "02", label: "Polynucleotide rejuvenation", name: "Rejuran®", detail: "2 ml · one session", priceGroup: "Rejuran", priceName: "2 ml · Single session", standard: 650, member: 553, memberLabel: "ISA member price · 15% off", route: "/treatments/rejuran", booking: "Rejuran 2ml", image: "/rejuran-brand-logo.png", imagePosition: "center center",
   },
   {
-    number: "03", label: "Professional hair removal", name: "Waxing", detail: "Underarms · one session", priceGroup: "Waxing", priceName: "Underarms", standard: 25, member: 20, memberLabel: "VenuX member price · 20% off", route: "/treatments/hair-removal", booking: "Professional Waxing", image: "/waxing-clinic-hero.jpg", imagePosition: "center center",
+    number: "03", label: "Professional hair removal", name: "Waxing", detail: "Underarms · one session", priceGroup: "Waxing", priceName: "Underarms", standard: 25, member: 20, memberLabel: "ISA member price · 20% off", route: "/treatments/hair-removal", booking: "Professional Waxing", image: "/waxing-clinic-hero.jpg", imagePosition: "center center",
   },
 ] as const;
 
@@ -19,7 +19,7 @@ const locations = [
   {
     number: "01",
     name: "Top Ryde",
-    label: "VenuX Skin Clinic",
+    label: "ISA Skin Clinic & Aesthetics",
     address: <>Shop 3002, Top Ryde City Shopping Centre<br />Devlin Street &amp; Blaxland Road<br />Ryde NSW 2112</>,
     map: "https://www.google.com/maps/search/?api=1&query=Shop+3002+Top+Ryde+City+Shopping+Centre+Ryde+NSW+2112",
     visual: "top-ryde",
@@ -27,7 +27,7 @@ const locations = [
   {
     number: "02",
     name: "Sydney CBD",
-    label: "VenuX Aesthetics",
+    label: "ISA Aesthetics",
     address: <>515 Kent Street<br />Sydney NSW 2000</>,
     map: "https://www.google.com/maps/search/?api=1&query=515+Kent+Street+Sydney+NSW+2000",
     visual: "kent-street",
@@ -47,9 +47,9 @@ export default async function Home() {
       <Header />
       <section className="poster-hero">
         <div className="poster-copy">
-          <p className="kicker premium-kicker"><strong>VenuX Premium</strong> Skin &amp; Aesthetic Clinic</p>
+          <p className="kicker premium-kicker"><strong>ISA Premium</strong> Skin &amp; Aesthetic Clinic</p>
           <h1>Natural Beauty,<br /><span className="title-accent">Refined by Science.</span></h1>
-          <p>VenuX brings thoughtful skin care and aesthetic precision together through personalised, consultation-led treatment plans.</p>
+          <p>ISA brings thoughtful skin care and aesthetic precision together through personalised, consultation-led treatment plans.</p>
           <div className="hero-actions">
             <a className="button dark" href="/book">Book a consultation</a>
             <a className="button outline-button" href="/treatments">View treatments</a>
@@ -96,11 +96,11 @@ export default async function Home() {
       </section>
 
       <section className="locations-section" id="locations">
-        <div className="locations-heading"><p className="kicker">Visit VenuX</p><h2>Two locations.<br /><span className="title-accent">One standard of care.</span></h2><p>Choose the clinic that is most convenient for your consultation or treatment.</p></div>
+        <div className="locations-heading"><p className="kicker">Visit ISA</p><h2>Two locations.<br /><span className="title-accent">One standard of care.</span></h2><p>Choose the clinic that is most convenient for your consultation or treatment.</p></div>
         <div className="location-grid environment-grid">
           {locations.map((location) => <article className="location-card environment-card" key={location.number}>
             <div className={`location-visual ${location.visual}`} role="img" aria-label={`${location.name} clinic environment photo placeholder`}>
-              <span>Inside VenuX</span><strong>{location.name}</strong><small>Real clinic photography to be added</small>
+              <span>Inside ISA</span><strong>{location.name}</strong><small>Real clinic photography to be added</small>
             </div>
             <div className="location-copy">
               <span>{location.number}</span><p>{location.label}</p><h3>{location.name}</h3><address>{location.address}</address>

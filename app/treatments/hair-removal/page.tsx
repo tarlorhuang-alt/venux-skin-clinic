@@ -3,8 +3,8 @@ import { Footer, Header, PageHero } from "../../site-chrome";
 import { getPriceMap, resolvePrice } from "../../../lib/pricing";
 
 export const metadata: Metadata = {
-  title: "Professional Waxing & Laser Hair Removal | VenuX",
-  description: "Compare VenuX professional waxing and laser hair removal prices by treatment area.",
+  title: "Professional Waxing & Laser Hair Removal | ISA",
+  description: "Compare ISA professional waxing and laser hair removal prices by treatment area.",
 };
 export const dynamic = "force-dynamic";
 
@@ -46,7 +46,7 @@ export default async function HairRemovalPage() {
     return [area, waxing, `$${single * 5}`] as const;
   }).filter(([area]) => area !== "Eyebrow shaping");
   return <main><Header />
-    <PageHero kicker="Hair removal" title="Smooth skin." italic="Your choice of method." intro="Choose professional waxing for immediate smoothness or consultation-led laser hair removal for progressive reduction. VenuX uses the same single-session price for comparable areas." />
+    <PageHero kicker="Hair removal" title="Smooth skin." italic="Your choice of method." intro="Choose professional waxing for immediate smoothness or consultation-led laser hair removal for progressive reduction. ISA uses the same single-session price for comparable areas." />
 
     <section className="treatment-product-hero waxing-visual supplied-waxing-visual">
       <img src="/waxing-clinic-hero.jpg" alt="Professional underarm waxing treatment" />
@@ -60,7 +60,7 @@ export default async function HairRemovalPage() {
         <div className="dual-price-head" role="row"><strong>Treatment area</strong><strong>Waxing</strong><strong>Laser</strong></div>
         {currentAreas.map(([area,waxing,laser]) => <div className="dual-price-row" role="row" key={area}><span>{area}</span><strong>{waxing}</strong><strong>{laser}</strong></div>)}
       </div>
-      <p className="price-note">Prices are current VenuX launch prices and may change. Laser is not performed over eyebrows or unsuitable areas. Final suitability and treatment area are confirmed by the clinic.</p>
+      <p className="price-note">Prices are current ISA launch prices and may change. Laser is not performed over eyebrows or unsuitable areas. Final suitability and treatment area are confirmed by the clinic.</p>
       <div className="wax-course-block">
         <div className="sub-price-heading"><div><p className="kicker">Wax maintenance courses</p><h3>Single visit or six sessions.</h3></div><span>Prepaid course · same treatment area</span></div>
         <div className="wax-course-table" role="table" aria-label="Waxing single-session and six-session prices">
