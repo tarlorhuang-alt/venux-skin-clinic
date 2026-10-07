@@ -7,6 +7,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const input = {
+      submissionKey: String(body.submissionKey ?? ""),
       name: String(body.name ?? "").trim().slice(0,120),
       mobile: String(body.mobile ?? "").trim().slice(0,40),
       email: String(body.email ?? "").trim().toLowerCase().slice(0,160),
