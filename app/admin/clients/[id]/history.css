@@ -1,0 +1,15 @@
+.history-photo-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 0 0 10px;
+}
+
+.history-photo-links a {
+  padding: 7px 9px;
+  border-radius: 7px;
+  background: var(--os-green);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 900;
+}
