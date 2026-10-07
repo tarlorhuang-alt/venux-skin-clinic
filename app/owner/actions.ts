@@ -76,13 +76,16 @@ export async function settleCityAppointment(data:FormData){
 }
 
 export async function startCityAppointment(data:FormData){
-  await requireOwner();const id=Number(data.get("id")),date=ownerDate(data),staffId=Number(data.get("staffId"));
+  await requireOwner();const id=Number(data.get("id")),date=ownerDate(data),staffId=Number(data.get("staffId")),photo=data.get("beforePhoto");
   if(!Number.isInteger(id)||id<=0||!date||!Number.isInteger(staffId)||staffId<=0)redirect(`/owner?date=${date}&error=start`);
-  const started=await startAppointment(id,staffId);revalidatePath("/owner");revalidatePath("/admin/bookings");revalidatePath("/admin/reports");redirect(`/owner?date=${date}&${started?"started=1":"error=start"}`);
+  const allowed=new Set(["image/jpeg","image/png","image/webp","image/heic","image/heif"]);
+  if(!(photo instanceof File)||photo.size===0||photo.size>4_000_000||!allowed.has(photo.type))redirect(`/owner?date=${date}&error=photo`);
+  const beforePhoto={dataUrl:`data:${photo.type};base64,${Buffer.from(await photo.arrayBuffer()).toString("base64")}`,name:photo.name||"before-photo"};
+  const started=await startAppointment(id,staffId,beforePhoto);revalidatePath("/owner");revalidatePath("/admin/bookings");revalidatePath("/admin/reports");redirect(`/owner?date=${date}&${started?"started=1":"error=start"}`);
 }
 
 export async function finishCityAppointment(data:FormData){
-  await requireOwner();const id=Number(data.get("id")),date=ownerDate(data),staffId=Number(data.get("staffId")),comment=text(data,"comment"),manualFee=Number(data.get("manualFee"));
-  if(!Number.isInteger(id)||id<=0||!date||!Number.isInteger(staffId)||staffId<=0||!comment||!Number.isFinite(manualFee)||manualFee<0)redirect(`/owner?date=${date}&error=finish`);
-  const finished=await finishAppointment(id,staffId,comment,manualFee);revalidatePath("/owner");revalidatePath("/admin/bookings");revalidatePath("/admin/reports");revalidatePath("/admin/payroll");redirect(`/owner?date=${date}&${finished?"finished=1":"error=finish"}`);
+  await requireOwner();const id=Number(data.get("id")),date=ownerDate(data),staffId=Number(data.get("staffId")),comment=text(data,"comment");
+  if(!Number.isInteger(id)||id<=0||!date||!Number.isInteger(staffId)||staffId<=0||!comment)redirect(`/owner?date=${date}&error=finish`);
+  const finished=await finishAppointment(id,staffId,comment);revalidatePath("/owner");revalidatePath("/admin/bookings");revalidatePath("/admin/reports");revalidatePath("/admin/payroll");revalidatePath("/admin/follow-ups");redirect(`/owner?date=${date}&${finished?"finished=1":"error=finish"}`);
 }
