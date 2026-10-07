@@ -15,7 +15,7 @@ const value=(input:unknown)=>input==null?"":String(input);
 const dateValue=(input:unknown)=>input?new Date(String(input)).toISOString().slice(0,10):"";
 const dateTimeValue=(input:unknown)=>input?new Date(String(input)).toLocaleString("en-AU",{dateStyle:"medium",timeStyle:"short"}):"";
 
-export default async function ClientRecord({params,searchParams}:{params:Promise<{id:string}>;searchParams:Promise<{saved?:string;error?:string}>}){
+export default async function ClientRecord({params,searchParams}:{params:Promise<{id:string}>;searchParams:Promise<{saved?:string;error?:string;started?:string;appointment?:string}>}){
   const query=await searchParams;
   if(!(await isAdminAuthenticated()))return <AdminLogin error={query.error}/>;
   const clientId=Number((await params).id);if(!Number.isInteger(clientId)||clientId<=0)notFound();
@@ -27,6 +27,7 @@ export default async function ClientRecord({params,searchParams}:{params:Promise
   return <AdminShell active="Clients">
     <header className="clinic-admin-head clinical-head"><div><p>Private clinical record · VX{String(clientId).padStart(6,"0")}</p><h1>{value(c.full_name)} {role==="owner"?<span className={`clinic-location-badge ${value(c.clinic_location)==="City"?"city":"ryde"}`}>{value(c.clinic_location)||"Top Ryde"}</span>:null} {c.membership_status!=null||record.packageItems.some(item=>value(item.status)==="active"&&Number(item.used_sessions)<Number(item.included_sessions))?<span className="premium-client-badge">✦ Premium</span>:null}</h1></div><div className="record-actions"><a href={`tel:${value(c.mobile)}`}>Call</a><a href={`https://wa.me/${value(c.mobile).replace(/^0/,"61").replace(/\D/g,"")}`} target="_blank" rel="noreferrer">WhatsApp</a><a href="/admin/clients">← Clients</a></div></header>
     {query.saved?<div className="clinic-alert">Saved securely. The change has been added to the audit history.</div>:null}
+    {query.started?<div className="clinic-alert">Before photo saved and service started. Complete and sign this client’s Treatment Record below; the appointment is linked to this client profile. {/^\d+$/.test(query.appointment??"")?<a href={`/api/admin/appointments/${query.appointment}/before-photo`} target="_blank" rel="noreferrer">View Before photo →</a>:null}</div>:null}
     {query.error?<div className="clinic-alert error">Please review the required fields and values.</div>:null}
     <nav className="record-tabs"><a href="#profile">Profile</a><a href="#membership">Membership</a><a href="#health">Health</a><a href="#assessment">Assessment</a><a href="#treatments">Treatments</a><a href="#courses">Courses</a><a href="#comments">Comments</a><a href="#history">Audit</a></nav>
 
