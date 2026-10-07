@@ -5,6 +5,7 @@ import { randomBytes,scryptSync,timingSafeEqual } from "node:crypto";
 export type AppointmentStatus = "confirmed" | "in_progress" | "completed" | "cancelled" | "no_show";
 
 export type BookingInput = {
+  submissionKey?: string;
   clientId?: number;
   staffId?: number;
   serviceId?: number;
@@ -134,6 +135,8 @@ export function ensureClinicTables() {
       await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS customer_confirmation_status TEXT NOT NULL DEFAULT 'pending'`;
       await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS confirmed_by_client_at TIMESTAMPTZ`;
       await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS confirmation_message_queued_at TIMESTAMPTZ`;
+      await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS submission_key TEXT`;
+      await sql`CREATE UNIQUE INDEX IF NOT EXISTS venux_appointments_submission_key_idx ON venux_appointments (submission_key) WHERE submission_key IS NOT NULL`;
       await sql`CREATE UNIQUE INDEX IF NOT EXISTS venux_appointments_confirmation_token_idx ON venux_appointments (confirmation_token) WHERE confirmation_token IS NOT NULL`;
       await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS membership_balance_deducted_amount NUMERIC(10,2) NOT NULL DEFAULT 0 CHECK (membership_balance_deducted_amount >= 0)`;
       await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS membership_balance_deducted_at TIMESTAMPTZ`;
@@ -305,6 +308,11 @@ export function ensureClinicTables() {
 export async function createBookingRequest(input: BookingInput) {
   await ensureClinicTables();
   const sql = client();
+  const submissionKey=(input.submissionKey??"").trim().replace(/[^A-Za-z0-9_-]/g,"").slice(0,100)||null;
+  if(submissionKey){
+    const previous=await sql`SELECT id FROM venux_appointments WHERE submission_key=${submissionKey} LIMIT 1`;
+    if(previous[0])return Number(previous[0].id);
+  }
   const normalMobile=normaliseMobile(input.mobile);
   const bookingLocation=/kent street|city/i.test(input.clinic)?"City":"Top Ryde";
   const existing = input.clientId
@@ -328,16 +336,20 @@ export async function createBookingRequest(input: BookingInput) {
     if(overlap[0])throw new BookingConflictError("This beautician already has an overlapping appointment.");
   }
   const standardSlotKey=input.staffId?`${input.clinic}|${input.date}|${input.time}|staff:${input.staffId}`:`${input.clinic}|${input.date}|${input.time}`;
-  const slotKey=input.allowOverlap?`${standardSlotKey}|overlap:${token.slice(0,12)}`:standardSlotKey;
+  const slotKey=input.allowOverlap?`${standardSlotKey}|overlap:${submissionKey??token.slice(0,12)}`:standardSlotKey;
   const created = await sql`WITH premium AS (
       SELECT EXISTS(SELECT 1 FROM venux_memberships m WHERE m.client_id=${clientId})
         OR EXISTS(SELECT 1 FROM venux_client_packages cp JOIN venux_client_package_items cpi ON cpi.client_package_id=cp.id
           WHERE cp.client_id=${clientId} AND cp.status='active' AND (cp.expires_on IS NULL OR cp.expires_on>=${input.date})
           AND cpi.used_sessions<cpi.included_sessions) AS is_premium
     ), claimed AS (INSERT INTO venux_booking_slots (slot_key) VALUES (${slotKey}) ON CONFLICT DO NOTHING RETURNING slot_key),
-    booked AS (INSERT INTO venux_appointments (client_id,clinic,treatment,requested_date,requested_time,notes,source,confirmation_token,staff_id,service_id,duration_minutes,start_minute,total_amount,deposit_status,deposit_amount)
-      SELECT ${clientId},${input.clinic},${input.treatment},${input.date},${input.time},${input.notes ?? ""},${input.source??"website"},${token},${input.staffId??null},${input.serviceId??null},${input.durationMinutes??60},${startMinute},${input.totalAmount??0},CASE WHEN premium.is_premium THEN 'waived' ELSE 'unpaid' END,CASE WHEN premium.is_premium THEN 0 ELSE 45 END FROM claimed CROSS JOIN premium RETURNING id)
+    booked AS (INSERT INTO venux_appointments (client_id,clinic,treatment,requested_date,requested_time,notes,source,confirmation_token,submission_key,staff_id,service_id,duration_minutes,start_minute,total_amount,deposit_status,deposit_amount)
+      SELECT ${clientId},${input.clinic},${input.treatment},${input.date},${input.time},${input.notes ?? ""},${input.source??"website"},${token},${submissionKey},${input.staffId??null},${input.serviceId??null},${input.durationMinutes??60},${startMinute},${input.totalAmount??0},CASE WHEN premium.is_premium THEN 'waived' ELSE 'unpaid' END,CASE WHEN premium.is_premium THEN 0 ELSE 45 END FROM claimed CROSS JOIN premium RETURNING id)
     UPDATE venux_booking_slots s SET appointment_id=b.id FROM booked b WHERE s.slot_key=${slotKey} RETURNING b.id`;
+  if(!created[0]&&submissionKey){
+    const previous=await sql`SELECT id FROM venux_appointments WHERE submission_key=${submissionKey} LIMIT 1`;
+    if(previous[0])return Number(previous[0].id);
+  }
   if(!created[0])throw new BookingConflictError("This time is no longer available.");
   const appointmentId=Number(created[0].id);
   if(input.serviceId){await sql`UPDATE venux_appointments SET client_package_item_id=(
@@ -407,6 +419,7 @@ export async function getAppointmentsRange(from:string,to:string,location="") {
 
 export async function getAppointmentClinic(id:number){await ensureClinicTables();const row=(await client()`SELECT clinic FROM venux_appointments WHERE id=${id} LIMIT 1`)[0];return row?String(row.clinic):null;}
 export async function getAppointmentDate(id:number){await ensureClinicTables();const row=(await client()`SELECT requested_date::text AS requested_date FROM venux_appointments WHERE id=${id} LIMIT 1`)[0];return row?String(row.requested_date).slice(0,10):"";}
+export async function getAppointmentClientId(id:number){await ensureClinicTables();const row=(await client()`SELECT client_id FROM venux_appointments WHERE id=${id} LIMIT 1`)[0];return row?Number(row.client_id):null;}
 
 export async function getClients(search = "",location = "",page = 1,pageSize = 50) {
   await ensureClinicTables();
