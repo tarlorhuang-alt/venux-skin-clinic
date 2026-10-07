@@ -7,7 +7,7 @@ import "../admin.css";
 import "../operations.css";
 
 export const dynamic="force-dynamic";
-export const metadata:Metadata={title:"Client Retention | VenuX",robots:{index:false,follow:false}};
+export const metadata:Metadata={title:"Client Retention | ISA",robots:{index:false,follow:false}};
 
 export default async function RetentionPage({searchParams}:{searchParams:Promise<{days?:string;q?:string;queued?:string;error?:string}>}){
   const params=await searchParams;if(!(await isAdminAuthenticated()))return <AdminLogin error={params.error}/>;const days=[90,120,180,365].includes(Number(params.days))?Number(params.days):120;const clients=await getDormantClients(days,params.q??"");

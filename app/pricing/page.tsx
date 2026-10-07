@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export default async function Pricing() {
   const prices = await getPriceMap();
   return <main><Header />
-    <PageHero kicker="Treatment menu" title="Transparent" italic="by design." intro="Current verified VenuX facial prices, organised by your treatment goals. All amounts are in AUD." />
+    <PageHero kicker="Treatment menu" title="Transparent" italic="by design." intro="Current verified ISA facial prices, organised by your treatment goals. All amounts are in AUD." />
     <section className="pricing page-section">
       <div className="pricing-key" aria-label="Price column guide">
         <span>Treatment</span><span>Duration</span><span>Regular</span><span>Member</span>

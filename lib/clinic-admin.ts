@@ -26,6 +26,7 @@ export type BookingInput = {
 };
 
 export class BookingConflictError extends Error {}
+export class MembershipBalanceError extends Error {}
 
 function normaliseMobile(input:string){
   const digits=input.replace(/\D/g,"");
@@ -603,6 +604,11 @@ export async function updateAppointment(id: number, status: AppointmentStatus, t
   const sql=client();
   const before=await sql`SELECT a.*,c.full_name,c.mobile,c.service_sms_consent,COALESCE(v.category,'') AS service_category,COALESCE(v.service_name,a.treatment) AS service_name FROM venux_appointments a JOIN venux_clients c ON c.id=a.client_id LEFT JOIN venux_services v ON v.id=a.service_id OR (a.service_id IS NULL AND LOWER(v.service_name)=LOWER(a.treatment)) WHERE a.id=${id} ORDER BY v.id LIMIT 1`;
   if(!before[0])return;
+  if(status==="completed"&&before[0].status==="completed"&&before[0].membership_balance_deducted_at&&(Number(before[0].total_amount)!==totalAmount||String(before[0].deposit_status)!==depositStatus)){
+    const membership=(await sql`SELECT balance FROM venux_memberships WHERE client_id=${before[0].client_id} LIMIT 1`)[0];
+    const revisedCharge=Math.max(0,totalAmount-(depositStatus==="paid"?Number(before[0].deposit_amount):0));
+    if(membership&&Number(membership.balance)+Number(before[0].membership_balance_deducted_amount)<revisedCharge)throw new MembershipBalanceError("The membership card does not have enough balance for this correction.");
+  }
   if(status==="cancelled"){
     await sql`UPDATE venux_appointments SET status='cancelled',updated_at=NOW() WHERE id=${id}`;
     await sql`DELETE FROM venux_booking_slots WHERE appointment_id=${id}`;
@@ -637,6 +643,9 @@ export async function updateAppointment(id: number, status: AppointmentStatus, t
   if(status==="completed"&&before[0].status!=="completed"){
     const packageSessionUsed=await consumeAppointmentPackageSession(id);
     if(!packageSessionUsed)await deductMembershipBalanceForAppointment(id);
+  }
+  if(status==="completed"&&before[0].status==="completed"&&(Number(before[0].total_amount)!==totalAmount||String(before[0].deposit_status)!==depositStatus)){
+    await reconcileMembershipBalanceForAppointment(id);
   }
   if(status==="confirmed"&&before[0].status!=="confirmed"&&before[0].service_sms_consent)await queueAppointmentConfirmation(id);
   if(String(before[0].status)!==status||Number(before[0].staff_id??0)!==Number(staffId??0)||Number(before[0].total_amount)!==totalAmount||String(before[0].deposit_status)!==depositStatus){
@@ -775,6 +784,32 @@ async function deductMembershipBalanceForAppointment(appointmentId:number){
   return false;
 }
 
+async function reconcileMembershipBalanceForAppointment(appointmentId:number){
+  const sql=client();const adjusted=await sql`WITH charge AS (
+      SELECT a.id AS appointment_id,a.client_id,a.treatment,a.membership_balance_deducted_amount AS previous_amount,
+        GREATEST(0,a.total_amount-CASE WHEN a.deposit_status='paid' THEN a.deposit_amount ELSE 0 END)::numeric AS revised_amount
+      FROM venux_appointments a JOIN venux_memberships m ON m.client_id=a.client_id
+      WHERE a.id=${appointmentId} AND a.status='completed' AND a.membership_balance_deducted_at IS NOT NULL
+      FOR UPDATE OF a,m
+    ), balance_adjustment AS (
+      UPDATE venux_memberships m SET balance=m.balance+c.previous_amount-c.revised_amount,updated_at=NOW() FROM charge c
+      WHERE m.client_id=c.client_id AND m.balance+c.previous_amount>=c.revised_amount
+      RETURNING m.balance,c.appointment_id,c.client_id,c.treatment,c.previous_amount,c.revised_amount
+    ), appointment_adjustment AS (
+      UPDATE venux_appointments a SET membership_balance_deducted_amount=b.revised_amount,updated_at=NOW()
+      FROM balance_adjustment b WHERE a.id=b.appointment_id
+      RETURNING b.client_id,b.treatment,b.previous_amount,b.revised_amount,b.balance
+    ) SELECT * FROM appointment_adjustment`;
+  if(adjusted[0]){
+    const difference=Number(adjusted[0].revised_amount)-Number(adjusted[0].previous_amount);
+    await audit("membership_balance_reconciled","client",Number(adjusted[0].client_id),`${adjusted[0].treatment}: completed-service card charge updated from $${Number(adjusted[0].previous_amount).toFixed(2)} to $${Number(adjusted[0].revised_amount).toFixed(2)} (${difference>=0?"additional deduction":"refund"} $${Math.abs(difference).toFixed(2)}). Remaining card balance $${Number(adjusted[0].balance).toFixed(2)}.`);
+    return true;
+  }
+  const appointment=(await sql`SELECT membership_balance_deducted_at,package_session_deducted_at FROM venux_appointments WHERE id=${appointmentId}`)[0];
+  if(appointment&&!appointment.membership_balance_deducted_at&&!appointment.package_session_deducted_at)return deductMembershipBalanceForAppointment(appointmentId);
+  return false;
+}
+
 export async function queueAppointmentConfirmation(appointmentId:number){
   await ensureClinicTables();const sql=client();
   const rows=await sql`SELECT a.*,c.full_name,c.mobile FROM venux_appointments a JOIN venux_clients c ON c.id=a.client_id WHERE a.id=${appointmentId}`;
@@ -782,7 +817,7 @@ export async function queueAppointmentConfirmation(appointmentId:number){
   let token=String(row.confirmation_token??"");if(!token){token=randomBytes(24).toString("base64url");await sql`UPDATE venux_appointments SET confirmation_token=${token} WHERE id=${appointmentId}`;}
   const base=(process.env.NEXT_PUBLIC_SITE_URL||"https://venux-three.vercel.app").replace(/\/$/,"");
   const date=new Date(String(row.requested_date)).toLocaleDateString("en-AU",{day:"numeric",month:"short",year:"numeric",timeZone:"Australia/Sydney"});
-  const body=`VenuX Skin Clinic: ${row.full_name}, your ${row.treatment} appointment is held for ${date} at ${row.requested_time}, ${row.clinic}. Please confirm: ${base}/booking/confirm/${token}`;
+  const body=`ISA Skin Clinic & Aesthetics: ${row.full_name}, your ${row.treatment} appointment is held for ${date} at ${row.requested_time}, ${row.clinic}. Please confirm: ${base}/booking/confirm/${token}`;
   const eventKey=`appointment-confirmation:${appointmentId}`;
   await sql`INSERT INTO venux_sms_outbox (client_id,appointment_id,event_key,message_type,recipient,message_body) VALUES (${row.client_id},${appointmentId},${eventKey},'appointment_confirmation',${row.mobile},${body}) ON CONFLICT (event_key) DO NOTHING`;
   await sql`UPDATE venux_appointments SET confirmation_message_queued_at=COALESCE(confirmation_message_queued_at,NOW()) WHERE id=${appointmentId}`;
@@ -805,7 +840,7 @@ export async function queueBirthdayMessages(){
   const part=(type:string)=>parts.find(item=>item.type===type)?.value??"";const today=`${part("month")}-${part("day")}`,year=part("year");
   const rows=await sql`SELECT id,full_name,mobile FROM venux_clients WHERE dob IS NOT NULL AND TO_CHAR(dob,'MM-DD')=${today} AND marketing_sms_consent=TRUE AND sms_unsubscribed_at IS NULL`;
   let queued=0;
-  for(const row of rows){const eventKey=`birthday:${year}:${row.id}`,first=String(row.full_name).trim().split(/\s+/)[0];const result=await sql`INSERT INTO venux_sms_outbox (client_id,event_key,message_type,recipient,message_body) VALUES (${row.id},${eventKey},'birthday',${row.mobile},${`Happy birthday ${first}! VenuX Skin Clinic wishes you a beautiful day. Reply STOP to opt out.`}) ON CONFLICT (event_key) DO NOTHING RETURNING id`;if(result[0])queued++;}
+  for(const row of rows){const eventKey=`birthday:${year}:${row.id}`,first=String(row.full_name).trim().split(/\s+/)[0];const result=await sql`INSERT INTO venux_sms_outbox (client_id,event_key,message_type,recipient,message_body) VALUES (${row.id},${eventKey},'birthday',${row.mobile},${`Happy birthday ${first}! ISA Skin Clinic & Aesthetics wishes you a beautiful day. Reply STOP to opt out.`}) ON CONFLICT (event_key) DO NOTHING RETURNING id`;if(result[0])queued++;}
   return {eligible:rows.length,queued};
 }
 
@@ -1091,7 +1126,7 @@ export async function queueReturnInvite(clientId:number){
   const month=new Intl.DateTimeFormat("en-CA",{timeZone:"Australia/Sydney",year:"numeric",month:"2-digit"}).format(new Date());
   const first=String(row.full_name).trim().split(/\s+/)[0];
   const result=await sql`INSERT INTO venux_sms_outbox (client_id,event_key,message_type,recipient,message_body)
-    VALUES (${clientId},${`return-invite:${month}:${clientId}`},'return_invite',${row.mobile},${`Hi ${first}, it has been a while since your last visit to VenuX Skin Clinic. Reply or book online if you would like help planning your next treatment. Reply STOP to opt out.`})
+    VALUES (${clientId},${`return-invite:${month}:${clientId}`},'return_invite',${row.mobile},${`Hi ${first}, it has been a while since your last visit to ISA Skin Clinic & Aesthetics. Reply or book online if you would like help planning your next treatment. Reply STOP to opt out.`})
     ON CONFLICT (event_key) DO NOTHING RETURNING id`;
   return Boolean(result[0]);
 }

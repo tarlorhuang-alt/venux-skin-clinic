@@ -22,7 +22,7 @@ const carePath = [
 
 const faqs = [
   ["How do I know which treatment is right for me?", "Start with a consultation. We review your concerns, history, current routine and goals before recommending an appropriate option."],
-  ["What is the difference between the regular and member price?", "VenuX Membership begins with a prepaid balance from AUD $1,000 and includes 20% off all VenuX treatments. Visit the Membership page or ask our team before joining."],
+  ["What is the difference between the regular and member price?", "ISA Membership begins with a prepaid balance from AUD $1,000 and includes 20% off all ISA treatments. Visit the Membership page or ask our team before joining."],
   ["Can I book a popular treatment directly?", "Yes. You can select Book now from a popular treatment card. Suitability will still be confirmed before treatment."],
   ["Do I need a consultation before laser or aesthetic care?", "A consultation may be required depending on the treatment and your individual circumstances. Higher-risk procedures always require an appropriate professional assessment."],
   ["How should I prepare for my appointment?", "Preparation varies by treatment. After booking, the clinic will provide any relevant pre-care information for your selected service."],
@@ -46,9 +46,9 @@ const treatmentLinks: Record<string, string> = {
 
 export default function Treatments() {
   return <main><Header />
-    <PageHero kicker="Our treatment approach" title="Care designed" italic="around you." intro="Explore VenuX skin, body and aesthetic care by category or treatment method. Every recommendation begins with your history, concerns and goals." />
+    <PageHero kicker="Our treatment approach" title="Care designed" italic="around you." intro="Explore ISA skin, body and aesthetic care by category or treatment method. Every recommendation begins with your history, concerns and goals." />
 
-    <section className="standards-strip" aria-label="VenuX professional care standards">
+    <section className="standards-strip" aria-label="ISA professional care standards">
       {standards.map(([number, title, description]) => <article key={number}><span>{number}</span><h3>{title}</h3><p>{description}</p></article>)}
     </section>
 
@@ -67,7 +67,7 @@ export default function Treatments() {
 
     <section className="brand-proof" id="brands">
       <div className="brand-proof-visual">
-        <img src="/scientific-hero.png" alt="Scientific skincare concept in VenuX aqua tones" />
+        <img src="/scientific-hero.png" alt="Scientific skincare concept in ISA aqua tones" />
         <div className="visual-trust-note"><span>Professional care</span><strong>Selected for your skin</strong></div>
       </div>
       <div className="brand-proof-copy">
@@ -84,7 +84,7 @@ export default function Treatments() {
       </div>
     </section>
 
-    <section className="care-path" aria-label="VenuX skin care pathway">
+    <section className="care-path" aria-label="ISA skin care pathway">
       <div><p className="kicker">Our approach</p><h2>Clinic care,<br /><i>connected.</i></h2></div>
       <div className="care-path-steps">
         {carePath.map(([title, description], index) => <article key={title}><span>0{index + 1}</span><h3>{title}</h3><p>{description}</p></article>)}
@@ -94,7 +94,7 @@ export default function Treatments() {
     <section className="split-cta compact-cta"><h2>Not sure where<br />to begin?</h2><div><p>Start with a consultation and receive a recommendation based on your concerns and goals.</p><a className="button light-button" href="/book">Book a consultation</a></div></section>
 
     <section className="faq-section" id="questions">
-      <div className="faq-intro"><p className="kicker">Question &amp; Answer</p><h2>Before you<br /><i>book.</i></h2><p>Helpful answers about choosing, booking and preparing for your VenuX treatment.</p></div>
+      <div className="faq-intro"><p className="kicker">Question &amp; Answer</p><h2>Before you<br /><i>book.</i></h2><p>Helpful answers about choosing, booking and preparing for your ISA treatment.</p></div>
       <div className="faq-list">
         {faqs.map(([question, answer], index) => <details key={question}>
           <summary><span>0{index + 1}</span><strong>{question}</strong><i>＋</i></summary>

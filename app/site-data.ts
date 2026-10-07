@@ -24,7 +24,7 @@ export const services = [
     id: "methods",
     category: "Treatment Methods",
     eyebrow: "Treatment technology",
-    description: "Explore the considered methods used across VenuX skin care and consultation-led treatment planning.",
+    description: "Explore the considered methods used across ISA skin care and consultation-led treatment planning.",
     items: ["Laser & Light", "Lutronic Picosecond", "Ultherapy®", "HIFU Focused Ultrasound", "Radiofrequency", "Enzyme Therapy"],
   },
 ];

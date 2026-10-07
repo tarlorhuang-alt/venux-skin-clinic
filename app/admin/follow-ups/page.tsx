@@ -8,7 +8,7 @@ import "../operations.css";
 import "./followups.css";
 
 export const dynamic="force-dynamic";
-export const metadata:Metadata={title:"Follow-ups | VenuX Clinic OS",robots:{index:false,follow:false}};
+export const metadata:Metadata={title:"Follow-ups | ISA Clinic OS",robots:{index:false,follow:false}};
 
 export default async function FollowupsPage({searchParams}:{searchParams:Promise<{error?:string;saved?:string}>}){
   const params=await searchParams;

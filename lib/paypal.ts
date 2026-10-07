@@ -65,14 +65,14 @@ export function createDepositOrder() {
     body: JSON.stringify({
       intent: "CAPTURE",
       purchase_units: [{
-        description: "VenuX consultation booking deposit",
+        description: "ISA consultation booking deposit",
         custom_id: "VENUX-BOOKING-DEPOSIT",
         amount: { currency_code: "AUD", value: DEPOSIT_AMOUNT },
       }],
       payment_source: {
         paypal: {
           experience_context: {
-            brand_name: "VenuX Skin Clinic",
+            brand_name: "ISA Skin Clinic & Aesthetics",
             locale: "en-AU",
             user_action: "PAY_NOW",
             shipping_preference: "NO_SHIPPING",

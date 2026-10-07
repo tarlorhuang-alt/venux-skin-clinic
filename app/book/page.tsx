@@ -4,7 +4,7 @@ import { Footer, Header, PageHero } from "../site-chrome";
 
 export default function Book() {
   return <main><Header />
-    <PageHero kicker="Begin your journey" title="Let’s talk" italic="about your skin." intro="Share a few details and the VenuX team can follow up to confirm your consultation, treatment and final fee." />
+    <PageHero kicker="Begin your journey" title="Let’s talk" italic="about your skin." intro="Share a few details and the ISA team can follow up to confirm your consultation, treatment and final fee." />
     <section className="booking booking-page">
       <div className="booking-intro"><p className="kicker">Book & pay</p><h2>Your next step,<br />made simple.</h2>
         <p>Choose a preferred clinic, date and time, then secure the request with a fixed AUD $45 deposit. Existing Premium membership and package clients are deposit-exempt. Your requested time and treatment suitability remain subject to clinic confirmation.</p>

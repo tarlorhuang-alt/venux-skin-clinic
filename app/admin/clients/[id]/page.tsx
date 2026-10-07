@@ -10,7 +10,7 @@ import "./clinical.css";
 import "./session.css";
 
 export const dynamic="force-dynamic";
-export const metadata:Metadata={title:"Clinical record | VenuX Clinic OS",robots:{index:false,follow:false}};
+export const metadata:Metadata={title:"Clinical record | ISA Clinic OS",robots:{index:false,follow:false}};
 const value=(input:unknown)=>input==null?"":String(input);
 const dateValue=(input:unknown)=>input?new Date(String(input)).toISOString().slice(0,10):"";
 const dateTimeValue=(input:unknown)=>input?new Date(String(input)).toLocaleString("en-AU",{dateStyle:"medium",timeStyle:"short"}):"";

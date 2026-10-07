@@ -9,7 +9,7 @@ import "../operations.css";
 import "./expenses.css";
 
 export const dynamic="force-dynamic";
-export const metadata:Metadata={title:"Expenses | VenuX Clinic OS",robots:{index:false,follow:false}};
+export const metadata:Metadata={title:"Expenses | ISA Clinic OS",robots:{index:false,follow:false}};
 const currentMonth=()=>new Intl.DateTimeFormat("en-CA",{timeZone:"Australia/Sydney",year:"numeric",month:"2-digit"}).format(new Date());
 
 export default async function ExpensesPage({searchParams}:{searchParams:Promise<{month?:string;created?:string;error?:string}>}){

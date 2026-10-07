@@ -3,7 +3,7 @@ import { Footer, Header } from "../../../site-chrome";
 import "../ipl.css";
 
 export const metadata: Metadata = {
-  title: "How IPL Works & Illustrative Examples | VenuX Skin Clinic",
+  title: "How IPL Works & Illustrative Examples | ISA Skin Clinic & Aesthetics",
   description: "A visual explanation of IPL, the concerns it may address and illustrative treatment examples. Consultation is required.",
 };
 

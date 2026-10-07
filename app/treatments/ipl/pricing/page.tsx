@@ -4,8 +4,8 @@ import { getPriceMap, resolvePrice } from "../../../../lib/pricing";
 import "../ipl.css";
 
 export const metadata: Metadata = {
-  title: "IPL Price List | VenuX Skin Clinic",
-  description: "Current VenuX IPL treatment area pricing in AUD, including regular and member prices.",
+  title: "IPL Price List | ISA Skin Clinic & Aesthetics",
+  description: "Current ISA IPL treatment area pricing in AUD, including regular and member prices.",
 };
 
 const areas = [
@@ -24,7 +24,7 @@ export default async function IplPricingPage() {
   return <main><Header />
     <section className="price-page-hero"><a className="back-link" href="/treatments/ipl">← IPL overview</a><p className="kicker">Current IPL pricing · AUD</p><h1>IPL treatment<br /><i>price list.</i></h1><p>Pricing is organised by treatment area. A consultation and, when appropriate, a patch test are required before treatment.</p></section>
 
-    <section className="ipl-pricing standalone-pricing"><div className="section-heading"><div><p className="kicker">Treatment areas</p><h2>Regular &<br /><i>member pricing.</i></h2></div><p>These are the VenuX IPL prices you previously confirmed. Your practitioner will confirm the correct area, suitability and recommended treatment plan.</p></div><div className="ipl-area-table" role="table" aria-label="IPL treatment areas and prices"><div className="ipl-area-row area-head" role="row"><span>Area</span><span>Common focus</span><span>Regular</span><span>Member</span></div>{areas.map(([area, focus, regular, member, from])=>{ const price=resolvePrice(prices,"IPL",area,regular,member); return <div className="ipl-area-row" role="row" key={area}><strong>{area}</strong><span>{focus}</span><span>{from&&"From "}${price.regular}</span><span>{from&&"From "}${price.member}</span></div>;})}</div><p className="price-note">All prices are in Australian dollars. Spot-treatment prices start from the amount shown and vary with treatment size. Final pricing is confirmed before treatment.</p></section>
+    <section className="ipl-pricing standalone-pricing"><div className="section-heading"><div><p className="kicker">Treatment areas</p><h2>Regular &<br /><i>member pricing.</i></h2></div><p>These are the ISA IPL prices you previously confirmed. Your practitioner will confirm the correct area, suitability and recommended treatment plan.</p></div><div className="ipl-area-table" role="table" aria-label="IPL treatment areas and prices"><div className="ipl-area-row area-head" role="row"><span>Area</span><span>Common focus</span><span>Regular</span><span>Member</span></div>{areas.map(([area, focus, regular, member, from])=>{ const price=resolvePrice(prices,"IPL",area,regular,member); return <div className="ipl-area-row" role="row" key={area}><strong>{area}</strong><span>{focus}</span><span>{from&&"From "}${price.regular}</span><span>{from&&"From "}${price.member}</span></div>;})}</div><p className="price-note">All prices are in Australian dollars. Spot-treatment prices start from the amount shown and vary with treatment size. Final pricing is confirmed before treatment.</p></section>
 
     <section className="price-guidance"><article><span>01</span><h3>Consultation</h3><p>We review your concern, skin characteristics, medical history, medication and recent sun exposure.</p></article><article><span>02</span><h3>Patch testing</h3><p>A patch test may be recommended depending on the area, skin response and treatment parameters.</p></article><article><span>03</span><h3>Treatment plan</h3><p>The number and timing of sessions varies. No package or outcome is assumed from a single listed price.</p></article></section>
 

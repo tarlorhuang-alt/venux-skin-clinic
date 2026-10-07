@@ -3,8 +3,8 @@ import { Footer, Header } from "../site-chrome";
 import "./products.css";
 
 export const metadata: Metadata = {
-  title: "Sothys & DMK Skincare Products | VenuX Skin Clinic",
-  description: "Browse professional Sothys Paris and DMK home-care products available to enquire about through VenuX Skin Clinic.",
+  title: "Sothys & DMK Skincare Products | ISA Skin Clinic & Aesthetics",
+  description: "Browse professional Sothys Paris and DMK home-care products available to enquire about through ISA Skin Clinic & Aesthetics.",
 };
 
 const productGroups = [
@@ -24,7 +24,7 @@ const productGroups = [
     tone: "dmk",
     intro: "DMK products are selected as part of a professionally planned skin revision pathway.",
     products: [
-      { name: "Herb & Mineral Mist", size: "120 ml", type: "Hydrating mist", price: "$89 current stockist price", priceNote: "Current Australian authorised-stockist price; VenuX confirms its own current selling price before purchase.", image: "https://thebeautyshop.com.au/cdn/shop/files/dmk-herb-mineral-mist-120ml-793573633002-341743.jpg?width=800", description: "A home-care mist used within selected DMK routines and prescribed protocols.", source: "https://thebeautyshop.com.au/products/herb-mineral-mist-120ml" },
+      { name: "Herb & Mineral Mist", size: "120 ml", type: "Hydrating mist", price: "$89 current stockist price", priceNote: "Current Australian authorised-stockist price; ISA confirms its own current selling price before purchase.", image: "https://thebeautyshop.com.au/cdn/shop/files/dmk-herb-mineral-mist-120ml-793573633002-341743.jpg?width=800", description: "A home-care mist used within selected DMK routines and prescribed protocols.", source: "https://thebeautyshop.com.au/products/herb-mineral-mist-120ml" },
       { name: "Beta Gel", size: "30 ml", type: "Professional serum", price: "$169 current stockist price", priceNote: "Current Australian authorised-stockist price; professional prescription is required.", image: "https://thebeautyshop.com.au/cdn/shop/files/dmk-beta-gel-30ml-793573632869-910066.jpg?width=800", description: "A professional home-care serum supplied following a DMK skin consultation.", source: "https://thebeautyshop.com.au/products/beta-gel-30ml" },
     ],
   },
@@ -36,7 +36,7 @@ export default function ProductsPage() {
       <div>
         <p className="kicker">Professional home care</p>
         <h1>Sothys &amp; DMK<br /><span className="title-accent">selected for your skin.</span></h1>
-        <p>Explore professional products available to enquire about through VenuX. Our clinic confirms the correct product, current stock and retail price before purchase.</p>
+        <p>Explore professional products available to enquire about through ISA. Our clinic confirms the correct product, current stock and retail price before purchase.</p>
         <div className="hero-actions"><a className="button dark" href="#catalogue">View products</a><a className="text-link" href="/book">Ask for product advice ↗</a></div>
       </div>
       <div className="product-hero-art" aria-hidden="true"><div className="bottle bottle-one"><span>DMK</span></div><div className="bottle bottle-two"><span>Sothys</span></div><span className="product-orbit" /></div>
@@ -73,7 +73,7 @@ export default function ProductsPage() {
 
     <section className="product-next">
       <div><p className="kicker">Product consultation</p><h2>Build a routine<br /><span className="title-accent">with purpose.</span></h2></div>
-      <div><p>Tell us what you currently use and what you would like to improve. The VenuX team will confirm the recommended Sothys or DMK products, current stock and exact price before purchase.</p><a className="text-link" href="/book">Request product advice ↗</a></div>
+      <div><p>Tell us what you currently use and what you would like to improve. The ISA team will confirm the recommended Sothys or DMK products, current stock and exact price before purchase.</p><a className="text-link" href="/book">Request product advice ↗</a></div>
     </section>
     <Footer />
   </main>;

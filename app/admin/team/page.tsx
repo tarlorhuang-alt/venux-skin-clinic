@@ -7,7 +7,7 @@ import "../admin.css";
 import "../operations.css";
 
 export const dynamic="force-dynamic";
-export const metadata:Metadata={title:"Team Clock & Revenue | VenuX",robots:{index:false,follow:false}};
+export const metadata:Metadata={title:"Team Clock & Revenue | ISA",robots:{index:false,follow:false}};
 
 const todaySydney=()=>new Intl.DateTimeFormat("en-CA",{timeZone:"Australia/Sydney",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
 const sydneyDateTime=(input:unknown)=>new Intl.DateTimeFormat("en-AU",{timeZone:"Australia/Sydney",day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit",hour12:true}).format(new Date(String(input)));
