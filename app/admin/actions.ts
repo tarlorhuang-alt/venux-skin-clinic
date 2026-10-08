@@ -37,10 +37,13 @@ export async function startAppointmentAction(formData:FormData){
   const recordingConfirmed=formData.get("handyRecording")==="yes";
   if(!recordingConfirmed)redirect(`/admin/bookings?${/^\d{4}-\d{2}-\d{2}$/.test(returnDate)?`date=${returnDate}&`:""}error=recording#appointment-${id}`);
   const allowed=new Set(["image/jpeg","image/png","image/webp","image/heic","image/heif"]);
-  if(!(photo instanceof File)||photo.size===0||photo.size>4*1024*1024||!allowed.has(photo.type))redirect(`/admin/bookings?${/^\d{4}-\d{2}-\d{2}$/.test(returnDate)?`date=${returnDate}&`:""}error=photo#appointment-${id}`);
-  const dataUrl=`data:${photo.type};base64,${Buffer.from(await photo.arrayBuffer()).toString("base64")}`;
+  let beforePhoto:{dataUrl:string;name:string}|undefined;
+  if(photo instanceof File&&photo.size>0){
+    if(photo.size>4*1024*1024||!allowed.has(photo.type))redirect(`/admin/bookings?${/^\d{4}-\d{2}-\d{2}$/.test(returnDate)?`date=${returnDate}&`:""}error=photo#appointment-${id}`);
+    beforePhoto={dataUrl:`data:${photo.type};base64,${Buffer.from(await photo.arrayBuffer()).toString("base64")}`,name:photo.name||`before-${id}.jpg`};
+  }
   const clientId=await getAppointmentClientId(id);
-  const started=await startAppointment(id,staffId,{dataUrl,name:photo.name||`before-${id}.jpg`},recordingConfirmed);revalidatePath("/admin");revalidatePath("/admin/bookings");revalidatePath("/admin/reports");
+  const started=await startAppointment(id,staffId,beforePhoto,recordingConfirmed);revalidatePath("/admin");revalidatePath("/admin/bookings");revalidatePath("/admin/reports");
   if(started&&clientId){revalidatePath(`/admin/clients/${clientId}`);redirect(`/admin/clients/${clientId}?started=1&appointment=${id}#treatments`);}
   redirect(`/admin/bookings?${/^\d{4}-\d{2}-\d{2}$/.test(returnDate)?`date=${returnDate}&`:""}error=start#appointment-${id}`);
 }
@@ -51,8 +54,11 @@ export async function finishAppointmentAction(formData:FormData){
   if(await staffCannotAccessAppointment(id))redirect("/admin?error=restricted");
   const photo=formData.get("afterPhoto"),returnDate=String(formData.get("returnDate")??"");
   const allowed=new Set(["image/jpeg","image/png","image/webp","image/heic","image/heif"]);
-  if(!(photo instanceof File)||photo.size===0||photo.size>4*1024*1024||!allowed.has(photo.type))redirect(`/admin/bookings?${/^\d{4}-\d{2}-\d{2}$/.test(returnDate)?`date=${returnDate}&`:""}error=after-photo#appointment-${id}`);
-  const afterPhoto={dataUrl:`data:${photo.type};base64,${Buffer.from(await photo.arrayBuffer()).toString("base64")}`,name:photo.name||`after-${id}.jpg`};
+  let afterPhoto:{dataUrl:string;name:string}|undefined;
+  if(photo instanceof File&&photo.size>0){
+    if(photo.size>4*1024*1024||!allowed.has(photo.type))redirect(`/admin/bookings?${/^\d{4}-\d{2}-\d{2}$/.test(returnDate)?`date=${returnDate}&`:""}error=after-photo#appointment-${id}`);
+    afterPhoto={dataUrl:`data:${photo.type};base64,${Buffer.from(await photo.arrayBuffer()).toString("base64")}`,name:photo.name||`after-${id}.jpg`};
+  }
   const finished=await finishAppointment(id,staffId,comment,afterPhoto),clientId=await getAppointmentClientId(id);revalidatePath("/admin");revalidatePath("/admin/bookings");revalidatePath("/admin/reports");revalidatePath("/admin/payroll");revalidatePath("/admin/follow-ups");if(clientId)revalidatePath(`/admin/clients/${clientId}`);redirect(`/admin/bookings?${/^\d{4}-\d{2}-\d{2}$/.test(returnDate)?`date=${returnDate}&`:""}${finished?"finished=1":"error=finish"}#appointment-${id}`);
 }
 
