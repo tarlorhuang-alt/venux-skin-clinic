@@ -843,7 +843,8 @@ export async function queueAppointmentConfirmation(appointmentId:number){
   let token=String(row.confirmation_token??"");if(!token){token=randomBytes(24).toString("base64url");await sql`UPDATE venux_appointments SET confirmation_token=${token} WHERE id=${appointmentId}`;}
   const base=(process.env.NEXT_PUBLIC_SITE_URL||"https://venux-three.vercel.app").replace(/\/$/,"");
   const date=new Date(String(row.requested_date)).toLocaleDateString("en-AU",{day:"numeric",month:"short",year:"numeric",timeZone:"Australia/Sydney"});
-  const body=`ISA Skin Clinic & Aesthetics: ${row.full_name}, your ${row.treatment} appointment is held for ${date} at ${row.requested_time}, ${row.clinic}. Please confirm: ${base}/booking/confirm/${token}`;
+  const first=String(row.full_name).trim().split(/\s+/)[0];
+  const body=`ISA Skin Clinic & Aesthetics: Hi ${first}, your ${row.treatment} appointment is held for ${date} at ${row.requested_time}, ${row.clinic}. Confirm: ${base}/booking/confirm/${token} Update your recent skin and health details: ${base}/booking/consultation/${token}`;
   const eventKey=`appointment-confirmation:${appointmentId}`;
   const inserted=await sql`INSERT INTO venux_sms_outbox (client_id,appointment_id,event_key,message_type,recipient,message_body) VALUES (${row.client_id},${appointmentId},${eventKey},'appointment_confirmation',${row.mobile},${body}) ON CONFLICT (event_key) DO NOTHING RETURNING id`;
   await sql`UPDATE venux_appointments SET confirmation_message_queued_at=COALESCE(confirmation_message_queued_at,NOW()) WHERE id=${appointmentId}`;
@@ -853,6 +854,24 @@ export async function queueAppointmentConfirmation(appointmentId:number){
 
 export async function getBookingByToken(token:string){
   await ensureClinicTables();return (await client()`SELECT a.id,a.treatment,a.clinic,a.requested_date,a.requested_time,a.status,a.customer_confirmation_status,a.confirmed_by_client_at,c.full_name FROM venux_appointments a JOIN venux_clients c ON c.id=a.client_id WHERE a.confirmation_token=${token} LIMIT 1`)[0]??null;
+}
+
+export async function getConsultationByToken(token:string){
+  await ensureClinicTables();
+  return (await client()`SELECT a.id,a.treatment,a.clinic,a.requested_date,a.requested_time,a.status,c.id AS client_id,c.full_name,
+    h.skin_type,h.primary_concerns,h.allergies,h.medical_conditions,h.medications,h.pregnancy_status,h.breastfeeding,h.implants,h.aesthetic_history,h.current_skincare,h.updated_at
+    FROM venux_appointments a JOIN venux_clients c ON c.id=a.client_id
+    LEFT JOIN venux_health_profiles h ON h.client_id=c.id
+    WHERE a.confirmation_token=${token} LIMIT 1`)[0]??null;
+}
+
+export async function saveConsultationByToken(token:string,values:Record<string,string|boolean>){
+  await ensureClinicTables();
+  const booking=(await client()`SELECT client_id FROM venux_appointments WHERE confirmation_token=${token} LIMIT 1`)[0];
+  if(!booking)return false;
+  await saveHealthProfile(Number(booking.client_id),values);
+  await audit("client_form_submitted","client",Number(booking.client_id),"Online pre-appointment skin and health update submitted");
+  return true;
 }
 
 export async function respondToBooking(token:string,response:"confirmed"|"change_requested"){
@@ -917,7 +936,7 @@ export async function sendSmsOutboxMessage(id:number){
   }
   await sql`UPDATE venux_sms_outbox SET status='sending',last_error=NULL,last_attempt_at=NOW(),attempt_count=attempt_count+1 WHERE id=${id}`;
   try{
-    const from=process.env.CLICKSEND_FROM?.trim();
+    const from=(process.env.CLICKSEND_FROM||"61432752750").trim();
     const message:Record<string,string>={body:String(row.message_body),to:recipient,source:'sdk'};if(from)message.from=from;
     const response=await fetch('https://rest.clicksend.com/v3/sms/send',{method:'POST',headers:{authorization:`Basic ${Buffer.from(`${username}:${apiKey}`).toString('base64')}`,'content-type':'application/json'},body:JSON.stringify({messages:[message]}),cache:'no-store'});
     const payload=await response.json().catch(()=>null) as {response_code?:string;response_msg?:string;data?:{messages?:Array<{message_id?:string;status?:string;status_text?:string}>}}|null;
