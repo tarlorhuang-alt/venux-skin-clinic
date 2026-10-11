@@ -683,14 +683,18 @@ export async function finishAppointment(id:number,staffId:number,comment:string,
   const sql=client();
   const rows=await sql`SELECT total_amount,deposit_status,status,staff_id FROM venux_appointments WHERE id=${id}`;
   const row=rows[0];
-  if(!row||String(row.status)!=="in_progress"||Number(row.staff_id)!==staffId||!comment.trim()||(afterPhoto&&!afterPhoto.dataUrl.startsWith("data:image/")))return false;
+  if(!row||Number(row.staff_id)!==staffId||!comment.trim()||(afterPhoto&&!afterPhoto.dataUrl.startsWith("data:image/")))return false;
+  if(String(row.status)==="completed")return true;
+  if(String(row.status)!=="in_progress")return false;
   await updateAppointment(id,"completed",Number(row.total_amount),String(row.deposit_status),staffId);
   await sql`UPDATE venux_appointments SET completion_comment=${comment.trim()},wage_project_rate=0,staff_wage_amount=0,updated_at=NOW() WHERE id=${id}`;
   if(afterPhoto)await sql`UPDATE venux_appointments SET after_photo_data_url=${afterPhoto.dataUrl},after_photo_name=${afterPhoto.name},after_photo_uploaded_at=NOW(),updated_at=NOW() WHERE id=${id}`;
-  await sql`INSERT INTO venux_followups (client_id,appointment_id,due_date,followup_type,status)
-    SELECT client_id,id,(NOW() AT TIME ZONE 'Australia/Sydney')::date+${FOLLOWUP_DAYS},'One-week treatment follow-up','pending'
-    FROM venux_appointments WHERE id=${id}
-    ON CONFLICT (appointment_id) WHERE appointment_id IS NOT NULL DO NOTHING`;
+  try{
+    await sql`INSERT INTO venux_followups (client_id,appointment_id,due_date,followup_type,status)
+      SELECT client_id,id,(NOW() AT TIME ZONE 'Australia/Sydney')::date+${FOLLOWUP_DAYS},'One-week treatment follow-up','pending'
+      FROM venux_appointments WHERE id=${id}
+      ON CONFLICT (appointment_id) WHERE appointment_id IS NOT NULL DO NOTHING`;
+  }catch(error){console.error("Unable to create treatment follow-up",{appointmentId:id,error:error instanceof Error?error.message:"Unknown error"});}
   return true;
 }
 

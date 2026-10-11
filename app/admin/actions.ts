@@ -59,7 +59,15 @@ export async function finishAppointmentAction(formData:FormData){
     if(photo.size>4*1024*1024||!allowed.has(photo.type))redirect(`/admin/bookings?${/^\d{4}-\d{2}-\d{2}$/.test(returnDate)?`date=${returnDate}&`:""}error=after-photo#appointment-${id}`);
     afterPhoto={dataUrl:`data:${photo.type};base64,${Buffer.from(await photo.arrayBuffer()).toString("base64")}`,name:photo.name||`after-${id}.jpg`};
   }
-  const finished=await finishAppointment(id,staffId,comment,afterPhoto),clientId=await getAppointmentClientId(id);revalidatePath("/admin");revalidatePath("/admin/bookings");revalidatePath("/admin/reports");revalidatePath("/admin/payroll");revalidatePath("/admin/follow-ups");if(clientId)revalidatePath(`/admin/clients/${clientId}`);redirect(`/admin/bookings?${/^\d{4}-\d{2}-\d{2}$/.test(returnDate)?`date=${returnDate}&`:""}${finished?"finished=1":"error=finish"}#appointment-${id}`);
+  let finished=false,clientId:number|null=null;
+  try{
+    clientId=await getAppointmentClientId(id);
+    finished=await finishAppointment(id,staffId,comment,afterPhoto);
+  }catch(error){
+    console.error("Unable to finish appointment",{appointmentId:id,error:error instanceof Error?error.message:"Unknown error"});
+    redirect(`/admin/bookings?${/^\d{4}-\d{2}-\d{2}$/.test(returnDate)?`date=${returnDate}&`:""}error=finish#appointment-${id}`);
+  }
+  revalidatePath("/admin");revalidatePath("/admin/bookings");revalidatePath("/admin/reports");revalidatePath("/admin/payroll");revalidatePath("/admin/follow-ups");if(clientId)revalidatePath(`/admin/clients/${clientId}`);redirect(`/admin/bookings?${/^\d{4}-\d{2}-\d{2}$/.test(returnDate)?`date=${returnDate}&`:""}${finished?"finished=1":"error=finish"}#appointment-${id}`);
 }
 
 export async function deleteCancelledAppointmentAction(formData:FormData){
