@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { clearAdminSession, createAdminSession, getAdminRole,isAdminAuthenticated, isOwnerAuthenticated, roleForPassword } from "../../lib/admin-auth";
-import { assignPackageToClient,BookingConflictError,completeFollowup,createBookingRequest,createClientCourse,createClientProfile,createExpense,createPackageTemplate,createSkinAssessment,createStaff,createSupplier,createTreatmentRecord,deleteCancelledAppointment,deletePackageTemplate,findClientIdForPackage,finishAppointment,getAppointmentClientId,getAppointmentClinic,getAppointmentDate,getClientForBooking,getOwnerService,importClientRows,markSmsOutboxSent,MembershipBalanceError,queueBirthdayMessages,queueReturnInvite,rechargeMembership,saveClientProfile,saveHealthProfile,setStaffClockPin,startAppointment,toggleStaffClock,toggleStaffClockWithPin,updateAppointment,updateStaffClockEntry,useClientCourseSession,useClientPackageItem,type AppointmentStatus,type ClientImportRow } from "../../lib/clinic-admin";
+import { assignPackageToClient,BookingConflictError,completeFollowup,createBookingRequest,createClientCourse,createClientProfile,createExpense,createPackageTemplate,createSkinAssessment,createStaff,createSupplier,createTreatmentRecord,deleteCancelledAppointment,deletePackageTemplate,findClientIdForPackage,finishAppointment,getAppointmentClientId,getAppointmentClinic,getAppointmentDate,getClientForBooking,getOwnerService,importClientRows,MembershipBalanceError,queueBirthdayMessages,queueReturnInvite,rechargeMembership,saveClientProfile,saveHealthProfile,sendSmsOutboxMessage,setStaffClockPin,startAppointment,toggleStaffClock,toggleStaffClockWithPin,updateAppointment,updateStaffClockEntry,useClientCourseSession,useClientPackageItem,type AppointmentStatus,type ClientImportRow } from "../../lib/clinic-admin";
 
 export async function adminLogin(formData: FormData) {
   const role=roleForPassword(String(formData.get("password") ?? ""));
@@ -106,8 +106,8 @@ export async function createClientProfileAction(formData:FormData){
   revalidatePath("/admin/clients");redirect(`/admin/clients/${result.id}?${result.created?"saved=profile":"existing=1"}`);
 }
 
-export async function markSmsSentAction(formData:FormData){
-  if(!(await isAdminAuthenticated()))redirect("/admin?error=session");const id=Number(formData.get("id"));if(!Number.isInteger(id)||id<=0)redirect("/admin/messages?error=invalid");await markSmsOutboxSent(id);revalidatePath("/admin/messages");redirect("/admin/messages?saved=1");
+export async function sendSmsNowAction(formData:FormData){
+  if(!(await isAdminAuthenticated()))redirect("/admin?error=session");const id=Number(formData.get("id"));if(!Number.isInteger(id)||id<=0)redirect("/admin/messages?error=invalid");const sent=await sendSmsOutboxMessage(id);revalidatePath("/admin/messages");redirect(`/admin/messages?${sent?'sent=1':'error=send'}`);
 }
 
 export async function queueBirthdaysAction(){if(!(await isAdminAuthenticated()))redirect("/admin?error=session");const result=await queueBirthdayMessages();revalidatePath("/admin/messages");redirect(`/admin/messages?birthdays=${result.queued}`);}

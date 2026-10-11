@@ -217,6 +217,11 @@ export function ensureClinicTables() {
         message_body TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'queued',
         queued_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), sent_at TIMESTAMPTZ
       )`;
+      await sql`ALTER TABLE venux_sms_outbox ADD COLUMN IF NOT EXISTS provider_message_id TEXT`;
+      await sql`ALTER TABLE venux_sms_outbox ADD COLUMN IF NOT EXISTS provider_status TEXT`;
+      await sql`ALTER TABLE venux_sms_outbox ADD COLUMN IF NOT EXISTS last_error TEXT`;
+      await sql`ALTER TABLE venux_sms_outbox ADD COLUMN IF NOT EXISTS attempt_count INTEGER NOT NULL DEFAULT 0`;
+      await sql`ALTER TABLE venux_sms_outbox ADD COLUMN IF NOT EXISTS last_attempt_at TIMESTAMPTZ`;
       await sql`CREATE INDEX IF NOT EXISTS venux_sms_outbox_status_idx ON venux_sms_outbox (status,queued_at)`;
       await sql`CREATE TABLE IF NOT EXISTS venux_staff (
         id BIGSERIAL PRIMARY KEY, full_name TEXT NOT NULL, role TEXT NOT NULL,
@@ -840,8 +845,9 @@ export async function queueAppointmentConfirmation(appointmentId:number){
   const date=new Date(String(row.requested_date)).toLocaleDateString("en-AU",{day:"numeric",month:"short",year:"numeric",timeZone:"Australia/Sydney"});
   const body=`ISA Skin Clinic & Aesthetics: ${row.full_name}, your ${row.treatment} appointment is held for ${date} at ${row.requested_time}, ${row.clinic}. Please confirm: ${base}/booking/confirm/${token}`;
   const eventKey=`appointment-confirmation:${appointmentId}`;
-  await sql`INSERT INTO venux_sms_outbox (client_id,appointment_id,event_key,message_type,recipient,message_body) VALUES (${row.client_id},${appointmentId},${eventKey},'appointment_confirmation',${row.mobile},${body}) ON CONFLICT (event_key) DO NOTHING`;
+  const inserted=await sql`INSERT INTO venux_sms_outbox (client_id,appointment_id,event_key,message_type,recipient,message_body) VALUES (${row.client_id},${appointmentId},${eventKey},'appointment_confirmation',${row.mobile},${body}) ON CONFLICT (event_key) DO NOTHING RETURNING id`;
   await sql`UPDATE venux_appointments SET confirmation_message_queued_at=COALESCE(confirmation_message_queued_at,NOW()) WHERE id=${appointmentId}`;
+  if(inserted[0])await sendSmsOutboxMessage(Number(inserted[0].id));
   return true;
 }
 
@@ -861,8 +867,26 @@ export async function queueBirthdayMessages(){
   const part=(type:string)=>parts.find(item=>item.type===type)?.value??"";const today=`${part("month")}-${part("day")}`,year=part("year");
   const rows=await sql`SELECT id,full_name,mobile FROM venux_clients WHERE dob IS NOT NULL AND TO_CHAR(dob,'MM-DD')=${today} AND marketing_sms_consent=TRUE AND sms_unsubscribed_at IS NULL`;
   let queued=0;
-  for(const row of rows){const eventKey=`birthday:${year}:${row.id}`,first=String(row.full_name).trim().split(/\s+/)[0];const result=await sql`INSERT INTO venux_sms_outbox (client_id,event_key,message_type,recipient,message_body) VALUES (${row.id},${eventKey},'birthday',${row.mobile},${`Happy birthday ${first}! ISA Skin Clinic & Aesthetics wishes you a beautiful day. Reply STOP to opt out.`}) ON CONFLICT (event_key) DO NOTHING RETURNING id`;if(result[0])queued++;}
-  return {eligible:rows.length,queued};
+  let sent=0;
+  for(const row of rows){const eventKey=`birthday:${year}:${row.id}`,first=String(row.full_name).trim().split(/\s+/)[0];const result=await sql`INSERT INTO venux_sms_outbox (client_id,event_key,message_type,recipient,message_body) VALUES (${row.id},${eventKey},'birthday',${row.mobile},${`Happy birthday ${first}! ISA Skin Clinic & Aesthetics wishes you a beautiful day. Reply STOP to opt out.`}) ON CONFLICT (event_key) DO NOTHING RETURNING id`;if(result[0]){queued++;if(await sendSmsOutboxMessage(Number(result[0].id)))sent++;}}
+  return {eligible:rows.length,queued,sent};
+}
+
+export async function queueAppointmentReminders(){
+  await ensureClinicTables();const sql=client();
+  const rows=await sql`SELECT a.id,a.client_id,a.treatment,a.clinic,a.requested_date,a.requested_time,c.full_name,c.mobile
+    FROM venux_appointments a JOIN venux_clients c ON c.id=a.client_id
+    WHERE a.status='confirmed' AND c.service_sms_consent=TRUE
+      AND a.requested_date=((NOW() AT TIME ZONE 'Australia/Sydney')::date+1)`;
+  let queued=0,sent=0;
+  for(const row of rows){
+    const eventKey=`appointment-reminder:${row.id}:${String(row.requested_date).slice(0,10)}`;
+    const body=`ISA Skin Clinic & Aesthetics: Hi ${String(row.full_name).trim().split(/\s+/)[0]}, reminder that your ${row.treatment} appointment is tomorrow at ${row.requested_time}, ${row.clinic}. Please contact us if you need to change it.`;
+    const inserted=await sql`INSERT INTO venux_sms_outbox (client_id,appointment_id,event_key,message_type,recipient,message_body)
+      VALUES (${row.client_id},${row.id},${eventKey},'appointment_reminder',${row.mobile},${body}) ON CONFLICT (event_key) DO NOTHING RETURNING id`;
+    if(inserted[0]){queued++;if(await sendSmsOutboxMessage(Number(inserted[0].id)))sent++;}
+  }
+  return {eligible:rows.length,queued,sent};
 }
 
 export async function getSmsOutbox(){
@@ -871,6 +895,41 @@ export async function getSmsOutbox(){
 
 export async function markSmsOutboxSent(id:number){
   await ensureClinicTables();await client()`UPDATE venux_sms_outbox SET status='sent',sent_at=NOW() WHERE id=${id}`;
+}
+
+export function isClickSendConfigured(){
+  return Boolean(process.env.CLICKSEND_USERNAME&&process.env.CLICKSEND_API_KEY);
+}
+
+export async function sendSmsOutboxMessage(id:number){
+  await ensureClinicTables();const sql=client();
+  const rows=await sql`SELECT id,recipient,message_body,status FROM venux_sms_outbox WHERE id=${id} LIMIT 1`;
+  const row=rows[0];if(!row||row.status==='sent')return Boolean(row);
+  const username=process.env.CLICKSEND_USERNAME?.trim(),apiKey=process.env.CLICKSEND_API_KEY?.trim();
+  if(!username||!apiKey){
+    await sql`UPDATE venux_sms_outbox SET status='failed',last_error='ClickSend credentials are not configured.',last_attempt_at=NOW(),attempt_count=attempt_count+1 WHERE id=${id}`;
+    return false;
+  }
+  const recipient=normaliseMobile(String(row.recipient));
+  if(!/^614\d{8}$/.test(recipient)){
+    await sql`UPDATE venux_sms_outbox SET status='failed',last_error='The client mobile number is not a valid Australian mobile number.',last_attempt_at=NOW(),attempt_count=attempt_count+1 WHERE id=${id}`;
+    return false;
+  }
+  await sql`UPDATE venux_sms_outbox SET status='sending',last_error=NULL,last_attempt_at=NOW(),attempt_count=attempt_count+1 WHERE id=${id}`;
+  try{
+    const from=process.env.CLICKSEND_FROM?.trim();
+    const message:Record<string,string>={body:String(row.message_body),to:recipient,source:'sdk'};if(from)message.from=from;
+    const response=await fetch('https://rest.clicksend.com/v3/sms/send',{method:'POST',headers:{authorization:`Basic ${Buffer.from(`${username}:${apiKey}`).toString('base64')}`,'content-type':'application/json'},body:JSON.stringify({messages:[message]}),cache:'no-store'});
+    const payload=await response.json().catch(()=>null) as {response_code?:string;response_msg?:string;data?:{messages?:Array<{message_id?:string;status?:string;status_text?:string}>}}|null;
+    const providerMessage=payload?.data?.messages?.[0];
+    if(!response.ok||payload?.response_code!=='SUCCESS'||!providerMessage?.message_id)throw new Error(providerMessage?.status_text||payload?.response_msg||`ClickSend returned HTTP ${response.status}`);
+    await sql`UPDATE venux_sms_outbox SET status='sent',sent_at=NOW(),provider_message_id=${providerMessage.message_id},provider_status=${providerMessage.status??'accepted'},last_error=NULL WHERE id=${id}`;
+    return true;
+  }catch(error){
+    const detail=(error instanceof Error?error.message:'Unable to send SMS').slice(0,500);
+    await sql`UPDATE venux_sms_outbox SET status='failed',provider_status='failed',last_error=${detail} WHERE id=${id}`;
+    console.error('ClickSend SMS failed',{outboxId:id,error:detail});return false;
+  }
 }
 
 export async function rechargeMembership(clientId: number, amount: number) {
@@ -1149,6 +1208,7 @@ export async function queueReturnInvite(clientId:number){
   const result=await sql`INSERT INTO venux_sms_outbox (client_id,event_key,message_type,recipient,message_body)
     VALUES (${clientId},${`return-invite:${month}:${clientId}`},'return_invite',${row.mobile},${`Hi ${first}, it has been a while since your last visit to ISA Skin Clinic & Aesthetics. Reply or book online if you would like help planning your next treatment. Reply STOP to opt out.`})
     ON CONFLICT (event_key) DO NOTHING RETURNING id`;
+  if(result[0])await sendSmsOutboxMessage(Number(result[0].id));
   return Boolean(result[0]);
 }
 
