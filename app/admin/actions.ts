@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { clearAdminSession, createAdminSession, getAdminRole,isAdminAuthenticated, isOwnerAuthenticated, roleForPassword } from "../../lib/admin-auth";
-import { assignPackageToClient,BookingConflictError,completeFollowup,createBookingRequest,createClientCourse,createClientProfile,createExpense,createPackageTemplate,createSkinAssessment,createStaff,createSupplier,createTreatmentRecord,deleteCancelledAppointment,deletePackageTemplate,findClientIdForPackage,finishAppointment,getAppointmentClientId,getAppointmentClinic,getAppointmentDate,getClientForBooking,getOwnerService,importClientRows,MembershipBalanceError,queueBirthdayMessages,queueReturnInvite,rechargeMembership,saveClientProfile,saveHealthProfile,sendSmsOutboxMessage,setStaffClockPin,startAppointment,toggleStaffClock,toggleStaffClockWithPin,updateAppointment,updateStaffClockEntry,useClientCourseSession,useClientPackageItem,type AppointmentStatus,type ClientImportRow } from "../../lib/clinic-admin";
+import { assignPackageToClient,BookingConflictError,completeFollowup,createBookingRequest,createClientCourse,createClientProfile,createExpense,createPackageTemplate,createSkinAssessment,createStaff,createSupplier,createTreatmentRecord,deleteCancelledAppointment,deletePackageTemplate,findClientIdForPackage,finishAppointment,getAppointmentClientId,getAppointmentClinic,getAppointmentDate,getClientForBooking,getOwnerService,importClientRows,MembershipBalanceError,queueBirthdayMessages,queueAppointmentConfirmation,queueReturnInvite,rechargeMembership,saveClientProfile,saveHealthProfile,sendSmsOutboxMessage,setStaffClockPin,startAppointment,toggleStaffClock,toggleStaffClockWithPin,updateAppointment,updateStaffClockEntry,useClientCourseSession,useClientPackageItem,type AppointmentStatus,type ClientImportRow } from "../../lib/clinic-admin";
 
 export async function adminLogin(formData: FormData) {
   const role=roleForPassword(String(formData.get("password") ?? ""));
@@ -281,4 +281,13 @@ export async function useClientCourseSessionAction(formData:FormData){
   const clientId=await authorisedClient(formData),courseId=Number(formData.get("courseId"));
   if(!Number.isInteger(courseId)||courseId<=0)redirect(`${clientPath(clientId)}?error=course`);
   const used=await useClientCourseSession(clientId,courseId);revalidatePath(clientPath(clientId));redirect(`${clientPath(clientId)}?${used?"saved=session":"error=course"}`);
+}
+
+export async function sendAppointmentConfirmationAction(formData:FormData){
+  if(!(await isAdminAuthenticated()))redirect("/admin?error=session");
+  const id=Number(formData.get("id"));
+  if(!Number.isInteger(id)||id<=0)redirect("/admin/messages?error=invalid");
+  const sent=await queueAppointmentConfirmation(id);
+  revalidatePath("/admin/messages");
+  redirect(`/admin/messages?${sent?'sent=1':'error=send'}`);
 }
