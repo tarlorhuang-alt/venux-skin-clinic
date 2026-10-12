@@ -1,0 +1,4 @@
+import Link from "next/link";
+export const metadata={title:"Treatment Care Guides | ISA Skin Clinic",robots:{index:false,follow:false}};
+const treatments=[["facial","Facial"],["ipl","IPL"],["rf-microneedling","RF Microneedling"],["hifu","HIFU"],["dmk","DMK Enzyme"],["prp","PRP"]];
+export default function CareIndex(){return <main style={{maxWidth:720,margin:"auto",padding:"48px 24px",fontFamily:"Arial,sans-serif"}}><h1>ISA Skin Clinic — Care Guides</h1><p>Select your treatment and read the instructions given by your treating clinician.</p>{treatments.map(([slug,name])=><section key={slug} style={{padding:"16px 0",borderBottom:"1px solid #ddd"}}><h2>{name}</h2><p><Link href={`/care/${slug}/pre`}>Before treatment</Link> · <Link href={`/care/${slug}/after`}>After treatment</Link></p></section>)}</main>}
