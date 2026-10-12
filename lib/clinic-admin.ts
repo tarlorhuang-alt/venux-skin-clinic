@@ -1,3 +1,4 @@
+import { carePath } from "./care-guides";
 import "server-only";
 import { neon } from "@neondatabase/serverless";
 import { randomBytes,scryptSync,timingSafeEqual } from "node:crypto";
@@ -844,7 +845,8 @@ export async function queueAppointmentConfirmation(appointmentId:number){
   const base=(process.env.NEXT_PUBLIC_SITE_URL||"https://venux-three.vercel.app").replace(/\/$/,"");
   const date=new Date(String(row.requested_date)).toLocaleDateString("en-AU",{day:"numeric",month:"short",year:"numeric",timeZone:"Australia/Sydney"});
   const first=String(row.full_name).trim().split(/\s+/)[0];
-  const body=`ISA Skin Clinic & Aesthetics: Hi ${first}, your ${row.treatment} appointment is held for ${date} at ${row.requested_time}, ${row.clinic}. Confirm: ${base}/booking/confirm/${token} Update your recent skin and health details: ${base}/booking/consultation/${token}`;
+  const preCare=carePath(String(row.treatment),"pre");
+  const body=`ISA Skin Clinic: Hi ${first}, ${row.treatment} on ${date} ${row.requested_time} at ${row.clinic}. Confirm: ${base}/booking/confirm/${token}${preCare?` Pre-care: ${base}${preCare}`:""}`;
   const eventKey=`appointment-confirmation:${appointmentId}`;
   const inserted=await sql`INSERT INTO venux_sms_outbox (client_id,appointment_id,event_key,message_type,recipient,message_body) VALUES (${row.client_id},${appointmentId},${eventKey},'appointment_confirmation',${row.mobile},${body}) ON CONFLICT (event_key) DO NOTHING RETURNING id`;
   await sql`UPDATE venux_appointments SET confirmation_message_queued_at=COALESCE(confirmation_message_queued_at,NOW()) WHERE id=${appointmentId}`;
