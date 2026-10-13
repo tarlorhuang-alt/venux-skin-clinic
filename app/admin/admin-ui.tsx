@@ -2,7 +2,7 @@ import { adminLogin, adminLogout } from "./actions";
 import { getAdminRole } from "../../lib/admin-auth";
 
 export function AdminLogin({ error }: { error?: string }) {
-  return <main className="clinic-admin-login"><section><div className="clinic-admin-brand">✦ ISA</div><p>Private clinic administration</p><h1>Clinic dashboard</h1><form action={adminLogin}><label>Owner or staff password<input name="password" type="password" autoComplete="current-password" required autoFocus /></label><button type="submit">Sign in</button></form>{error ? <div className="clinic-alert error">The password was not accepted or your session expired.</div> : null}<small>Your password opens the correct workspace for your role.</small></section></main>;
+  return <main className="clinic-admin-login"><section><div className="clinic-admin-brand">✦ ISA</div><p>Private clinic administration</p><h1>Clinic dashboard</h1><form action={adminLogin}><label>Password<input name="password" type="password" autoComplete="current-password" required autoFocus /></label><button type="submit">Sign in</button></form>{error ? <div className="clinic-alert error">The password was not accepted or your session expired.</div> : null}</section></main>;
 }
 
 export async function AdminShell({ active, children }: { active: string; children: React.ReactNode }) {
