@@ -34,7 +34,7 @@ export async function startAppointmentAction(formData:FormData){
   if(!Number.isInteger(id)||id<=0||!Number.isInteger(staffId)||staffId<=0)redirect("/admin/bookings?error=staff");
   if(await staffCannotAccessAppointment(id))redirect("/admin?error=restricted");
   const photo=formData.get("beforePhoto"),returnDate=String(formData.get("returnDate")??"");
-  const recordingConfirmed=formData.get("handyRecording")==="yes";
+  const recordingConfirmed=formData.get("heidiRecording")==="yes";
   if(!recordingConfirmed)redirect(`/admin/bookings?${/^\d{4}-\d{2}-\d{2}$/.test(returnDate)?`date=${returnDate}&`:""}error=recording#appointment-${id}`);
   const allowed=new Set(["image/jpeg","image/png","image/webp","image/heic","image/heif"]);
   let beforePhoto:{dataUrl:string;name:string}|undefined;

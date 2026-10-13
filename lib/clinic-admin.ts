@@ -676,12 +676,12 @@ export async function deleteCancelledAppointment(id:number){
   return true;
 }
 
-export async function startAppointment(id:number,staffId:number,beforePhoto?:{dataUrl:string;name:string},handyRecordingConfirmed=false){
+export async function startAppointment(id:number,staffId:number,beforePhoto?:{dataUrl:string;name:string},heidiRecordingConfirmed=false){
   await ensureClinicTables();
   const sql=client();
   const rows=await sql`SELECT total_amount,deposit_status,status FROM venux_appointments WHERE id=${id}`;
   const row=rows[0];
-  if(!row||String(row.status)!=="confirmed"||(beforePhoto&&!beforePhoto.dataUrl.startsWith("data:image/"))||!handyRecordingConfirmed)return false;
+  if(!row||String(row.status)!=="confirmed"||(beforePhoto&&!beforePhoto.dataUrl.startsWith("data:image/"))||!heidiRecordingConfirmed)return false;
   await sql`UPDATE venux_appointments SET handy_recording_confirmed_at=NOW(),updated_at=NOW() WHERE id=${id}`;
   if(beforePhoto)await sql`UPDATE venux_appointments SET before_photo_data_url=${beforePhoto.dataUrl},before_photo_name=${beforePhoto.name},before_photo_uploaded_at=NOW(),updated_at=NOW() WHERE id=${id}`;
   await updateAppointment(id,"in_progress",Number(row.total_amount),String(row.deposit_status),staffId);
@@ -701,7 +701,7 @@ export async function finishAppointment(id:number,staffId:number,comment:string,
   if(afterPhoto)await sql`UPDATE venux_appointments SET after_photo_data_url=${afterPhoto.dataUrl},after_photo_name=${afterPhoto.name},after_photo_uploaded_at=NOW(),updated_at=NOW() WHERE id=${id}`;
   try{
     await sql`INSERT INTO venux_followups (client_id,appointment_id,due_date,followup_type,status)
-      SELECT client_id,id,(NOW() AT TIME ZONE 'Australia/Sydney')::date+${FOLLOWUP_DAYS},'One-week treatment follow-up','pending'
+      SELECT client_id,id,(completed_at AT TIME ZONE 'Australia/Sydney')::date+${FOLLOWUP_DAYS},'One-week treatment follow-up','pending'
       FROM venux_appointments WHERE id=${id}
       ON CONFLICT (appointment_id) WHERE appointment_id IS NOT NULL DO NOTHING`;
   }catch(error){console.error("Unable to create treatment follow-up",{appointmentId:id,error:error instanceof Error?error.message:"Unknown error"});}
@@ -1218,8 +1218,13 @@ export async function getPayrollReport(from:string,to:string){
 }
 
 export async function getFollowups(status="pending"){
-  await ensureClinicTables();const value=status==="completed"?"completed":"pending";
-  return client()`SELECT f.*,c.full_name,c.mobile,a.treatment,a.requested_date,a.completion_comment,s.full_name AS staff_name,
+  await ensureClinicTables();
+  // Recover any reminder missed during completion; retain its original due date.
+  await client()`INSERT INTO venux_followups (client_id,appointment_id,due_date,followup_type,status)
+    SELECT client_id,id,(completed_at AT TIME ZONE 'Australia/Sydney')::date+7,'One-week treatment follow-up','pending'
+    FROM venux_appointments WHERE status='completed' AND completed_at IS NOT NULL
+    ON CONFLICT (appointment_id) WHERE appointment_id IS NOT NULL DO NOTHING`;const value=status==="completed"?"completed":"pending";
+  return client()`SELECT f.*,c.full_name,c.mobile,c.clinic_location,a.treatment,a.requested_date,a.completion_comment,s.full_name AS staff_name,
     (f.due_date-(NOW() AT TIME ZONE 'Australia/Sydney')::date)::int AS days_until_due
     FROM venux_followups f JOIN venux_clients c ON c.id=f.client_id
     LEFT JOIN venux_appointments a ON a.id=f.appointment_id LEFT JOIN venux_staff s ON s.id=a.staff_id

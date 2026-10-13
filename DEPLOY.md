@@ -49,7 +49,7 @@ needs provider-status reconciliation before a manual retry to avoid duplicates.
 Customers follow one confirmation link to confirm/request a change, read
 pre-care and complete their skin/skincare/health questionnaire. Staff can also
 use **Send confirmation now** on the appointment; SMS consent is required.
-Start service requires assigned staff and Handy recording confirmation. End
+Start service requires assigned staff and Heidi recording confirmation. End
 service requires a completion comment; before/after photos remain optional.
 After completion each appointment displays its own after-care QR link. It uses
 a separate random token, exposes only care guidance, and cannot access the
