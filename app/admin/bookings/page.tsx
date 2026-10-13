@@ -1,3 +1,4 @@
+import {quarterHourSlots,calendarTimeLabel} from "../../../lib/calendar-schedule";
 import type { Metadata } from "next";
 import { randomUUID } from "node:crypto";
 import { getAdminRole,isAdminAuthenticated } from "../../../lib/admin-auth";
@@ -14,9 +15,9 @@ import "./service-photos.css";
 export const dynamic="force-dynamic";
 export const metadata:Metadata={title:"Appointments | ISA Skin Clinic & Aesthetics",robots:{index:false,follow:false}};
 const formatTime=(minutes:number)=>{const hour24=Math.floor(minutes/60),minute=minutes%60,hour=hour24%12||12;return `${hour}:${String(minute).padStart(2,"0")} ${hour24<12?"AM":"PM"}`;};
-const times=Array.from({length:67},(_,index)=>formatTime(10*60+index*10));
 const todaySydney=()=>new Intl.DateTimeFormat("en-CA",{timeZone:"Australia/Sydney",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
 const timeMinutes=(value:string)=>{const match=value.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);if(!match)return 9999;let hour=Number(match[1])%12;if(match[3].toUpperCase()==="PM")hour+=12;return hour*60+Number(match[2]);};
+const times=[...new Set([...quarterHourSlots().map(calendarTimeLabel),...Array.from({length:67},(_,index)=>formatTime(10*60+index*10))])].sort((a,b)=>timeMinutes(a)-timeMinutes(b));
 
 export default async function BookingsAdmin({searchParams}:{searchParams:Promise<{saved?:string;created?:string;started?:string;finished?:string;deleted?:string;error?:string;client?:string;date?:string;staff?:string;time?:string;overlap?:string}>}){
   const params=await searchParams;if(!(await isAdminAuthenticated()))return <AdminLogin error={params.error}/>;

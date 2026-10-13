@@ -8,3 +8,6 @@ export function calendarTimeLabel(minutes:number){
  return `${hour%12||12}:${String(minutes%60).padStart(2,'0')} ${hour<12?'AM':'PM'}`;
 }
 export function beauticianColour(id:number){return `hsl(${(id*137.508)%360} 45% 88%)`;}
+export function quarterHourSlots(start=360,end=1260){
+ return Array.from({length:Math.floor((end-start)/15)+1},(_,index)=>start+index*15);
+}
