@@ -1,3 +1,4 @@
+import AdminFrame from "./admin-frame";
 import { adminLogin, adminLogout } from "./actions";
 import { getAdminRole } from "../../lib/admin-auth";
 
@@ -8,7 +9,9 @@ export function AdminLogin({ error }: { error?: string }) {
 export async function AdminShell({ active, children }: { active: string; children: React.ReactNode }) {
   const role=await getAdminRole();
   const links = [["Dashboard","/admin",false],["Calendar","/admin/calendar",false],["Appointments","/admin/bookings",false],["Team clock & revenue","/admin/team",false],["+ New client","/admin/clients/new",false],["Clients","/admin/clients",false],["Membership balances","/admin/memberships",false],["Package sessions","/admin/client-packages",false],["Package setup","/admin/packages",false],["Products","/admin/products",false],["Follow-ups","/admin/follow-ups",false],["Payroll","/admin/payroll",true],["Revenue & performance","/admin/reports",true],["Expenses","/admin/expenses",true],["Staff & time clock","/admin/staff",true],["Client retention","/admin/retention",false],["Messages","/admin/messages",false]] as const;
-  return <main className="clinic-admin"><aside><a className="clinic-admin-logo" href="/admin"><span>✦</span><strong>ISA</strong><small>{role==="owner"?"Owner workspace":"Top Ryde workspace"}</small></a><nav>{links.filter(([, ,ownerOnly])=>!ownerOnly||role==="owner").map(([label,href])=><a className={active===label?"active":""} href={href} key={href}>{label}</a>)}</nav><form action={adminLogout}><button type="submit">Sign out</button></form></aside><div className="clinic-admin-main">{children}</div></main>;
+  const icons:Record<string,string>={Dashboard:"DB",Calendar:"CA",Appointments:"AP","Team clock & revenue":"TC","+ New client":"+","Clients":"CL","Membership balances":"MB","Package sessions":"PS","Package setup":"PK",Products:"PR","Follow-ups":"FU",Payroll:"PY","Revenue & performance":"RP",Expenses:"EX","Staff & time clock":"ST","Client retention":"CR",Messages:"MS"};
+  const sidebar=<><a className="clinic-admin-logo" href="/admin" aria-label="ISA clinic dashboard"><span>✦</span><strong>ISA</strong><small>{role==="owner"?"Owner workspace":"Top Ryde workspace"}</small></a><nav id="clinic-navigation">{links.filter(([, ,ownerOnly])=>!ownerOnly||role==="owner").map(([label,href])=><a className={active===label?"active":""} href={href} key={href} title={label} aria-label={label} aria-current={active===label?"page":undefined}><span className="navigation-icon" aria-hidden="true">{icons[label]}</span><span className="navigation-label">{label}</span></a>)}</nav><form action={adminLogout}><button type="submit" title="Sign out" aria-label="Sign out"><span className="navigation-icon" aria-hidden="true">↗</span><span className="navigation-label">Sign out</span></button></form></>;
+  return <AdminFrame sidebar={sidebar}>{children}</AdminFrame>;
 }
 
 export function Change({ now, last, money=false }: { now:number; last:number; money?:boolean }) {
