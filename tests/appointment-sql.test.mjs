@@ -56,7 +56,7 @@ test('atomic sending claim prevents concurrent sends for the same queued message
  assert.equal(results.reduce((sum,result)=>sum+result.rows.length,0),1);
  assert.equal((await db.query('SELECT attempt_count FROM venux_sms_outbox')).rows[0].attempt_count,1);
 });
-test('missed seven-day follow-ups are recovered from completion date without duplicating or reopening them',async()=>{
+test('missed two-week follow-ups are recovered from completion date without duplicating or reopening them',async()=>{
  await db.exec(`CREATE TABLE venux_followups(client_id INT,appointment_id INT,due_date DATE,followup_type TEXT,status TEXT);
  CREATE UNIQUE INDEX followup_appointment ON venux_followups(appointment_id) WHERE appointment_id IS NOT NULL;
  DELETE FROM venux_appointments;
@@ -64,7 +64,7 @@ test('missed seven-day follow-ups are recovered from completion date without dup
  const sql=source.match(/await client\(\)`(INSERT INTO venux_followups[\s\S]*?)`;/)[1];
  await db.exec(sql);
  let rows=(await db.query('SELECT appointment_id,due_date::text,status FROM venux_followups')).rows;
- assert.deepEqual(rows,[{appointment_id:20,due_date:'2026-10-21',status:'pending'}]);
+ assert.deepEqual(rows,[{appointment_id:20,due_date:'2026-10-28',status:'pending'}]);
  await db.exec("UPDATE venux_followups SET status='completed'");
  await db.exec(sql);
  rows=(await db.query('SELECT appointment_id,status FROM venux_followups')).rows;

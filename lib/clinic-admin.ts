@@ -48,7 +48,7 @@ function projectWageFor(treatment:string,category:string){
   return value.includes("dmk")||value.includes("facial")||((value.includes("ayko")||value.includes("german"))&&value.includes("hifu"))?32:25;
 }
 
-const FOLLOWUP_DAYS=7;
+const FOLLOWUP_DAYS=14;
 
 export type ClientImportRow = {
   group: string;
@@ -194,6 +194,13 @@ export function ensureClinicTables() {
         adverse_reaction TEXT NOT NULL DEFAULT '', adverse_management TEXT NOT NULL DEFAULT '',
         operator_signature TEXT NOT NULL DEFAULT '', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )`;
+      await sql`CREATE TABLE IF NOT EXISTS venux_treatment_comments (
+        id BIGSERIAL PRIMARY KEY, client_id BIGINT NOT NULL REFERENCES venux_clients(id) ON DELETE RESTRICT,
+        appointment_id BIGINT REFERENCES venux_appointments(id) ON DELETE SET NULL,
+        staff_name TEXT NOT NULL, comment TEXT NOT NULL CHECK (length(trim(comment)) > 0),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`;
+      await sql`CREATE INDEX IF NOT EXISTS venux_treatment_comments_client_idx ON venux_treatment_comments (client_id,created_at DESC)`;
       await sql`CREATE TABLE IF NOT EXISTS venux_followups (
         id BIGSERIAL PRIMARY KEY, client_id BIGINT NOT NULL REFERENCES venux_clients(id) ON DELETE CASCADE,
         treatment_record_id BIGINT REFERENCES venux_treatment_records(id) ON DELETE SET NULL,
@@ -709,7 +716,7 @@ export async function finishAppointment(id:number,staffId:number,comment:string,
   if(afterPhoto)await sql`UPDATE venux_appointments SET after_photo_data_url=${afterPhoto.dataUrl},after_photo_name=${afterPhoto.name},after_photo_uploaded_at=NOW(),updated_at=NOW() WHERE id=${id}`;
   try{
     await sql`INSERT INTO venux_followups (client_id,appointment_id,due_date,followup_type,status)
-      SELECT client_id,id,(completed_at AT TIME ZONE 'Australia/Sydney')::date+${FOLLOWUP_DAYS},'One-week treatment follow-up','pending'
+      SELECT client_id,id,(completed_at AT TIME ZONE 'Australia/Sydney')::date+${FOLLOWUP_DAYS},'Two-week treatment follow-up','pending'
       FROM venux_appointments WHERE id=${id}
       ON CONFLICT (appointment_id) WHERE appointment_id IS NOT NULL DO NOTHING`;
   }catch(error){console.error("Unable to create treatment follow-up",{appointmentId:id,error:error instanceof Error?error.message:"Unknown error"});}
@@ -761,6 +768,12 @@ export async function assignPackageToClient(clientId:number,packageId:number,amo
     SELECT ${clientPackageId},service_id,included_sessions FROM venux_package_items WHERE package_id=${packageId}`;
   await sql`UPDATE venux_appointments SET deposit_status='waived',deposit_amount=0,updated_at=NOW() WHERE client_id=${clientId} AND requested_date>=CURRENT_DATE AND deposit_status='unpaid'`;
   await audit("assign","client_package",clientPackageId,`Package ${template[0].package_name} assigned to client ${clientId}`);return true;
+}
+
+export async function getActivePackageTemplates(){
+  await ensureClinicTables();
+  return client()`SELECT id,package_name,package_price FROM venux_packages WHERE active=TRUE
+    AND EXISTS (SELECT 1 FROM venux_package_items WHERE package_id=venux_packages.id) ORDER BY package_name`;
 }
 
 export async function getPackageAdminData(){
@@ -897,16 +910,16 @@ export async function respondToBooking(token:string,response:"confirmed"|"change
 
 export async function getTodayBirthdayClients(location=""){
   await ensureClinicTables();
-  return client()`SELECT id,full_name,mobile,marketing_sms_consent,sms_unsubscribed_at FROM venux_clients
+  return client()`SELECT id,full_name,mobile,marketing_sms_consent,marketing_sms_enabled,sms_unsubscribed_at FROM venux_clients
     WHERE dob IS NOT NULL AND TO_CHAR(dob,'MM-DD')=TO_CHAR(NOW() AT TIME ZONE 'Australia/Sydney','MM-DD')
       AND (${location}='' OR clinic_location=${location}) ORDER BY full_name`;
 }
 
-export async function queueBirthdayMessages(){
+export async function queueBirthdayMessages(location=""){
   await ensureClinicTables();const sql=client();
   const now=new Date(),parts=new Intl.DateTimeFormat("en-AU",{timeZone:"Australia/Sydney",month:"2-digit",day:"2-digit",year:"numeric"}).formatToParts(now);
   const part=(type:string)=>parts.find(item=>item.type===type)?.value??"";const today=`${part("month")}-${part("day")}`,year=part("year");
-  const rows=await sql`SELECT id,full_name,mobile FROM venux_clients WHERE dob IS NOT NULL AND TO_CHAR(dob,'MM-DD')=${today} AND marketing_sms_consent=TRUE AND marketing_sms_enabled=TRUE AND sms_unsubscribed_at IS NULL`;
+  const rows=await sql`SELECT id,full_name,mobile FROM venux_clients WHERE dob IS NOT NULL AND TO_CHAR(dob,'MM-DD')=${today} AND marketing_sms_consent=TRUE AND marketing_sms_enabled=TRUE AND sms_unsubscribed_at IS NULL AND (${location}='' OR clinic_location=${location})`;
   let queued=0;
   let sent=0;
   for(const row of rows){const eventKey=`birthday:${year}:${row.id}`,first=String(row.full_name).trim().split(/\s+/)[0];const result=await sql`INSERT INTO venux_sms_outbox (client_id,event_key,message_type,recipient,message_body) VALUES (${row.id},${eventKey},'birthday',${row.mobile},${`Happy birthday ${first}! ISA Skin Clinic & Aesthetics wishes you a beautiful day. Contact the clinic to ask about birthday offers. Reply STOP to opt out.`}) ON CONFLICT (event_key) DO NOTHING RETURNING id`;if(result[0])queued++;}
@@ -956,6 +969,15 @@ export async function updateBirthdayPromotion(id:number,body:string){
   if(!message)throw new Error('Promotion text is required');
   if(!/reply STOP/i.test(message))message+=' Reply STOP to opt out.';
   await client()`UPDATE venux_sms_outbox SET message_body=${message} WHERE id=${id} AND message_type='birthday' AND status IN ('queued','failed')`;
+}
+
+export async function getTodayBirthdayMessages(location=""){
+  await ensureClinicTables();
+  return client()`SELECT o.*,c.full_name FROM venux_sms_outbox o JOIN venux_clients c ON c.id=o.client_id
+    WHERE o.message_type='birthday'
+      AND TO_CHAR(c.dob,'MM-DD')=TO_CHAR(NOW() AT TIME ZONE 'Australia/Sydney','MM-DD')
+      AND o.event_key='birthday:'||TO_CHAR(NOW() AT TIME ZONE 'Australia/Sydney','YYYY')||':'||c.id
+      AND (${location}='' OR c.clinic_location=${location}) ORDER BY c.full_name,o.queued_at DESC`;
 }
 
 export async function getSmsOutbox(){
@@ -1024,7 +1046,7 @@ async function audit(action: string, entityType: string, entityId: number, detai
 export async function getClientClinicalRecord(clientId: number) {
   await ensureClinicTables();
   const sql = client();
-  const [clientRows, healthRows, assessments, treatments, courses,packageItems,appointments, audits] = await Promise.all([
+  const [clientRows, healthRows, assessments, treatments, courses,packageItems,appointments, audits,comments] = await Promise.all([
     sql`SELECT c.*,m.balance,m.status AS membership_status,m.joined_at FROM venux_clients c LEFT JOIN venux_memberships m ON m.client_id=c.id WHERE c.id=${clientId}`,
     sql`SELECT * FROM venux_health_profiles WHERE client_id=${clientId}`,
     sql`SELECT * FROM venux_skin_assessments WHERE client_id=${clientId} ORDER BY created_at DESC`,
@@ -1037,9 +1059,10 @@ export async function getClientClinicalRecord(clientId: number) {
       WHERE cp.client_id=${clientId} ORDER BY cp.created_at DESC,cpi.id`,
     sql`SELECT a.*,s.full_name AS staff_name FROM venux_appointments a LEFT JOIN venux_staff s ON s.id=a.staff_id WHERE a.client_id=${clientId} ORDER BY a.requested_date DESC,a.start_minute DESC NULLS LAST,a.id DESC`,
     sql`SELECT * FROM venux_audit_log WHERE entity_type='client' AND entity_id=${clientId} ORDER BY created_at DESC LIMIT 20`,
+    sql`SELECT * FROM venux_treatment_comments WHERE client_id=${clientId} ORDER BY created_at DESC,id DESC`,
   ]);
   if (clientRows[0]) await audit("view", "client", clientId, "Clinical record opened");
-  return { client: clientRows[0] ?? null, health: healthRows[0] ?? null, assessments, treatments, courses,packageItems, appointments, audits };
+  return { client: clientRows[0] ?? null, health: healthRows[0] ?? null, assessments, treatments, courses,packageItems, appointments, audits,comments };
 }
 
 export async function saveClientProfile(clientId: number, values: Record<string,string>) {
@@ -1061,6 +1084,19 @@ export async function createSkinAssessment(clientId: number, values: Record<stri
   await client()`INSERT INTO venux_skin_assessments (client_id,concern_categories,main_concern,anxiety_level,expected_outcome,fitzpatrick,treatment_recommendation,course_plan,budget,practitioner_notes,assessed_by)
     VALUES (${clientId},${values.concerns},${values.mainConcern},${values.anxietyLevel},${values.expectedOutcome},${values.fitzpatrick},${values.recommendation},${values.coursePlan},${values.budget},${values.notes},${values.assessedBy})`;
   await audit("create", "client", clientId, "Skin assessment added");
+}
+
+export async function addTreatmentComment(clientId:number,appointmentId:number|null,staffId:number,comment:string){
+  await ensureClinicTables();
+  const rows=await client()`INSERT INTO venux_treatment_comments (client_id,appointment_id,staff_name,comment)
+    SELECT c.id,${appointmentId}::bigint,s.full_name,${comment.trim()}
+    FROM venux_clients c CROSS JOIN venux_staff s
+    WHERE c.id=${clientId} AND s.id=${staffId} AND s.active=TRUE AND length(trim(${comment}))>0
+      AND (${appointmentId}::bigint IS NULL OR EXISTS (
+        SELECT 1 FROM venux_appointments a WHERE a.id=${appointmentId} AND a.client_id=c.id)) RETURNING id`;
+  if(!rows[0])return false;
+  await audit("treatment_comment_added","client",clientId,`Treatment comment #${rows[0].id} added`);
+  return true;
 }
 
 export async function createTreatmentRecord(clientId: number, values: Record<string,string|number|null>) {
@@ -1249,23 +1285,28 @@ export async function getPayrollReport(from:string,to:string){
 
 export async function getFollowups(status="pending"){
   await ensureClinicTables();
-  // Recover any reminder missed during completion; retain its original due date.
+  // Apply the two-week policy to pending reminders only; completed follow-ups stay complete.
+  await client()`UPDATE venux_followups f SET due_date=(a.completed_at AT TIME ZONE 'Australia/Sydney')::date+14,
+    followup_type='Two-week treatment follow-up' FROM venux_appointments a
+    WHERE f.appointment_id=a.id AND f.status='pending' AND f.followup_type='One-week treatment follow-up'
+      AND a.completed_at IS NOT NULL`;
+  // Recover reminders missed during service completion.
   await client()`INSERT INTO venux_followups (client_id,appointment_id,due_date,followup_type,status)
-    SELECT client_id,id,(completed_at AT TIME ZONE 'Australia/Sydney')::date+7,'One-week treatment follow-up','pending'
+    SELECT client_id,id,(completed_at AT TIME ZONE 'Australia/Sydney')::date+14,'Two-week treatment follow-up','pending'
     FROM venux_appointments WHERE status='completed' AND completed_at IS NOT NULL
     ON CONFLICT (appointment_id) WHERE appointment_id IS NOT NULL DO NOTHING`;const value=status==="completed"?"completed":"pending";
   return client()`SELECT f.*,c.full_name,c.mobile,c.clinic_location,a.treatment,a.requested_date,a.completion_comment,s.full_name AS staff_name,
     (f.due_date-(NOW() AT TIME ZONE 'Australia/Sydney')::date)::int AS days_until_due
     FROM venux_followups f JOIN venux_clients c ON c.id=f.client_id
     LEFT JOIN venux_appointments a ON a.id=f.appointment_id LEFT JOIN venux_staff s ON s.id=a.staff_id
-    WHERE f.status=${value} ORDER BY f.due_date,c.full_name LIMIT 500`;
+    WHERE f.status=${value} AND (f.status='completed' OR f.due_date<=(NOW() AT TIME ZONE 'Australia/Sydney')::date) ORDER BY f.due_date,c.full_name LIMIT 500`;
 }
 
 export async function completeFollowup(id:number,notes:string){
   await ensureClinicTables();const sql=client();
   const changed=await sql`UPDATE venux_followups SET status='completed',recovery_notes=${notes},completed_at=NOW() WHERE id=${id} AND status='pending' RETURNING client_id`;
   if(!changed[0])return false;
-  await audit("followup_completed","client",Number(changed[0].client_id),notes||"One-week follow-up completed");return true;
+  await audit("followup_completed","client",Number(changed[0].client_id),notes||"Two-week follow-up completed");return true;
 }
 
 export async function getDormantClients(days=120,search=""){

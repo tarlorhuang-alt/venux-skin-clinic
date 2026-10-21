@@ -15,11 +15,11 @@ export default function DaySchedule({rows,staff,date,entry="admin"}:{rows:Row[];
     if(id&&!columns.some(person=>person.id===id))columns.push({id,name:String(row.staff_name||`Beautician #${id}`)});
   }
   if(visibleRows.some(row=>!row.staff_id)||!columns.length)columns.push({id:0,name:"Unassigned"});
-  const earliest=Math.min(360,...visibleRows.map(row=>calendarTimeMinutes(String(row.requested_time))).filter(time=>time<1440));
+  const earliest=Math.min(540,...visibleRows.map(row=>calendarTimeMinutes(String(row.requested_time))).filter(time=>time<1440));
   const latest=Math.min(1425,Math.max(1260,...visibleRows.map(row=>calendarTimeMinutes(String(row.requested_time))+Number(row.duration_minutes??60)).filter(time=>time<1440)));
   const slots=quarterHourSlots(Math.floor(earliest/15)*15,Math.ceil(latest/15)*15);
   const start=slots[0];
-  return (<ScheduleView slotCount={slots.length}><div className="shared-day-schedule"><section className="day-occupancy-overview" aria-label="Whole-day appointment overview"><header><strong>Whole-day overview</strong><small>Each bar is an appointment · select it to manage</small></header><div className="overview-hours"><span>Beautician</span><div>{[360,540,720,900,1080,1260].filter(minutes=>minutes>=start&&minutes<=start+slots.length*15).map(minutes=><time style={{left:`${(minutes-start)/(slots.length*15)*100}%`}} key={minutes}>{calendarTimeLabel(minutes)}</time>)}</div></div>{columns.map(person=>{
+  return (<ScheduleView slotCount={slots.length}><div className="shared-day-schedule"><section className="day-occupancy-overview" aria-label="Whole-day appointment overview"><header><strong>Whole-day overview</strong><small>Each bar is an appointment · select it to manage</small></header><div className="overview-hours"><span>Beautician</span><div>{[540,720,900,1080,1260].filter(minutes=>minutes>=start&&minutes<=start+slots.length*15).map(minutes=><time style={{left:`${(minutes-start)/(slots.length*15)*100}%`}} key={minutes}>{calendarTimeLabel(minutes)}</time>)}</div></div>{columns.map(person=>{
     const appointments=visibleRows.filter(row=>Number(row.staff_id??0)===person.id).sort((a,b)=>calendarTimeMinutes(String(a.requested_time))-calendarTimeMinutes(String(b.requested_time)));
     const ends:number[]=[];
     const positions=appointments.map(row=>{

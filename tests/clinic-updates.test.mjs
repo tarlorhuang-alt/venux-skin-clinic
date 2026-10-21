@@ -96,3 +96,75 @@ test('calendar appointment links open only that beautician appointment and its o
  assert.match(html,/Selected client/);assert.match(html,/End service/);assert.match(html,/Dannie/);
  assert.ok(!html.includes('Other client hidden'));assert.ok(!html.includes('Full table hidden in focused view'));assert.ok(!html.includes('Create appointment'));
 });
+
+test('default full-day calendar runs from 9 AM to 9 PM',()=>{
+ const {default:Schedule}=load('app/admin/calendar/day-schedule.tsx');
+ const html=renderToStaticMarkup(Schedule({rows:[],staff:[{id:1,full_name:'Dannie',active:true}],date:'2026-10-21'}));
+ assert.match(html,/9:00 AM/);assert.match(html,/9:00 PM/);assert.ok(!html.includes('6:00 AM'));assert.ok(!html.includes('8:45 AM'));
+});
+
+test('client record assigns packages inline and shows all comment updates without the health panel',async()=>{
+ const {default:Page}=load('app/admin/clients/[id]/page.tsx',{
+  'next/navigation':{notFound:()=>{throw Error('Unexpected notFound')}},
+  'admin-auth':{isAdminAuthenticated:async()=>true,getAdminRole:async()=> 'owner'},
+  'clinic-admin':{getClientClinicalRecord:async()=>({client:{id:1,full_name:'Test client',mobile:'0400000001'},appointments:[{id:7,treatment:'Facial',staff_name:'Dannie',completion_comment:'Original completion note',completed_at:'2026-10-10T00:00Z'}],comments:[{id:1,appointment_id:7,staff_name:'Mei',comment:'First update',created_at:'2026-10-11T00:00Z'},{id:2,appointment_id:7,staff_name:'Dannie',comment:'Second update',created_at:'2026-10-12T00:00Z'}],packageItems:[],treatments:[],assessments:[],courses:[],audits:[]}),getActivePackageTemplates:async()=>[{id:3,package_name:'Facial course',package_price:500}],getStaff:async()=>[{id:1,full_name:'Dannie',active:true}]},
+  '../../actions':{},'membership-balance-form':{MembershipBalanceForm:()=>null},
+  'admin-ui':{AdminShell:({children})=>jsx.jsx('main',{children}),statusLabel:String}
+ });
+ const html=renderToStaticMarkup(await Page({params:Promise.resolve({id:'1'}),searchParams:Promise.resolve({})}));
+ assert.match(html,/Add package to this client/);assert.match(html,/Facial course/);assert.match(html,/name="clientId" value="1"/);
+ const treatments=html.split('id="treatments"')[1].split('id="courses"')[0];
+ for(const text of ['Original completion note','First update','Second update','Dannie','Mei','Add comment update'])assert.ok(treatments.includes(text),text);
+ assert.ok(!html.includes('Health &amp; contraindications'));assert.ok(!html.includes('href="#health"'));
+});
+
+test('treatment comments append updates and reject another client’s appointment',async()=>{
+ const db=new PGlite();const source=read('lib/clinic-admin.ts');
+ const ddl=source.match(/await sql`(CREATE TABLE IF NOT EXISTS venux_treatment_comments \([\s\S]*?)`;/)[1];
+ await db.exec(`CREATE TABLE venux_clients(id BIGINT PRIMARY KEY);CREATE TABLE venux_staff(id BIGINT,full_name TEXT,active BOOLEAN);CREATE TABLE venux_appointments(id BIGINT PRIMARY KEY,client_id BIGINT);INSERT INTO venux_clients VALUES(1),(2);INSERT INTO venux_staff VALUES(1,'Dannie',TRUE);INSERT INTO venux_appointments VALUES(7,1),(8,2);`);
+ await db.exec(ddl);
+ const raw=source.match(/const rows=await client\(\)`(INSERT INTO venux_treatment_comments[\s\S]*?)`;/)[1];
+ const sql=raw.replaceAll('${appointmentId}','$1').replaceAll('${comment.trim()}','$2').replaceAll('${clientId}','$3').replaceAll('${staffId}','$4').replaceAll('${comment}','$2');
+ assert.equal((await db.query(sql,[7,'First comment',1,1])).rows.length,1);
+ assert.equal((await db.query(sql,[7,'Second comment',1,1])).rows.length,1);
+ assert.equal((await db.query(sql,[8,'Wrong client',1,1])).rows.length,0);
+ assert.equal((await db.query(sql,[7,'  ',1,1])).rows.length,0);
+ const rows=(await db.query('SELECT comment FROM venux_treatment_comments ORDER BY id')).rows;
+ assert.deepEqual(rows.map(row=>row.comment),['First comment','Second comment']);
+ await db.close();
+});
+
+test('follow-up list shows due and overdue clients, and migrates only incomplete seven-day reminders',async()=>{
+ const db=new PGlite(),source=read('lib/clinic-admin.ts');
+ await db.exec(`CREATE TABLE venux_clients(id INT,full_name TEXT,mobile TEXT,clinic_location TEXT);CREATE TABLE venux_staff(id INT,full_name TEXT);
+ CREATE TABLE venux_appointments(id INT,staff_id INT,treatment TEXT,requested_date DATE,completion_comment TEXT,completed_at TIMESTAMPTZ);
+ CREATE TABLE venux_followups(id INT,client_id INT,appointment_id INT,due_date DATE,followup_type TEXT,status TEXT);
+ INSERT INTO venux_clients VALUES(1,'Due','','Top Ryde');
+ INSERT INTO venux_appointments VALUES(1,NULL,'Facial',CURRENT_DATE,'Note',NOW()-INTERVAL '14 days');
+ INSERT INTO venux_followups VALUES(1,1,1,CURRENT_DATE-7,'One-week treatment follow-up','pending'),(2,1,NULL,CURRENT_DATE-1,'Two-week treatment follow-up','pending'),(3,1,NULL,CURRENT_DATE+1,'Two-week treatment follow-up','pending'),(4,1,1,CURRENT_DATE-7,'One-week treatment follow-up','completed');`);
+ const migration=source.match(/await client\(\)`(UPDATE venux_followups f SET due_date=[\s\S]*?)`;/)[1];
+ await db.exec(migration);
+ assert.equal((await db.query('SELECT followup_type FROM venux_followups WHERE id=1')).rows[0].followup_type,'Two-week treatment follow-up');
+ assert.equal((await db.query('SELECT followup_type FROM venux_followups WHERE id=4')).rows[0].followup_type,'One-week treatment follow-up');
+ const query=source.match(/return client\(\)`(SELECT f\.\*,c.full_name[\s\S]*?)`;/)[1].replace('${value}','$1');
+ const rows=(await db.query(query,['pending'])).rows;
+ assert.deepEqual(rows.map(row=>row.id).sort(),[1,2]);
+ await db.close();
+});
+
+test('birthday outbox excludes old years, other dates, confirmations and other clinic locations',async()=>{
+ const db=new PGlite(),source=read('lib/clinic-admin.ts');
+ await db.exec(`CREATE TABLE venux_clients(id INT,full_name TEXT,dob DATE,clinic_location TEXT);
+ CREATE TABLE venux_sms_outbox(id INT,client_id INT,message_type TEXT,event_key TEXT,queued_at TIMESTAMPTZ);
+ INSERT INTO venux_clients VALUES(1,'Today',(NOW() AT TIME ZONE 'Australia/Sydney')::date,'Top Ryde'),(2,'Tomorrow',(NOW() AT TIME ZONE 'Australia/Sydney')::date+1,'Top Ryde'),(3,'City',(NOW() AT TIME ZONE 'Australia/Sydney')::date,'City');
+ INSERT INTO venux_sms_outbox VALUES
+ (1,1,'birthday','birthday:'||TO_CHAR(NOW() AT TIME ZONE 'Australia/Sydney','YYYY')||':1',NOW()),
+ (2,1,'birthday','birthday:'||(EXTRACT(YEAR FROM NOW() AT TIME ZONE 'Australia/Sydney')::int-1)||':1',NOW()),
+ (3,1,'confirmation','confirmation:1',NOW()),
+ (4,2,'birthday','birthday:'||TO_CHAR(NOW() AT TIME ZONE 'Australia/Sydney','YYYY')||':2',NOW()),
+ (5,3,'birthday','birthday:'||TO_CHAR(NOW() AT TIME ZONE 'Australia/Sydney','YYYY')||':3',NOW());`);
+ const sql=source.match(/return client\(\)`(SELECT o\.\*,c.full_name FROM venux_sms_outbox o JOIN venux_clients[\s\S]*?)`;/)[1].replaceAll('${location}','$1');
+ assert.deepEqual((await db.query(sql,['Top Ryde'])).rows.map(row=>row.id),[1]);
+ assert.deepEqual((await db.query(sql,[''])).rows.map(row=>row.id).sort(),[1,5]);
+ await db.close();
+});

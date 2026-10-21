@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { clearAdminSession, createAdminSession, getAdminRole,isAdminAuthenticated, isOwnerAuthenticated, roleForPassword } from "../../lib/admin-auth";
-import { assignPackageToClient,BookingConflictError,completeFollowup,createBookingRequest,createClientCourse,createClientProfile,createExpense,createPackageTemplate,createSkinAssessment,createStaff,createSupplier,createTreatmentRecord,deleteCancelledAppointment,deletePackageTemplate,findClientIdForPackage,finishAppointment,getAppointmentClientId,getAppointmentClinic,getAppointmentDate,getClientForBooking,getOwnerService,importClientRows,MembershipBalanceError,queueBirthdayMessages,queueAppointmentConfirmation,updateBirthdayPromotion,queueReturnInvite,rechargeMembership,saveClientProfile,saveHealthProfile,sendSmsOutboxMessage,setStaffClockPin,startAppointment,toggleStaffClock,toggleStaffClockWithPin,updateAppointment,updateStaffClockEntry,useClientCourseSession,useClientPackageItem,type AppointmentStatus,type ClientImportRow } from "../../lib/clinic-admin";
+import { addTreatmentComment,assignPackageToClient,BookingConflictError,completeFollowup,createBookingRequest,createClientCourse,createClientProfile,createExpense,createPackageTemplate,createSkinAssessment,createStaff,createSupplier,createTreatmentRecord,deleteCancelledAppointment,deletePackageTemplate,findClientIdForPackage,finishAppointment,getAppointmentClientId,getAppointmentClinic,getAppointmentDate,getClientForBooking,getOwnerService,importClientRows,MembershipBalanceError,queueBirthdayMessages,queueAppointmentConfirmation,updateBirthdayPromotion,queueReturnInvite,rechargeMembership,saveClientProfile,saveHealthProfile,sendSmsOutboxMessage,setStaffClockPin,startAppointment,toggleStaffClock,toggleStaffClockWithPin,updateAppointment,updateStaffClockEntry,useClientCourseSession,useClientPackageItem,type AppointmentStatus,type ClientImportRow } from "../../lib/clinic-admin";
 
 export async function adminLogin(formData: FormData) {
   const role=roleForPassword(String(formData.get("password") ?? ""));
@@ -110,7 +110,7 @@ export async function sendSmsNowAction(formData:FormData){
   if(!(await isAdminAuthenticated()))redirect("/admin?error=session");const id=Number(formData.get("id"));if(!Number.isInteger(id)||id<=0)redirect("/admin/messages?error=invalid");const body=formData.get("messageBody");if(typeof body==="string"){if(!body.trim())redirect("/admin/messages?error=invalid");await updateBirthdayPromotion(id,body);}const sent=await sendSmsOutboxMessage(id);revalidatePath("/admin/messages");redirect(`/admin/messages?${sent?'sent=1':'error=send'}`);
 }
 
-export async function queueBirthdaysAction(){if(!(await isAdminAuthenticated()))redirect("/admin?error=session");const result=await queueBirthdayMessages();revalidatePath("/admin/messages");redirect(`/admin/messages?birthdays=${result.queued}`);}
+export async function queueBirthdaysAction(){if(!(await isAdminAuthenticated()))redirect("/admin?error=session");const result=await queueBirthdayMessages((await getAdminRole())==="staff"?"Top Ryde":"");revalidatePath("/admin/messages");redirect(`/admin/messages?birthdays=${result.queued}`);}
 
 export async function createPackageAction(formData:FormData){
   if(!(await isOwnerAuthenticated()))redirect("/admin?error=restricted");const packageId=Number(formData.get("packageId")??0),name=textValue(formData,"name"),price=Number(formData.get("price")),validityDays=Number(formData.get("validityDays"));
@@ -128,9 +128,11 @@ export async function deletePackageAction(formData:FormData){
 export async function assignPackageAction(formData:FormData){
   if(!(await isAdminAuthenticated()))redirect("/admin?error=session");let clientId=Number(formData.get("clientId"));const packageId=Number(formData.get("packageId")),amountPaid=Number(formData.get("amountPaid")),purchasedOn=textValue(formData,"purchasedOn"),expiresOn=textValue(formData,"expiresOn");
   if(!Number.isInteger(clientId)||clientId<1)clientId=await findClientIdForPackage(textValue(formData,"name"),textValue(formData,"mobile"));
-  if(!Number.isInteger(clientId)||clientId<1||!Number.isInteger(packageId)||packageId<1||!Number.isFinite(amountPaid)||amountPaid<0||!/^\d{4}-\d{2}-\d{2}$/.test(purchasedOn))redirect("/admin/packages?error=assign");
-  let saved=false;try{saved=await assignPackageToClient(clientId,packageId,amountPaid,purchasedOn,expiresOn);}catch{redirect("/admin/packages?error=assign");}
-  revalidatePath("/admin/packages");revalidatePath("/admin/client-packages");revalidatePath(`/admin/clients/${clientId}`);redirect(saved?`/admin/clients/${clientId}?saved=1#courses`:"/admin/packages?error=assign");
+  const errorPath=textValue(formData,"returnTo")==="record"?`/admin/clients/${clientId}?error=assign#courses`:"/admin/packages?error=assign";
+  if(!Number.isInteger(clientId)||clientId<1||!Number.isInteger(packageId)||packageId<1||!Number.isFinite(amountPaid)||amountPaid<0||!/^\d{4}-\d{2}-\d{2}$/.test(purchasedOn))redirect(Number.isInteger(clientId)&&clientId>0?errorPath:"/admin/clients?error=invalid");
+  if((await getAdminRole())==="staff"&&String((await getClientForBooking(clientId))?.clinic_location)==="City")redirect("/admin?error=restricted");
+  let saved=false;try{saved=await assignPackageToClient(clientId,packageId,amountPaid,purchasedOn,expiresOn);}catch{redirect(errorPath);}
+  revalidatePath("/admin/packages");revalidatePath("/admin/client-packages");revalidatePath(`/admin/clients/${clientId}`);redirect(saved?`/admin/clients/${clientId}?saved=1#courses`:errorPath);
 }
 
 export async function usePackageSessionAction(formData:FormData){
@@ -259,6 +261,13 @@ export async function addSkinAssessmentAction(formData:FormData){
   if((fitzpatrick!==null&&(fitzpatrick<1||fitzpatrick>6))||(anxietyLevel!==null&&(anxietyLevel<1||anxietyLevel>5))) redirect(`${clientPath(clientId)}?error=assessment`);
   await createSkinAssessment(clientId,{concerns:textValue(formData,"concerns"),mainConcern:textValue(formData,"mainConcern"),anxietyLevel,expectedOutcome:textValue(formData,"expectedOutcome"),fitzpatrick,recommendation:textValue(formData,"recommendation"),coursePlan:textValue(formData,"coursePlan"),budget,notes:textValue(formData,"notes"),assessedBy:textValue(formData,"assessedBy")||"Admin"});
   revalidatePath(clientPath(clientId));redirect(`${clientPath(clientId)}?saved=assessment`);
+}
+
+export async function addTreatmentCommentAction(formData:FormData){
+  const clientId=await authorisedClient(formData),staffId=Number(formData.get("staffId")),appointmentId=Number(formData.get("appointmentId")||0),comment=textValue(formData,"comment");
+  if(!Number.isInteger(staffId)||staffId<=0||!Number.isInteger(appointmentId)||appointmentId<0||!comment||comment.length>10000)redirect(`${clientPath(clientId)}?error=comment#treatments`);
+  const saved=await addTreatmentComment(clientId,appointmentId||null,staffId,comment);
+  revalidatePath(clientPath(clientId));redirect(`${clientPath(clientId)}?${saved?"saved=comment":"error=comment"}#treatments`);
 }
 
 export async function addTreatmentRecordAction(formData:FormData){
