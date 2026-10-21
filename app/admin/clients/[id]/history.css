@@ -13,3 +13,4 @@
   font-size: 9px;
   font-weight: 900;
 }
+.appointment-comment{white-space:pre-wrap;overflow-wrap:anywhere}.appointment-comment strong{font-size:11px;color:var(--os-green)}

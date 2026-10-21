@@ -63,8 +63,8 @@ export async function addCityBeautician(data:FormData){
 export async function createCityAppointment(data:FormData){
   await requireOwner();const serviceId=Number(data.get("serviceId")),staffId=Number(data.get("staffId")),clientId=Number(data.get("clientId")??0),date=ownerDate(data),time=text(data,"time"),service=await getOwnerService(serviceId);
   if(!service||!Number.isInteger(staffId)||staffId<=0||!date||!time)redirect("/owner?error=booking");
-  const input={clientId:clientId>0?clientId:undefined,staffId,serviceId,name:text(data,"name"),mobile:text(data,"mobile"),email:text(data,"email").toLowerCase(),treatment:String(service.service_name),clinic:"Sydney City · 515 Kent Street",date,time,durationMinutes:Number(service.duration_minutes),totalAmount:Number(service.regular_price),notes:text(data,"notes"),source:"admin" as const,serviceSmsConsent:data.get("serviceSmsConsent")==="yes"};
-  if(!input.name||!input.mobile)redirect(`/owner?date=${date}&error=booking`);
+  const input={clientId:clientId>0?clientId:undefined,staffId,serviceId,name:text(data,"name"),mobile:text(data,"mobile"),email:text(data,"email").toLowerCase(),treatment:String(service.service_name),clinic:"Sydney City · 515 Kent Street",date,time,durationMinutes:Number(data.get("durationMinutes")||service.duration_minutes),totalAmount:String(data.get("totalAmount")??"").trim()===""?Number(service.regular_price):Number(data.get("totalAmount")),notes:text(data,"notes"),source:"admin" as const,serviceSmsConsent:data.get("serviceSmsConsent")==="yes"};
+  if((service.price_required&&String(data.get("totalAmount")??"").trim()==="")||!Number.isFinite(input.totalAmount)||input.totalAmount<0||!Number.isInteger(input.durationMinutes)||input.durationMinutes<1||input.durationMinutes>720||!input.name||!input.mobile)redirect(`/owner?date=${date}&error=booking`);
   try{await createBookingRequest(input);}catch(error){if(error instanceof BookingConflictError)redirect(`/owner?date=${date}&error=conflict`);throw error;}
   revalidatePath("/owner");redirect(`/owner?date=${date}&booked=1`);
 }

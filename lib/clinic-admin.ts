@@ -1,4 +1,5 @@
 import "server-only";
+import {IMAGE_SERVICE_NAMES,imageServiceDuration,imageServiceCategory} from "./legacy-image-services";
 import { reminderEventKey, reminderMessage } from "./appointment-communication";
 import { neon } from "@neondatabase/serverless";
 import { randomBytes,scryptSync,timingSafeEqual } from "node:crypto";
@@ -266,6 +267,7 @@ export function ensureClinicTables() {
         active BOOLEAN NOT NULL DEFAULT TRUE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )`;
+      await sql`ALTER TABLE venux_services ADD COLUMN IF NOT EXISTS price_required BOOLEAN NOT NULL DEFAULT FALSE`;
       await sql`ALTER TABLE venux_services ALTER COLUMN regular_price TYPE NUMERIC(10,2) USING regular_price::numeric`;
       await sql`ALTER TABLE venux_services ADD COLUMN IF NOT EXISTS member_price NUMERIC(10,2) CHECK (member_price >= 0)`;
       await sql`ALTER TABLE venux_services ADD COLUMN IF NOT EXISTS commission_percent NUMERIC(5,2) NOT NULL DEFAULT 0 CHECK (commission_percent BETWEEN 0 AND 100)`;
@@ -1005,7 +1007,7 @@ export async function getClientClinicalRecord(clientId: number) {
       FROM venux_client_packages cp JOIN venux_packages p ON p.id=cp.package_id
       JOIN venux_client_package_items cpi ON cpi.client_package_id=cp.id JOIN venux_services s ON s.id=cpi.service_id
       WHERE cp.client_id=${clientId} ORDER BY cp.created_at DESC,cpi.id`,
-    sql`SELECT a.*,s.full_name AS staff_name FROM venux_appointments a LEFT JOIN venux_staff s ON s.id=a.staff_id WHERE a.client_id=${clientId} ORDER BY a.requested_date DESC,a.requested_time DESC LIMIT 50`,
+    sql`SELECT a.*,s.full_name AS staff_name FROM venux_appointments a LEFT JOIN venux_staff s ON s.id=a.staff_id WHERE a.client_id=${clientId} ORDER BY a.requested_date DESC,a.start_minute DESC NULLS LAST,a.id DESC`,
     sql`SELECT * FROM venux_audit_log WHERE entity_type='client' AND entity_id=${clientId} ORDER BY created_at DESC LIMIT 20`,
   ]);
   if (clientRows[0]) await audit("view", "client", clientId, "Clinical record opened");
@@ -1205,7 +1207,7 @@ export async function getPayrollReport(from:string,to:string){
       FROM venux_staff s LEFT JOIN venux_time_clock t ON t.staff_id=s.id
         AND t.clock_in < (${to}::date+1)::timestamp AT TIME ZONE 'Australia/Sydney'
         AND COALESCE(t.clock_out,NOW()) > ${from}::date::timestamp AT TIME ZONE 'Australia/Sydney'
-      WHERE s.active=TRUE GROUP BY s.id,s.full_name,s.role,s.hourly_rate ORDER BY s.full_name`,
+      WHERE s.active=TRUE OR t.id IS NOT NULL GROUP BY s.id,s.full_name,s.role,s.hourly_rate ORDER BY s.full_name`,
     sql`SELECT t.id,t.staff_id,t.clock_in,t.clock_out,t.note,s.full_name AS staff_name,s.role,s.hourly_rate,
       ROUND(EXTRACT(EPOCH FROM (LEAST(COALESCE(t.clock_out,NOW()),(${to}::date+1)::timestamp AT TIME ZONE 'Australia/Sydney')-GREATEST(t.clock_in,${from}::date::timestamp AT TIME ZONE 'Australia/Sydney')))/3600,2) AS hours,
       ROUND(EXTRACT(EPOCH FROM (LEAST(COALESCE(t.clock_out,NOW()),(${to}::date+1)::timestamp AT TIME ZONE 'Australia/Sydney')-GREATEST(t.clock_in,${from}::date::timestamp AT TIME ZONE 'Australia/Sydney')))/3600*s.hourly_rate,2) AS wage
@@ -1292,18 +1294,32 @@ export async function createExpense(values:{date:string;category:string;payee:st
 
 export type ServiceImportRow={name:string;category:string;duration:number;price:number;memberPrice?:number|null;commissionPercent?:number;pricingType?:"fixed"|"from"|"per_unit";unitLabel?:string;notes?:string};
 
+let imageServicesReady:Promise<void>|undefined;
+export async function ensureImageServices(){
+  await ensureClinicTables();
+  if(!imageServicesReady)imageServicesReady=(async()=>{
+  const sql=client();
+  const rows=IMAGE_SERVICE_NAMES.map(name=>({name,category:imageServiceCategory(name),duration:imageServiceDuration(name)}));
+  await sql`INSERT INTO venux_services(service_name,category,duration_minutes,regular_price,price_notes,price_required)
+    SELECT name,category,duration,0,'Imported from service-name images. Price must be confirmed; unspecified scheduling duration defaults to 60 minutes and must be checked.',TRUE
+    FROM jsonb_to_recordset(${JSON.stringify(rows)}::jsonb) AS x(name TEXT,category TEXT,duration INT)
+    ON CONFLICT ((LOWER(service_name))) DO NOTHING`;
+  })().catch(error=>{imageServicesReady=undefined;throw error;});
+  await imageServicesReady;
+}
+
 export async function getOwnerServices(){
-  await ensureClinicTables();return client()`SELECT * FROM venux_services ORDER BY active DESC,category,service_name`;
+  await ensureImageServices();return client()`SELECT * FROM venux_services ORDER BY active DESC,category,service_name`;
 }
 
 export async function getOwnerService(serviceId:number){
-  await ensureClinicTables();return (await client()`SELECT * FROM venux_services WHERE id=${serviceId} AND active=TRUE LIMIT 1`)[0]??null;
+  await ensureImageServices();return (await client()`SELECT * FROM venux_services WHERE id=${serviceId} AND active=TRUE LIMIT 1`)[0]??null;
 }
 
 export async function createClinicService(values:ServiceImportRow){
   await ensureClinicTables();await client()`INSERT INTO venux_services (service_name,category,duration_minutes,regular_price,member_price,commission_percent,pricing_type,unit_label,price_notes)
     VALUES (${values.name},${values.category},${values.duration},${values.price},${values.memberPrice??null},${values.commissionPercent??0},${values.pricingType??"fixed"},${values.unitLabel??""},${values.notes??""})
-    ON CONFLICT ((LOWER(service_name))) DO UPDATE SET category=EXCLUDED.category,duration_minutes=EXCLUDED.duration_minutes,regular_price=EXCLUDED.regular_price,member_price=EXCLUDED.member_price,commission_percent=EXCLUDED.commission_percent,pricing_type=EXCLUDED.pricing_type,unit_label=EXCLUDED.unit_label,price_notes=EXCLUDED.price_notes,active=TRUE,updated_at=NOW()`;
+    ON CONFLICT ((LOWER(service_name))) DO UPDATE SET category=EXCLUDED.category,duration_minutes=EXCLUDED.duration_minutes,regular_price=EXCLUDED.regular_price,member_price=EXCLUDED.member_price,commission_percent=EXCLUDED.commission_percent,pricing_type=EXCLUDED.pricing_type,unit_label=EXCLUDED.unit_label,price_notes=EXCLUDED.price_notes,price_required=FALSE,active=TRUE,updated_at=NOW()`;
 }
 
 export async function importClinicServices(rows:ServiceImportRow[]){
@@ -1312,9 +1328,9 @@ export async function importClinicServices(rows:ServiceImportRow[]){
 
 export async function getCityStaff(){
   await ensureClinicTables();const sql=client();
-  const selected=await sql`SELECT * FROM venux_staff WHERE active=TRUE AND city_enabled=TRUE ORDER BY id LIMIT 3`;
+  const selected=await sql`SELECT * FROM venux_staff WHERE active=TRUE AND city_enabled=TRUE ORDER BY id`;
   if(selected.length)return selected;
-  return sql`SELECT * FROM venux_staff WHERE active=TRUE ORDER BY id LIMIT 3`;
+  return sql`SELECT * FROM venux_staff WHERE active=TRUE ORDER BY id`;
 }
 
 export async function createCityStaff(fullName:string,role:string){

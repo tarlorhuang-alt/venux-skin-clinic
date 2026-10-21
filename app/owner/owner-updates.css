@@ -12,3 +12,4 @@
 .service-list>div{grid-template-columns:2fr 1fr .55fr .65fr .55fr .55fr}
 @media(max-width:1050px){.owner-service-form{grid-template-columns:repeat(4,1fr)}.owner-service-form .service-notes{grid-column:span 3}}
 @media(max-width:450px){.owner-service-form{grid-template-columns:1fr}.owner-service-form .service-notes{grid-column:auto}.owner-price-list-import{align-items:start;flex-direction:column}}
+.city-appointment-management{margin-top:20px}.city-appointment-management>summary{cursor:pointer;padding:14px 0;font-weight:700;color:#073f3b}.owner-app .reference-day-planner{min-width:0}.owner-app .reference-planner-scroll{max-height:78vh}.owner-app .reference-booking-block{box-sizing:border-box}.owner-app .reference-quarter-row{box-sizing:border-box}.owner-app .reference-time-label,.owner-app .reference-empty-slot{box-sizing:border-box}.owner-app{--os-line:#dbe4df;--os-green:#073f3b;--os-gold:#b98d47;--os-ink:#173d39;--os-muted:#6a7c77}
