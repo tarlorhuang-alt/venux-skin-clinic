@@ -49,9 +49,9 @@ test('same daily schedule supports both portals, all staff and off-grid booking 
  const {default:Schedule}=load('app/admin/calendar/day-schedule.tsx');
  const rows=[{id:1,staff_id:7,staff_name:'Dannie',requested_time:'10:10 AM',duration_minutes:60,status:'confirmed',full_name:'Client A',treatment:'Facial'},{id:2,staff_id:8,staff_name:'Mei',requested_time:'2:15 PM',duration_minutes:30,status:'completed',full_name:'Client B',treatment:'DMK'}];
  for(const entry of ['admin','owner']){
-  const html=renderToStaticMarkup(Schedule({rows,staff:[{id:7,full_name:'Dannie',active:true}],date:'2026-10-21',entry}));
+  const html=renderToStaticMarkup(Schedule({rows,staff:[{id:7,full_name:'Dannie',active:true}],date:'2026-10-21',entry})).replaceAll('&amp;','&');
   assert.match(html,/Whole-day overview/);assert.match(html,/Mei appointments/);assert.match(html,/10:10 AM/);
-  assert.ok(html.includes(entry==='owner'?'/owner?date=2026-10-21#city-appointment-1':'/admin/bookings?date=2026-10-21#appointment-1'));
+  assert.ok(html.includes(entry==='owner'?'/owner?date=2026-10-21&appointment=1#city-appointment-1':'/admin/bookings?date=2026-10-21&appointment=1#appointment-1'));
   assert.ok(html.includes(entry==='owner'?'beautician=7':'staff=7'));
   assert.match(html,/time=10%3A15%20AM/);
  }
@@ -80,4 +80,19 @@ test('clinical history query retains more than fifty appointment comments',async
  assert.equal(records.length,60);assert.ok(records.some(record=>record.completion_comment==='Comment 1'));
  assert.ok(!records.some(record=>record.completion_comment==='Other client'));
  await db.close();
+});
+test('calendar appointment links open only that beautician appointment and its operation controls',async()=>{
+ const rows=[{id:7,client_id:1,full_name:'Selected client',mobile:'0400000001',email:'',treatment:'Facial',staff_id:7,staff_name:'Dannie',requested_date:'2026-10-21',requested_time:'10:15 AM',status:'in_progress',customer_confirmation_status:'confirmed',total_amount:100,deposit_status:'paid',service_sms_consent:true},{id:8,client_id:2,full_name:'Other client hidden',mobile:'0400000002',treatment:'DMK',staff_id:8,staff_name:'Mei',requested_date:'2026-10-21',requested_time:'11:00 AM',status:'confirmed',total_amount:150,deposit_status:'paid'}];
+ const {default:Page}=load('app/admin/bookings/page.tsx',{
+  'booking-preferences':{BookingPreferencesProvider:({children})=>children,BookingSmsOptions:()=>null},
+  '../calendar/day-schedule':{default:()=>jsx.jsx('p',{children:'Full table hidden in focused view'})},
+  'node:crypto':{randomUUID:()=> 'test-key'},
+  'admin-auth':{isAdminAuthenticated:async()=>true,getAdminRole:async()=> 'owner'},
+  'clinic-admin':{getAppointments:async()=>rows,getStaff:async()=>[{id:7,full_name:'Dannie',active:true},{id:8,full_name:'Mei',active:true}],getOwnerServices:async()=>[],getClientForBooking:async()=>null},
+  '../actions':{},'./appointment-client-picker':{AppointmentClientPicker:()=>null},'./treatment-picker':{TreatmentPicker:()=>null},
+  'admin-ui':{AdminShell:({children})=>jsx.jsx('main',{children}),statusLabel:value=>String(value).replaceAll('_',' ')}
+ });
+ const html=renderToStaticMarkup(await Page({searchParams:Promise.resolve({date:'2026-10-21',appointment:'7'})}));
+ assert.match(html,/Selected client/);assert.match(html,/End service/);assert.match(html,/Dannie/);
+ assert.ok(!html.includes('Other client hidden'));assert.ok(!html.includes('Full table hidden in focused view'));assert.ok(!html.includes('Create appointment'));
 });

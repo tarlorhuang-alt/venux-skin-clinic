@@ -5,6 +5,7 @@ import {queueReturnInviteAction} from "../actions";
 import {AdminLogin,AdminShell,statusLabel} from "../admin-ui";
 import "../admin.css";
 import "../operations.css";
+import "./retention.css";
 
 export const dynamic="force-dynamic";
 export const metadata:Metadata={title:"Client Retention | ISA",robots:{index:false,follow:false}};
