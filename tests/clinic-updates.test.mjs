@@ -12,6 +12,7 @@ function load(path,mocks={}){
  const code=ts.transpileModule(read(path),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;
  vm.runInNewContext(code,{exports,Date,Set,Map,Math,Number,String,Array,Promise,require:id=>{
   if(id.endsWith('.css'))return {};
+  if(id==='./schedule-view')return {default:({children})=>jsx.jsx('div',{children})};
   if(id==='react/jsx-runtime')return jsx;
   if(id.includes('calendar-schedule'))return load('lib/calendar-schedule.ts');
   for(const [match,value] of Object.entries(mocks))if(id.includes(match))return value;

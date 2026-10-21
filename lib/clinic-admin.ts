@@ -24,6 +24,7 @@ export type BookingInput = {
   source?: "website"|"admin";
   serviceSmsConsent?: boolean;
   marketingSmsConsent?: boolean;
+  marketingSmsEnabled?: boolean;
   allowOverlap?: boolean;
 };
 
@@ -91,6 +92,7 @@ export function ensureClinicTables() {
       await sql`ALTER TABLE venux_clients ADD COLUMN IF NOT EXISTS location_source TEXT NOT NULL DEFAULT 'default'`;
       await sql`ALTER TABLE venux_clients ADD COLUMN IF NOT EXISTS service_sms_consent BOOLEAN NOT NULL DEFAULT FALSE`;
       await sql`ALTER TABLE venux_clients ADD COLUMN IF NOT EXISTS marketing_sms_consent BOOLEAN NOT NULL DEFAULT FALSE`;
+      await sql`ALTER TABLE venux_clients ADD COLUMN IF NOT EXISTS marketing_sms_enabled BOOLEAN NOT NULL DEFAULT TRUE`;
       await sql`ALTER TABLE venux_clients ADD COLUMN IF NOT EXISTS marketing_consent_at TIMESTAMPTZ`;
       await sql`ALTER TABLE venux_clients ADD COLUMN IF NOT EXISTS sms_unsubscribed_at TIMESTAMPTZ`;
       await sql`CREATE TABLE IF NOT EXISTS venux_system_settings (
@@ -134,6 +136,7 @@ export function ensureClinicTables() {
       await sql`ALTER TABLE venux_appointments ALTER COLUMN status SET DEFAULT 'confirmed'`;
       await sql`UPDATE venux_appointments SET status='confirmed' WHERE status='requested'`;
       await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'website'`;
+      await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS appointment_sms_enabled BOOLEAN NOT NULL DEFAULT TRUE`;
       await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS confirmation_token TEXT`;
       await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS aftercare_token TEXT`;
       await sql`UPDATE venux_appointments SET aftercare_token=REPLACE(gen_random_uuid()::text,'-','') WHERE aftercare_token IS NULL`;
@@ -342,6 +345,7 @@ export async function createBookingRequest(input: BookingInput) {
     const rows = await sql`INSERT INTO venux_clients (full_name,mobile,email,clinic_location,location_source,service_sms_consent,marketing_sms_consent,marketing_consent_at,lead_source) VALUES (${input.name},${input.mobile},${input.email},${bookingLocation},'booking',${Boolean(input.serviceSmsConsent)},${Boolean(input.marketingSmsConsent)},CASE WHEN ${Boolean(input.marketingSmsConsent)} THEN NOW() ELSE NULL END,${input.source==="admin"?"Clinic":"Website"}) RETURNING id`;
     clientId = Number(rows[0].id);
   }
+  if(input.marketingSmsEnabled!==undefined)await sql`UPDATE venux_clients SET marketing_sms_enabled=${input.marketingSmsEnabled} WHERE id=${clientId}`;
   const token=randomBytes(24).toString("base64url");
   const startMinute=timeToMinutes(input.time);
   if(!input.allowOverlap&&input.staffId&&startMinute!==null){
@@ -368,13 +372,15 @@ export async function createBookingRequest(input: BookingInput) {
   }
   if(!created[0])throw new BookingConflictError("This time is no longer available.");
   const appointmentId=Number(created[0].id);
-  await sql`UPDATE venux_appointments SET aftercare_token=COALESCE(aftercare_token,${randomBytes(16).toString('hex')}) WHERE id=${appointmentId}`;
+  await sql`UPDATE venux_appointments SET aftercare_token=COALESCE(aftercare_token,${randomBytes(16).toString('hex')}),appointment_sms_enabled=${Boolean(input.serviceSmsConsent)} WHERE id=${appointmentId}`;
   if(input.serviceId){await sql`UPDATE venux_appointments SET client_package_item_id=(
     SELECT cpi.id FROM venux_client_package_items cpi JOIN venux_client_packages cp ON cp.id=cpi.client_package_id
     WHERE cp.client_id=${clientId} AND cpi.service_id=${input.serviceId} AND cp.status='active'
       AND (cp.expires_on IS NULL OR cp.expires_on>=${input.date}) AND cpi.used_sessions<cpi.included_sessions
     ORDER BY cp.expires_on NULLS LAST,cp.created_at LIMIT 1) WHERE id=${appointmentId}`;}
-  // The scheduled task sends the confirmation when the appointment is within 24 hours.
+  // Catch late-created bookings without sending reminders to unrelated clients.
+  // The same schedule-specific event key is used by the daily task.
+  await queueAppointmentReminders("previous-day",appointmentId);
   await audit("appointment_created","client",clientId,`${input.treatment} booked for ${input.date} ${input.time} at ${input.clinic}`);
   return appointmentId;
 }
@@ -846,7 +852,7 @@ async function reconcileMembershipBalanceForAppointment(appointmentId:number){
 export async function queueAppointmentConfirmation(appointmentId:number){
   await ensureClinicTables();const sql=client();
   const rows=await sql`SELECT a.*,c.full_name,c.mobile,c.service_sms_consent FROM venux_appointments a JOIN venux_clients c ON c.id=a.client_id WHERE a.id=${appointmentId}`;
-  const row=rows[0];if(!row||!row.service_sms_consent||row.status!=="confirmed"||row.customer_confirmation_status==="change_requested")return false;
+  const row=rows[0];if(!row||!row.service_sms_consent||row.appointment_sms_enabled===false||row.status!=="confirmed"||row.customer_confirmation_status==="change_requested")return false;
   let token=String(row.confirmation_token??"");if(!token){token=randomBytes(24).toString("base64url");await sql`UPDATE venux_appointments SET confirmation_token=${token} WHERE id=${appointmentId}`;}
   const base=(process.env.NEXT_PUBLIC_SITE_URL||"https://venux-three.vercel.app").replace(/\/$/,"");
   const date=new Date(String(row.requested_date)).toLocaleDateString("en-AU",{day:"numeric",month:"short",year:"numeric",timeZone:"Australia/Sydney"});
@@ -889,18 +895,25 @@ export async function respondToBooking(token:string,response:"confirmed"|"change
   return Boolean(rows[0]);
 }
 
+export async function getTodayBirthdayClients(location=""){
+  await ensureClinicTables();
+  return client()`SELECT id,full_name,mobile,marketing_sms_consent,sms_unsubscribed_at FROM venux_clients
+    WHERE dob IS NOT NULL AND TO_CHAR(dob,'MM-DD')=TO_CHAR(NOW() AT TIME ZONE 'Australia/Sydney','MM-DD')
+      AND (${location}='' OR clinic_location=${location}) ORDER BY full_name`;
+}
+
 export async function queueBirthdayMessages(){
   await ensureClinicTables();const sql=client();
   const now=new Date(),parts=new Intl.DateTimeFormat("en-AU",{timeZone:"Australia/Sydney",month:"2-digit",day:"2-digit",year:"numeric"}).formatToParts(now);
   const part=(type:string)=>parts.find(item=>item.type===type)?.value??"";const today=`${part("month")}-${part("day")}`,year=part("year");
-  const rows=await sql`SELECT id,full_name,mobile FROM venux_clients WHERE dob IS NOT NULL AND TO_CHAR(dob,'MM-DD')=${today} AND marketing_sms_consent=TRUE AND sms_unsubscribed_at IS NULL`;
+  const rows=await sql`SELECT id,full_name,mobile FROM venux_clients WHERE dob IS NOT NULL AND TO_CHAR(dob,'MM-DD')=${today} AND marketing_sms_consent=TRUE AND marketing_sms_enabled=TRUE AND sms_unsubscribed_at IS NULL`;
   let queued=0;
   let sent=0;
-  for(const row of rows){const eventKey=`birthday:${year}:${row.id}`,first=String(row.full_name).trim().split(/\s+/)[0];const result=await sql`INSERT INTO venux_sms_outbox (client_id,event_key,message_type,recipient,message_body) VALUES (${row.id},${eventKey},'birthday',${row.mobile},${`Happy birthday ${first}! ISA Skin Clinic & Aesthetics wishes you a beautiful day. Reply STOP to opt out.`}) ON CONFLICT (event_key) DO NOTHING RETURNING id`;if(result[0]){queued++;if(await sendSmsOutboxMessage(Number(result[0].id)))sent++;}}
+  for(const row of rows){const eventKey=`birthday:${year}:${row.id}`,first=String(row.full_name).trim().split(/\s+/)[0];const result=await sql`INSERT INTO venux_sms_outbox (client_id,event_key,message_type,recipient,message_body) VALUES (${row.id},${eventKey},'birthday',${row.mobile},${`Happy birthday ${first}! ISA Skin Clinic & Aesthetics wishes you a beautiful day. Contact the clinic to ask about birthday offers. Reply STOP to opt out.`}) ON CONFLICT (event_key) DO NOTHING RETURNING id`;if(result[0])queued++;}
   return {eligible:rows.length,queued,sent};
 }
 
-export async function queueAppointmentReminders(){
+export async function queueAppointmentReminders(mode:"24h"|"previous-day"="24h",appointmentId?:number){
   await ensureClinicTables();const sql=client();
   // PostgreSQL handles Sydney daylight saving; use the local date and clock time.
   const rows=await sql`WITH scheduled AS (
@@ -910,9 +923,9 @@ export async function queueAppointmentReminders(){
         ELSE to_timestamp(a.requested_time,'HH12:MI AM')::time - TIME '00:00' END) AT TIME ZONE 'Australia/Sydney' AS appointment_at
     FROM venux_appointments a JOIN venux_clients c ON c.id=a.client_id
     WHERE a.status='confirmed' AND a.customer_confirmation_status<>'change_requested'
-      AND c.service_sms_consent=TRUE AND a.requested_date >= (NOW() AT TIME ZONE 'Australia/Sydney')::date
+      AND c.service_sms_consent=TRUE AND a.appointment_sms_enabled=TRUE AND a.requested_date >= (NOW() AT TIME ZONE 'Australia/Sydney')::date
       AND (a.start_minute IS NOT NULL OR a.requested_time ~ '^(0?[1-9]|1[0-2]):[0-5][0-9] (AM|PM)$')
-  ) SELECT *,requested_date::text AS requested_date FROM scheduled WHERE appointment_at > NOW() AND appointment_at <= NOW()+INTERVAL '24 hours'`;
+  ) SELECT *,requested_date::text AS requested_date FROM scheduled WHERE appointment_at > NOW() AND (${appointmentId??null}::bigint IS NULL OR id=${appointmentId??null}) AND ((${mode}='previous-day' AND requested_date<=(NOW() AT TIME ZONE 'Australia/Sydney')::date+1) OR (${mode}='24h' AND appointment_at <= NOW()+INTERVAL '24 hours'))`;
   let queued=0,sent=0,failed=0;
   for(const row of rows){
     let token=String(row.confirmation_token??'');
@@ -937,6 +950,14 @@ export async function getAftercareByToken(token:string){
   return (await client()`SELECT treatment,completed_at FROM venux_appointments WHERE aftercare_token=${token} AND status='completed' LIMIT 1`)[0]??null;
 }
 
+export async function updateBirthdayPromotion(id:number,body:string){
+  await ensureClinicTables();
+  let message=body.trim().slice(0,1000);
+  if(!message)throw new Error('Promotion text is required');
+  if(!/reply STOP/i.test(message))message+=' Reply STOP to opt out.';
+  await client()`UPDATE venux_sms_outbox SET message_body=${message} WHERE id=${id} AND message_type='birthday' AND status IN ('queued','failed')`;
+}
+
 export async function getSmsOutbox(){
   await ensureClinicTables();return client()`SELECT o.*,c.full_name,a.requested_date,a.requested_time FROM venux_sms_outbox o LEFT JOIN venux_clients c ON c.id=o.client_id LEFT JOIN venux_appointments a ON a.id=o.appointment_id ORDER BY CASE WHEN o.status='queued' THEN 0 ELSE 1 END,o.queued_at DESC LIMIT 500`;
 }
@@ -951,8 +972,15 @@ export function isClickSendConfigured(){
 
 export async function sendSmsOutboxMessage(id:number){
   await ensureClinicTables();const sql=client();
-  const rows=await sql`SELECT id,recipient,message_body,status FROM venux_sms_outbox WHERE id=${id} LIMIT 1`;
+  const rows=await sql`SELECT id,client_id,message_type,recipient,message_body,status FROM venux_sms_outbox WHERE id=${id} LIMIT 1`;
   const row=rows[0];if(!row||row.status==='sent')return Boolean(row);
+  if(["birthday","return_invite"].includes(String(row.message_type))){
+    const recipient=(await sql`SELECT marketing_sms_consent,marketing_sms_enabled,sms_unsubscribed_at FROM venux_clients WHERE id=${row.client_id}`)[0];
+    if(!recipient?.marketing_sms_consent||recipient.marketing_sms_enabled===false||recipient.sms_unsubscribed_at){
+      await sql`UPDATE venux_sms_outbox SET status='cancelled',last_error='Marketing consent is missing or withdrawn.' WHERE id=${id} AND status IN ('queued','failed')`;
+      return false;
+    }
+  }
   const username=process.env.CLICKSEND_USERNAME?.trim(),apiKey=process.env.CLICKSEND_API_KEY?.trim();
   if(!username||!apiKey){
     await sql`UPDATE venux_sms_outbox SET status='failed',last_error='ClickSend credentials are not configured.',last_attempt_at=NOW(),attempt_count=attempt_count+1 WHERE id=${id}`;

@@ -1,3 +1,4 @@
+import ScheduleView from "./schedule-view";
 import type {CSSProperties} from "react";
 import {calendarTimeMinutes,calendarTimeLabel,beauticianColour,quarterHourSlots} from "../../../lib/calendar-schedule";
 import "./calendar.css";
@@ -18,7 +19,7 @@ export default function DaySchedule({rows,staff,date,entry="admin"}:{rows:Row[];
   const latest=Math.min(1425,Math.max(1260,...visibleRows.map(row=>calendarTimeMinutes(String(row.requested_time))+Number(row.duration_minutes??60)).filter(time=>time<1440)));
   const slots=quarterHourSlots(Math.floor(earliest/15)*15,Math.ceil(latest/15)*15);
   const start=slots[0];
-  return (<div className="shared-day-schedule"><section className="day-occupancy-overview" aria-label="Whole-day appointment overview"><header><strong>Whole-day overview</strong><small>Each bar is an appointment · select it to manage</small></header><div className="overview-hours"><span>Beautician</span><div>{[360,540,720,900,1080,1260].filter(minutes=>minutes>=start&&minutes<=start+slots.length*15).map(minutes=><time style={{left:`${(minutes-start)/(slots.length*15)*100}%`}} key={minutes}>{calendarTimeLabel(minutes)}</time>)}</div></div>{columns.map(person=>{
+  return (<ScheduleView><div className="shared-day-schedule"><section className="day-occupancy-overview" aria-label="Whole-day appointment overview"><header><strong>Whole-day overview</strong><small>Each bar is an appointment · select it to manage</small></header><div className="overview-hours"><span>Beautician</span><div>{[360,540,720,900,1080,1260].filter(minutes=>minutes>=start&&minutes<=start+slots.length*15).map(minutes=><time style={{left:`${(minutes-start)/(slots.length*15)*100}%`}} key={minutes}>{calendarTimeLabel(minutes)}</time>)}</div></div>{columns.map(person=>{
     const appointments=visibleRows.filter(row=>Number(row.staff_id??0)===person.id).sort((a,b)=>calendarTimeMinutes(String(a.requested_time))-calendarTimeMinutes(String(b.requested_time)));
     const ends:number[]=[];
     const positions=appointments.map(row=>{
@@ -29,7 +30,7 @@ export default function DaySchedule({rows,staff,date,entry="admin"}:{rows:Row[];
     return <div className="overview-person" key={person.id}><strong>{person.name}<small>{appointments.length} appointments</small></strong><div className="overview-day-track" style={{height:Math.max(34,ends.length*32+2)}}>{positions.map(({row,lane})=>{
       const minutes=calendarTimeMinutes(String(row.requested_time)),duration=Number(row.duration_minutes??60);
       return <a key={String(row.id)} href={appointmentUrl(row.id)} title={`${person.name} · ${row.full_name} · ${row.requested_time} · ${duration} min · ${row.treatment}`} aria-label={`${person.name}, ${row.full_name}, ${row.requested_time}, ${duration} minutes`} style={{top:lane*32+2,height:28,bottom:"auto",left:`${Math.max(0,(minutes-start)/(slots.length*15)*100)}%`,width:`${Math.min(100,duration/(slots.length*15)*100)}%`,background:person.id?beauticianColour(person.id):"#dce5e9"}}>{String(row.full_name)}</a>})}{!appointments.length?<small>No appointments</small>:null}</div><div className="overview-time-list">{appointments.map(row=><a key={String(row.id)} href={appointmentUrl(row.id)}>{String(row.requested_time)}–{calendarTimeLabel((calendarTimeMinutes(String(row.requested_time))+Number(row.duration_minutes??60))%1440)} · {String(row.full_name)}</a>)}</div></div>;
-  })}</section><div className="reference-planner-scroll"><div className="reference-beautician-columns" style={{gridTemplateColumns:`repeat(${columns.length},minmax(230px,1fr))`}}>
+  })}</section><div className="reference-planner-scroll"><div className="reference-beautician-columns" style={{gridTemplateColumns:`repeat(${columns.length},minmax(var(--schedule-column-min,230px),1fr))`}}>
           {columns.map(person=>{
             const appointments=visibleRows.filter(row=>Number(row.staff_id??0)===person.id).sort((a,b)=>calendarTimeMinutes(String(a.requested_time))-calendarTimeMinutes(String(b.requested_time)));
             const laneEnds:number[]=[];
@@ -50,9 +51,9 @@ export default function DaySchedule({rows,staff,date,entry="admin"}:{rows:Row[];
                   const href=occupied?appointmentUrl(occupied.id):bookingUrl(minutes);
                   return <div className={`reference-quarter-row ${minutes%60===0?"hour-start":""}`} key={minutes} style={{top:index*ROW_HEIGHT,height:ROW_HEIGHT}}><a className="reference-time-label" href={href} aria-label={`${person.name}, ${calendarTimeLabel(minutes)}${occupied?', manage appointment':', new appointment'}`}>{minutes%60===0?calendarTimeLabel(minutes):String(minutes%60)}</a><a className="reference-empty-slot" href={href} aria-label={`${occupied?'Manage appointment':'Book'} with ${person.name} at ${calendarTimeLabel(minutes)}`}/></div>;
                 })}
-                {positioned.map(({row,minutes,lane})=><a className="reference-booking-block" href={appointmentUrl(row.id)} key={String(row.id)} style={{top:(minutes-start)/15*ROW_HEIGHT,height:Math.max(ROW_HEIGHT,(Number(row.duration_minutes??60)/15)*ROW_HEIGHT)-3,left:`calc(68px + (100% - 68px) * ${lane/lanes})`,width:`calc((100% - 68px) / ${lanes} - 4px)`}}><strong>{String(row.full_name)}</strong><span>{String(row.treatment)}</span><small>{String(row.requested_time)} · {Number(row.duration_minutes??60)} min</small><small>{statusLabel(row.status)}</small></a>)}
+                {positioned.map(({row,minutes,lane})=><a className="reference-booking-block" href={appointmentUrl(row.id)} key={String(row.id)} style={{top:(minutes-start)/15*ROW_HEIGHT,height:Math.max(ROW_HEIGHT,(Number(row.duration_minutes??60)/15)*ROW_HEIGHT)-3,left:`calc(var(--schedule-time-width,68px) + (100% - var(--schedule-time-width,68px)) * ${lane/lanes})`,width:`calc((100% - var(--schedule-time-width,68px)) / ${lanes} - 4px)`}}><strong>{String(row.full_name)}</strong><span>{String(row.treatment)}</span><small>{String(row.requested_time)} · {Number(row.duration_minutes??60)} min</small><small>{statusLabel(row.status)}</small></a>)}
               </div>
             </section>;
           })}
-        </div></div></div>);
+        </div></div></div></ScheduleView>);
 }

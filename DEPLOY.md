@@ -10,34 +10,38 @@ credentials in Vercel environment settings, never in the repository. Redeploy
 when changing Vercel environment variables. `CLICKSEND_FROM` is optional; omit
 it to use ClickSend's default sender rather than an unverified sender number.
 
-This project uses Vercel Hobby, so `vercel.json` retains only the existing
-once-daily birthday task. Appointment confirmations need an external scheduler.
-For example, configure a free cron-job.org job with:
+This project uses Vercel Hobby. The existing daily task
+`/api/cron/birthday-messages` at `0 22 * * *` UTC now sends all tomorrow's
+appointment confirmations and prepares today's birthday promotions for staff
+review. This is nominally 9 AM Sydney daylight time / 8 AM standard time;
+Hobby execution may be delayed. Confirm `CRON_SECRET` is configured in Vercel
+Production and inspect Vercel's Cron execution history. The dashboard reports
+if the secret is missing. Vercel authenticates scheduled calls using that secret.
 
-- URL: `https://venux-three.vercel.app/api/cron/appointment-confirmations`
-- Method: GET; interval: every five minutes; job enabled.
-- Request header: `Authorization: Bearer <CRON_SECRET>` using the same secret
-  configured in Vercel Production. Keep the value private; do not use URL parameters.
-- Enable failure notifications and check successful execution history.
+Birthday promotions are queued, not automatically sent. Staff can edit the
+promotion text in Messages and click Send; marketing consent and unsubscribe
+status are checked again immediately before sending. Dashboard birthday
+reminders can include clients without marketing consent for appropriate
+non-SMS follow-up. Existing recorded consent is automatically loaded when a
+client is selected in the booking form; no historic marketing opt-in is invented.
 
-Create `CRON_SECRET` securely in Vercel Production, set `NEXT_PUBLIC_SITE_URL` to
-`https://venux-three.vercel.app`, and configure the database and ClickSend
-credentials there. Redeploy before enabling the scheduler. On first activation
-the endpoint sends ALL consenting, eligible appointments in the next 24 hours,
-including existing bookings. For a live test, first use a designated isolated
-test database/deployment, or review the eligible production bookings before
-activating. External cron requests are not enabled by a repository change.
-Do not manually call the production cron just to check connectivity: an
-authenticated call triggers real SMS. Unauthenticated requests must return 401.
-If moving to Pro later, Vercel can schedule the same endpoint with
-`*/5 * * * *`; run only one scheduler. External scheduling can be delayed and
-does not guarantee delivery at the exact second of the 24-hour boundary.
-The existing once-daily birthday task stays separate.
+Appointments created for today or tomorrow are checked immediately after
+creation, so bookings made after the daily run are not missed. Each immediate
+check is restricted to that appointment. A schedule-specific event key prevents
+the daily job and the immediate check from duplicating the same SMS. Future
+appointments further ahead wait for the daily job. The daily job also catches
+missed upcoming appointments today. Only future, active, consenting bookings
+are eligible.
+
+The optional `/api/cron/appointment-confirmations` endpoint still supports
+an external five-minute scheduler for the rolling 24-hour window. No external
+scheduler is required for the new previous-calendar-day workflow. An authenticated
+production cron call sends real eligible messages; do not invoke it merely to
+check connectivity. Unauthenticated requests must return 401.
 
 The scheduler calculates the appointment instant in Australia/Sydney, including
-DST. Consenting clients with confirmed future appointments get a confirmation
-when the start is at most 24 hours away, normally within five minutes of the
-24-hour boundary. Late-created bookings are sent on the next run. Downtime may
+DST. The optional rolling scheduler selects future appointments within 24 hours;
+the daily scheduler uses the previous-calendar-day rule described above. Downtime may
 delay delivery. Cancelled, completed, in-progress, past and change-requested
 appointments are excluded. Date/time-specific outbox keys prevent repeated
 cron executions from sending the same message twice. Failed scheduled messages

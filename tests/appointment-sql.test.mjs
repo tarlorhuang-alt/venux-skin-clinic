@@ -6,14 +6,14 @@ const source=readFileSync(new URL('../lib/clinic-admin.ts',import.meta.url),'utf
 const reminderSql=source.match(/const rows=await sql`(WITH scheduled AS [\s\S]*?)`;/)[1];
 const db=new PGlite();
 await db.exec(`CREATE TABLE venux_clients(id INT PRIMARY KEY,full_name TEXT,mobile TEXT,service_sms_consent BOOLEAN);
-CREATE TABLE venux_appointments(id INT PRIMARY KEY,client_id INT,requested_date DATE,requested_time TEXT,start_minute INT,status TEXT,customer_confirmation_status TEXT,treatment TEXT,aftercare_token TEXT,completed_at TIMESTAMPTZ);
+CREATE TABLE venux_appointments(id INT PRIMARY KEY,client_id INT,requested_date DATE,requested_time TEXT,start_minute INT,status TEXT,customer_confirmation_status TEXT,treatment TEXT,aftercare_token TEXT,completed_at TIMESTAMPTZ,appointment_sms_enabled BOOLEAN DEFAULT TRUE);
 INSERT INTO venux_clients VALUES (1,'Test','0400000000',TRUE),(2,'No consent','0400000001',FALSE);`);
-async function eligible(now,rows){
+async function eligible(now,rows,mode="24h",appointmentId=null){
  await db.exec('DELETE FROM venux_appointments');
  for(const r of rows){
-  await db.query('INSERT INTO venux_appointments(id,client_id,requested_date,requested_time,start_minute,status,customer_confirmation_status) VALUES ($1,$2,$3,$4,$5,$6,$7)',[r.id,r.client??1,r.date,r.time??'10:00 AM',r.minutes??null,r.status??'confirmed',r.confirmation??'pending']);
+  await db.query('INSERT INTO venux_appointments(id,client_id,requested_date,requested_time,start_minute,status,customer_confirmation_status,appointment_sms_enabled) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',[r.id,r.client??1,r.date,r.time??'10:00 AM',r.minutes??null,r.status??'confirmed',r.confirmation??'pending',r.enabled??true]);
  }
- const query=reminderSql.replaceAll('NOW()',`TIMESTAMPTZ '${now}'`);
+ const query=reminderSql.replaceAll('${appointmentId??null}',String(appointmentId??'NULL')).replaceAll('${mode}',`'${mode}'`).replaceAll('NOW()',`TIMESTAMPTZ '${now}'`);
  return (await db.query(query)).rows.map(r=>r.id).sort((a,b)=>a-b);
 }
 test('24h boundary includes exact due and late bookings but excludes future, past and opted-out states',async()=>{
@@ -69,4 +69,18 @@ test('missed seven-day follow-ups are recovered from completion date without dup
  await db.exec(sql);
  rows=(await db.query('SELECT appointment_id,status FROM venux_followups')).rows;
  assert.deepEqual(rows,[{appointment_id:20,status:'completed'}]);
+});
+
+test('daily Hobby task includes tomorrow and catches missed future bookings today, but excludes later days',async()=>{
+ const rows=[{id:1,date:'2026-10-13',time:'10:00 AM'},{id:2,date:'2026-10-13',time:'8:00 PM'},{id:3,date:'2026-10-14',time:'10:00 AM'},{id:4,date:'2026-10-12',time:'11:00 AM'},{id:5,date:'2026-10-13',client:2}];
+ assert.deepEqual(await eligible('2026-10-11 22:00:00+00',rows,'previous-day'),[1,2,4]);
+});
+
+test('immediate late-booking check targets only the new appointment',async()=>{
+ const rows=[{id:1,date:'2026-10-13'},{id:2,date:'2026-10-13'}];
+ assert.deepEqual(await eligible('2026-10-11 22:00:00+00',rows,'previous-day',2),[2]);
+});
+
+test('an appointment-level SMS switch can disable sending even when the client has consent',async()=>{
+ assert.deepEqual(await eligible('2026-10-11 22:00:00+00',[{id:1,date:'2026-10-13',enabled:false},{id:2,date:'2026-10-13',enabled:true}],'previous-day'),[2]);
 });
