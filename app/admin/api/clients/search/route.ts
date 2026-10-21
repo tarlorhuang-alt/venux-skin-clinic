@@ -8,7 +8,7 @@ export async function GET(request:Request){
   if(!(await isAdminAuthenticated()))return NextResponse.json({error:"Unauthorized"},{status:401});
   try{
     const query=new URL(request.url).searchParams.get("q")?.trim().slice(0,80)??"",role=await getAdminRole(),rows=await getClientsForBookingSearch(query,role==="staff"?"Top Ryde":"");
-    const clients=rows.slice(0,8).map(row=>({id:Number(row.id),name:String(row.full_name),mobile:String(row.mobile),email:String(row.email??""),clinicLocation:String(row.clinic_location??"Top Ryde"),membershipStatus:row.is_premium?"Premium client":"Standard client",visitCount:Number(row.visit_count??0),serviceSmsConsent:Boolean(row.service_sms_consent),marketingSmsConsent:Boolean(row.marketing_sms_consent)&&!row.sms_unsubscribed_at,marketingSmsEnabled:row.marketing_sms_enabled!==false&&!row.sms_unsubscribed_at}));
+    const clients=rows.slice(0,8).map(row=>({id:Number(row.id),name:String(row.full_name),mobile:String(row.mobile),email:String(row.email??""),clinicLocation:String(row.clinic_location??"Top Ryde"),membershipStatus:row.is_premium?"Premium client":"Standard client",visitCount:Number(row.visit_count??0),serviceSmsConsent:Boolean(row.service_sms_consent),serviceSmsDefault:!row.sms_unsubscribed_at,marketingSmsConsent:Boolean(row.marketing_sms_consent)&&!row.sms_unsubscribed_at,marketingSmsEnabled:row.marketing_sms_enabled!==false&&!row.sms_unsubscribed_at}));
     return NextResponse.json({clients},{headers:{"Cache-Control":"private, no-store"}});
   }catch(error){
     console.error("Booking client search failed",error);

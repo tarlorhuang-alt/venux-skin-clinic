@@ -851,8 +851,8 @@ async function reconcileMembershipBalanceForAppointment(appointmentId:number){
 
 export async function queueAppointmentConfirmation(appointmentId:number){
   await ensureClinicTables();const sql=client();
-  const rows=await sql`SELECT a.*,c.full_name,c.mobile,c.service_sms_consent FROM venux_appointments a JOIN venux_clients c ON c.id=a.client_id WHERE a.id=${appointmentId}`;
-  const row=rows[0];if(!row||!row.service_sms_consent||row.appointment_sms_enabled===false||row.status!=="confirmed"||row.customer_confirmation_status==="change_requested")return false;
+  const rows=await sql`SELECT a.*,c.full_name,c.mobile,c.service_sms_consent,c.sms_unsubscribed_at FROM venux_appointments a JOIN venux_clients c ON c.id=a.client_id WHERE a.id=${appointmentId}`;
+  const row=rows[0];if(!row||!row.service_sms_consent||row.sms_unsubscribed_at||row.appointment_sms_enabled===false||row.status!=="confirmed"||row.customer_confirmation_status==="change_requested")return false;
   let token=String(row.confirmation_token??"");if(!token){token=randomBytes(24).toString("base64url");await sql`UPDATE venux_appointments SET confirmation_token=${token} WHERE id=${appointmentId}`;}
   const base=(process.env.NEXT_PUBLIC_SITE_URL||"https://venux-three.vercel.app").replace(/\/$/,"");
   const date=new Date(String(row.requested_date)).toLocaleDateString("en-AU",{day:"numeric",month:"short",year:"numeric",timeZone:"Australia/Sydney"});
@@ -923,7 +923,7 @@ export async function queueAppointmentReminders(mode:"24h"|"previous-day"="24h",
         ELSE to_timestamp(a.requested_time,'HH12:MI AM')::time - TIME '00:00' END) AT TIME ZONE 'Australia/Sydney' AS appointment_at
     FROM venux_appointments a JOIN venux_clients c ON c.id=a.client_id
     WHERE a.status='confirmed' AND a.customer_confirmation_status<>'change_requested'
-      AND c.service_sms_consent=TRUE AND a.appointment_sms_enabled=TRUE AND a.requested_date >= (NOW() AT TIME ZONE 'Australia/Sydney')::date
+      AND c.service_sms_consent=TRUE AND c.sms_unsubscribed_at IS NULL AND a.appointment_sms_enabled=TRUE AND a.requested_date >= (NOW() AT TIME ZONE 'Australia/Sydney')::date
       AND (a.start_minute IS NOT NULL OR a.requested_time ~ '^(0?[1-9]|1[0-2]):[0-5][0-9] (AM|PM)$')
   ) SELECT *,requested_date::text AS requested_date FROM scheduled WHERE appointment_at > NOW() AND (${appointmentId??null}::bigint IS NULL OR id=${appointmentId??null}) AND ((${mode}='previous-day' AND requested_date<=(NOW() AT TIME ZONE 'Australia/Sydney')::date+1) OR (${mode}='24h' AND appointment_at <= NOW()+INTERVAL '24 hours'))`;
   let queued=0,sent=0,failed=0;

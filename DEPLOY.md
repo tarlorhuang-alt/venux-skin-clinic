@@ -22,8 +22,9 @@ Birthday promotions are queued, not automatically sent. Staff can edit the
 promotion text in Messages and click Send; marketing consent and unsubscribe
 status are checked again immediately before sending. Dashboard birthday
 reminders can include clients without marketing consent for appropriate
-non-SMS follow-up. Existing recorded consent is automatically loaded when a
-client is selected in the booking form; no historic marketing opt-in is invented.
+non-SMS follow-up. New bookings default to transactional reminders on, unless the selected client
+is unsubscribed. Existing marketing preferences and consent are retained; no
+historic marketing opt-in is invented.
 
 Appointments created for today or tomorrow are checked immediately after
 creation, so bookings made after the daily run are not missed. Each immediate

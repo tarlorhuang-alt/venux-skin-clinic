@@ -5,9 +5,9 @@ import {PGlite} from '@electric-sql/pglite';
 const source=readFileSync(new URL('../lib/clinic-admin.ts',import.meta.url),'utf8');
 const reminderSql=source.match(/const rows=await sql`(WITH scheduled AS [\s\S]*?)`;/)[1];
 const db=new PGlite();
-await db.exec(`CREATE TABLE venux_clients(id INT PRIMARY KEY,full_name TEXT,mobile TEXT,service_sms_consent BOOLEAN);
+await db.exec(`CREATE TABLE venux_clients(id INT PRIMARY KEY,full_name TEXT,mobile TEXT,service_sms_consent BOOLEAN,sms_unsubscribed_at TIMESTAMPTZ);
 CREATE TABLE venux_appointments(id INT PRIMARY KEY,client_id INT,requested_date DATE,requested_time TEXT,start_minute INT,status TEXT,customer_confirmation_status TEXT,treatment TEXT,aftercare_token TEXT,completed_at TIMESTAMPTZ,appointment_sms_enabled BOOLEAN DEFAULT TRUE);
-INSERT INTO venux_clients VALUES (1,'Test','0400000000',TRUE),(2,'No consent','0400000001',FALSE);`);
+INSERT INTO venux_clients(id,full_name,mobile,service_sms_consent) VALUES (1,'Test','0400000000',TRUE),(2,'No consent','0400000001',FALSE);`);
 async function eligible(now,rows,mode="24h",appointmentId=null){
  await db.exec('DELETE FROM venux_appointments');
  for(const r of rows){
@@ -83,4 +83,10 @@ test('immediate late-booking check targets only the new appointment',async()=>{
 
 test('an appointment-level SMS switch can disable sending even when the client has consent',async()=>{
  assert.deepEqual(await eligible('2026-10-11 22:00:00+00',[{id:1,date:'2026-10-13',enabled:false},{id:2,date:'2026-10-13',enabled:true}],'previous-day'),[2]);
+});
+
+test('unsubscribed clients do not receive appointment reminders',async()=>{
+ await db.exec("UPDATE venux_clients SET sms_unsubscribed_at=NOW() WHERE id=1");
+ try{assert.deepEqual(await eligible('2026-10-11 22:00:00+00',[{id:1,date:'2026-10-13'}],'previous-day'),[]);}
+ finally{await db.exec("UPDATE venux_clients SET sms_unsubscribed_at=NULL WHERE id=1");}
 });
