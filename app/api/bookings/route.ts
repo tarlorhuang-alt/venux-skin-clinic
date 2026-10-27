@@ -20,7 +20,7 @@ export async function POST(request: Request) {
       serviceSmsConsent:body.serviceSmsConsent==="yes",
       marketingSmsConsent:body.marketingSmsConsent==="yes",
     };
-    if (!input.name || !input.mobile || !/^\S+@\S+\.\S+$/.test(input.email) || !input.treatment || !allowedClinics.has(input.clinic) || !/^\d{4}-\d{2}-\d{2}$/.test(input.date) || !input.time) {
+    if (!input.name || !input.mobile || (input.email && !/^\S+@\S+\.\S+$/.test(input.email)) || !input.treatment || !allowedClinics.has(input.clinic) || !/^\d{4}-\d{2}-\d{2}$/.test(input.date) || !input.time) {
       return NextResponse.json({ error: "Please check the required booking details." }, { status: 400 });
     }
     const todaySydney = new Intl.DateTimeFormat("en-CA", { timeZone:"Australia/Sydney", year:"numeric", month:"2-digit", day:"2-digit" }).format(new Date());

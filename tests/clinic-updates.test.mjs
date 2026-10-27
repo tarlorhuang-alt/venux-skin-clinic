@@ -168,3 +168,24 @@ test('birthday outbox excludes old years, other dates, confirmations and other c
  assert.deepEqual((await db.query(sql,[''])).rows.map(row=>row.id).sort(),[1,5]);
  await db.close();
 });
+
+test('booking API accepts a missing email and still validates a supplied address',async()=>{
+ const saved=[];
+ const {POST}=load('app/api/bookings/route.ts',{
+  'next/server':{NextResponse:{json:(body,options={})=>({body,status:options.status??200})}},
+  'clinic-admin':{BookingConflictError:class extends Error{},createBookingRequest:async input=>{saved.push(input);return 42}}
+ });
+ const body={name:'Test client',mobile:'0400000001',interest:'Facial',clinic:'Top Ryde · Shop 3002',date:'2999-01-01',time:'10:00 AM'};
+ assert.equal((await POST({json:async()=>body})).status,200);assert.equal(saved[0].email,'');
+ assert.equal((await POST({json:async()=>({...body,email:'invalid'})})).status,400);
+ assert.equal(saved.length,1);
+});
+
+test('calendar only time labels and existing appointments navigate, not blank cells or headings',()=>{
+ const {default:Schedule}=load('app/admin/calendar/day-schedule.tsx');
+ const html=renderToStaticMarkup(Schedule({rows:[],staff:[{id:1,full_name:'Dannie',active:true}],date:'2026-10-27'}));
+ assert.match(html,/<header class="reference-beautician-heading"/);
+ assert.match(html,/<span class="reference-empty-slot" aria-hidden="true"/);
+ assert.ok(!html.includes('<a class="reference-empty-slot"'));
+ assert.match(html,/<a class="reference-time-label" href="[^\"]*time=9%3A15%20AM/);
+});

@@ -28,7 +28,7 @@ export function BookingForm() {
     <form onSubmit={submitBooking}>
       <label>Full name<input required name="name" autoComplete="name" placeholder="Your name" /></label>
       <label>Mobile<input required name="mobile" inputMode="tel" autoComplete="tel" placeholder="04XX XXX XXX" /></label>
-      <label>Email<input required name="email" type="email" autoComplete="email" placeholder="you@example.com" /></label>
+      <label>Email (optional)<input name="email" type="email" autoComplete="email" placeholder="you@example.com" /></label>
       <label>What can we help with?
         <select required name="interest" defaultValue="">
           <option value="" disabled>Select an area</option>
