@@ -86,6 +86,7 @@ test('calendar appointment links open only that beautician appointment and its o
  const {default:Page}=load('app/admin/bookings/page.tsx',{
   'booking-preferences':{BookingPreferencesProvider:({children})=>children,BookingSmsOptions:()=>null},
   '../calendar/day-schedule':{default:()=>jsx.jsx('p',{children:'Full table hidden in focused view'})},
+  './visit-documents':{default:()=>null},
   './service-account-panel':{default:()=>jsx.jsx('p',{children:'Client card and package controls'})},'./service-checkout-fields':{default:()=>jsx.jsx('p',{children:'Combination payment controls'})},
   'node:crypto':{randomUUID:()=> 'test-key'},
   'admin-auth':{isAdminAuthenticated:async()=>true,getAdminRole:async()=> 'owner'},
@@ -227,4 +228,33 @@ test('service account changes reject staff access to a City appointment before r
  });
  const form=new FormData();for(const [key,value] of Object.entries({id:'1',date:'2026-10-27',accountKey:'12345678-1234-1234-1234-123456789012',accountKind:'recharge',accountAmount:'100',accountMethod:'Card'}))form.set(key,value);
  await assert.rejects(()=>recordServiceAccountAction(form),/restricted/);assert.equal(mutated,false);
+});
+
+test('completed visit exposes a direct receipt and separate care link, or a missing-receipt recovery path',()=>{
+ const {default:Documents}=load('app/admin/bookings/visit-documents.tsx',{'./local-qr-code':{default:({path,label})=>jsx.jsx('a',{href:path,children:label})}});
+ const html=renderToStaticMarkup(Documents({id:7,receiptToken:'a'.repeat(48),aftercareToken:'b'.repeat(32)}));
+ assert.ok(html.includes('/booking/receipt/'+'a'.repeat(48)));assert.ok(html.includes('/booking/aftercare/'+'b'.repeat(32)));
+ const missing=renderToStaticMarkup(Documents({id:7,entry:'owner'}));assert.match(missing,/href="\/owner\/receipts\/7"/);assert.ok(!missing.includes('/booking/receipt/undefined'));
+});
+
+test('unapproved after-care drafts require login and clearly identify all five review-only documents',async()=>{
+ const drafts=load('lib/aftercare-review.ts');
+ function page(authenticated){return load('app/admin/care-review/page.tsx',{
+  'admin-auth':{isAdminAuthenticated:async()=>authenticated},'aftercare-review':drafts,
+  'admin-ui':{AdminLogin:()=>jsx.jsx('p',{children:'Password required'})}
+ }).default;}
+ const privateHtml=renderToStaticMarkup(await page(false)());assert.match(privateHtml,/Password required/);assert.ok(!privateHtml.includes('Laser 激光治疗'));
+ const html=renderToStaticMarkup(await page(true)());for(const title of ['Laser 激光治疗','Microneedling 微针','Skin booster','Injection of filler','Botulinum toxin / Botox'])assert.ok(html.includes(title));
+ assert.match(html,/尚未用于客人的二维码/);assert.match(html,/000/);assert.equal(drafts.aftercareReviewDrafts.length,5);
+});
+
+test('missing receipt recovery cannot disclose patient details without authentication',async()=>{
+ let queried=false;
+ const {default:Page}=load('app/admin/receipts/[id]/page.tsx',{
+  'admin-auth':{isAdminAuthenticated:async()=>false},'clinic-admin':{getReceiptAppointment:async()=>{queried=true;throw Error('Should not query')}},
+  'next/navigation':{},'../../actions':{},'missing-receipt-form':{default:()=>null},
+  'admin-ui':{AdminLogin:()=>jsx.jsx('p',{children:'Password required'})}
+ });
+ const html=renderToStaticMarkup(await Page({params:Promise.resolve({id:'1'}),searchParams:Promise.resolve({})}));
+ assert.match(html,/Password required/);assert.equal(queried,false);
 });

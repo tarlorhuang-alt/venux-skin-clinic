@@ -4,7 +4,7 @@ import {moneyInput,parseServiceCheckout} from "../../lib/service-checkout";
 import {revalidatePath} from "next/cache";
 import {redirect} from "next/navigation";
 import {clearOwnerSession,createOwnerSession,isOwnerAuthenticated,ownerPasswordMatches} from "../../lib/owner-auth";
-import {finishServiceCheckout,recordServiceAccountEvent,queueVisitReceipt,BookingConflictError,createBookingRequest,createCityStaff,createClinicService,finishAppointment,getOwnerService,importClientRows,importClinicServices,startAppointment,updateAppointment,type AppointmentStatus,type ClientImportRow,type ServiceImportRow} from "../../lib/clinic-admin";
+import {issueRecordedVisitReceipt,finishServiceCheckout,recordServiceAccountEvent,queueVisitReceipt,BookingConflictError,createBookingRequest,createCityStaff,createClinicService,finishAppointment,getOwnerService,importClientRows,importClinicServices,startAppointment,updateAppointment,type AppointmentStatus,type ClientImportRow,type ServiceImportRow} from "../../lib/clinic-admin";
 import {PRICE_LIST_2026_SERVICES} from "../../lib/price-list-services";
 
 const text=(data:FormData,name:string)=>String(data.get(name)??"").trim();
@@ -105,4 +105,12 @@ export async function recordCityServiceAccount(data:FormData){
   try{saved=await recordServiceAccountEvent(id,key,kind,moneyInput(data.get("accountAmount")),method,Number.isSafeInteger(packageId)&&packageId>0?packageId:null);}catch{saved=false;}
   revalidatePath("/owner");revalidatePath("/admin/bookings");revalidatePath("/admin/client-packages");
   redirect(`/owner?date=${date}&appointment=${id}&${saved?"accountSaved=1":"error=checkout"}#city-appointment-${id}`);
+}
+
+
+export async function issueMissingCityReceipt(data:FormData){
+  await requireOwner();const id=Number(data.get('id'));if(!Number.isSafeInteger(id)||id<=0)redirect('/owner');
+  let token='';try{token=await issueRecordedVisitReceipt(id,parseServiceCheckout(data).payments);}catch{token='';}
+  if(!token)redirect(`/owner/receipts/${id}?error=amount`);
+  revalidatePath('/owner');revalidatePath('/admin/receipts');redirect(`/booking/receipt/${token}`);
 }

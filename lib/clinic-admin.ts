@@ -1,4 +1,6 @@
 import "server-only";
+import {RECORDED_RECEIPT_SQL} from "./recorded-receipt-sql";
+import type {PaymentPart} from "./service-checkout";
 import {SERVICE_CHECKOUT_SQL,SERVICE_ACCOUNT_SQL} from "./service-checkout-sql";
 import type {ServiceCheckout} from "./service-checkout";
 import {IMAGE_SERVICE_NAMES,imageServiceDuration,imageServiceCategory} from "./legacy-image-services";
@@ -447,10 +449,11 @@ export async function getClinicDashboard(location="") {
 
 export async function getAppointments(date = "",location="") {
   await ensureClinicTables();
-  return client()`SELECT a.*,a.requested_date::text AS requested_date,c.full_name,c.mobile,c.email,c.clinic_location,c.service_sms_consent,s.full_name AS staff_name,
+  return client()`SELECT a.*,a.requested_date::text AS requested_date,c.full_name,c.mobile,c.email,c.clinic_location,c.service_sms_consent,s.full_name AS staff_name,r.token AS receipt_token,
     (m.client_id IS NOT NULL OR EXISTS(SELECT 1 FROM venux_client_packages cp JOIN venux_client_package_items cpi ON cpi.client_package_id=cp.id WHERE cp.client_id=c.id AND cp.status='active' AND (cp.expires_on IS NULL OR cp.expires_on>=CURRENT_DATE) AND cpi.used_sessions<cpi.included_sessions)) AS is_premium
     FROM venux_appointments a JOIN venux_clients c ON c.id=a.client_id
     LEFT JOIN venux_staff s ON s.id=a.staff_id LEFT JOIN venux_memberships m ON m.client_id=c.id
+    LEFT JOIN venux_visit_receipts r ON r.appointment_id=a.id
     WHERE (${date}='' OR a.requested_date=${date || null}) AND (${location}='' OR a.clinic ILIKE ${`%${location}%`})
     ORDER BY a.requested_date DESC,a.requested_time DESC LIMIT 500`;
 }
@@ -1434,9 +1437,10 @@ export async function createCityStaff(fullName:string,role:string){
 export async function getCityDay(date:string){
   await ensureClinicTables();const sql=client();
   const [appointments,settlement]=await Promise.all([
-    sql`SELECT a.*,c.full_name,c.mobile,s.full_name AS staff_name,v.service_name,v.duration_minutes AS catalog_duration,v.regular_price
+    sql`SELECT a.*,c.full_name,c.mobile,s.full_name AS staff_name,v.service_name,v.duration_minutes AS catalog_duration,v.regular_price,r.token AS receipt_token
       FROM venux_appointments a JOIN venux_clients c ON c.id=a.client_id
       LEFT JOIN venux_staff s ON s.id=a.staff_id LEFT JOIN venux_services v ON v.id=a.service_id
+      LEFT JOIN venux_visit_receipts r ON r.appointment_id=a.id
       WHERE a.clinic ILIKE '%515 Kent Street%' AND a.requested_date=${date}
       ORDER BY a.requested_time,s.full_name`,
     sql`SELECT COALESCE(s.full_name,'Unassigned') AS staff_name,
@@ -1494,9 +1498,9 @@ export async function getVisitDeliveries(location=""){
   await ensureClinicTables();
   return client()`SELECT a.id,a.client_id,c.full_name,a.clinic,r.token,o.id AS outbox_id,o.status,o.last_error,
     CASE WHEN NOT c.service_sms_consent OR c.sms_unsubscribed_at IS NOT NULL OR NOT a.appointment_sms_enabled THEN TRUE ELSE FALSE END AS sms_disabled
-    FROM venux_visit_receipts r JOIN venux_appointments a ON a.id=r.appointment_id JOIN venux_clients c ON c.id=a.client_id
+    FROM venux_appointments a JOIN venux_clients c ON c.id=a.client_id LEFT JOIN venux_visit_receipts r ON r.appointment_id=a.id
     LEFT JOIN venux_sms_outbox o ON o.event_key='visit-receipt:'||a.id::text
-    WHERE (${location}='' OR a.clinic ILIKE '%'||${location}||'%') ORDER BY r.created_at DESC LIMIT 100`;
+    WHERE a.status='completed' AND (${location}='' OR a.clinic ILIKE '%'||${location}||'%') ORDER BY COALESCE(r.created_at,a.completed_at,a.updated_at) DESC LIMIT 100`;
 }
 
 
@@ -1532,4 +1536,20 @@ export async function finishServiceCheckout(id:number,staffId:number,comment:str
   // A replay may only deliver the already-issued receipt; it cannot charge again.
   return (await sql`SELECT a.id FROM venux_appointments a JOIN venux_visit_receipts r ON r.appointment_id=a.id
     WHERE a.id=${id} AND a.staff_id=${staffId} AND a.status='completed'`).length>0;
+}
+
+
+export async function getReceiptAppointment(id:number){
+  await ensureClinicTables();
+  return (await client()`SELECT a.*,c.full_name,c.mobile,r.token AS receipt_token
+    FROM venux_appointments a JOIN venux_clients c ON c.id=a.client_id
+    LEFT JOIN venux_visit_receipts r ON r.appointment_id=a.id WHERE a.id=${id} AND a.status='completed' LIMIT 1`)[0]??null;
+}
+
+export async function issueRecordedVisitReceipt(id:number,payments:PaymentPart[]){
+  await ensureClinicTables();const sql=client();
+  if(payments.some(p=>!['Cash','Card','Bank transfer','Other'].includes(p.method)||!Number.isFinite(p.amount)||p.amount<0||Math.abs(Math.round(p.amount*100)-p.amount*100)>0.000001))return '';
+  const saved=await sql.query(RECORDED_RECEIPT_SQL,[id,randomBytes(24).toString('hex'),JSON.stringify(payments),process.env.CLINIC_ABN||'']);
+  if(saved[0])return String(saved[0].token);
+  return String((await getReceiptAppointment(id))?.receipt_token??'');
 }

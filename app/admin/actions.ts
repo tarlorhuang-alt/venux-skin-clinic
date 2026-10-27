@@ -4,7 +4,7 @@ import {moneyInput,parseServiceCheckout,type ServiceCheckout} from "../../lib/se
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { clearAdminSession, createAdminSession, getAdminRole,isAdminAuthenticated, isOwnerAuthenticated, roleForPassword } from "../../lib/admin-auth";
-import { finishServiceCheckout,recordServiceAccountEvent,issueVisitReceipt,queueVisitReceipt,getVisitDeliveries,addTreatmentComment,assignPackageToClient,BookingConflictError,completeFollowup,createBookingRequest,createClientCourse,createClientProfile,createExpense,createPackageTemplate,createSkinAssessment,createStaff,createSupplier,createTreatmentRecord,deleteCancelledAppointment,deletePackageTemplate,findClientIdForPackage,finishAppointment,getAppointmentClientId,getAppointmentClinic,getAppointmentDate,getClientForBooking,getOwnerService,importClientRows,MembershipBalanceError,queueBirthdayMessages,queueAppointmentConfirmation,updateBirthdayPromotion,queueReturnInvite,rechargeMembership,saveClientProfile,saveHealthProfile,sendSmsOutboxMessage,setStaffClockPin,startAppointment,toggleStaffClock,toggleStaffClockWithPin,updateAppointment,updateStaffClockEntry,useClientCourseSession,useClientPackageItem,type AppointmentStatus,type ClientImportRow } from "../../lib/clinic-admin";
+import { issueRecordedVisitReceipt,finishServiceCheckout,recordServiceAccountEvent,issueVisitReceipt,queueVisitReceipt,getVisitDeliveries,addTreatmentComment,assignPackageToClient,BookingConflictError,completeFollowup,createBookingRequest,createClientCourse,createClientProfile,createExpense,createPackageTemplate,createSkinAssessment,createStaff,createSupplier,createTreatmentRecord,deleteCancelledAppointment,deletePackageTemplate,findClientIdForPackage,finishAppointment,getAppointmentClientId,getAppointmentClinic,getAppointmentDate,getClientForBooking,getOwnerService,importClientRows,MembershipBalanceError,queueBirthdayMessages,queueAppointmentConfirmation,updateBirthdayPromotion,queueReturnInvite,rechargeMembership,saveClientProfile,saveHealthProfile,sendSmsOutboxMessage,setStaffClockPin,startAppointment,toggleStaffClock,toggleStaffClockWithPin,updateAppointment,updateStaffClockEntry,useClientCourseSession,useClientPackageItem,type AppointmentStatus,type ClientImportRow } from "../../lib/clinic-admin";
 
 export async function adminLogin(formData: FormData) {
   const role=roleForPassword(String(formData.get("password") ?? ""));
@@ -333,4 +333,14 @@ export async function recordServiceAccountAction(formData:FormData){
   revalidatePath("/admin/bookings");revalidatePath("/admin/clients");revalidatePath("/admin/client-packages");revalidatePath("/admin/memberships");
   const clientId=await getAppointmentClientId(id);if(clientId)revalidatePath(`/admin/clients/${clientId}`);
   redirect(`/admin/bookings?date=${date}&appointment=${id}&${saved?"saved=account":"error=checkout"}#appointment-${id}`);
+}
+
+
+export async function issueMissingReceiptAction(formData:FormData){
+  if(!(await isAdminAuthenticated()))redirect('/admin?error=session');
+  const id=Number(formData.get('id'));if(!Number.isSafeInteger(id)||id<=0)redirect('/admin/receipts');
+  if(await staffCannotAccessAppointment(id))redirect('/admin?error=restricted');
+  let token='';try{token=await issueRecordedVisitReceipt(id,parseServiceCheckout(formData).payments);}catch{token='';}
+  if(!token)redirect(`/admin/receipts/${id}?error=amount`);
+  revalidatePath('/admin/receipts');revalidatePath('/admin/bookings');redirect(`/booking/receipt/${token}`);
 }

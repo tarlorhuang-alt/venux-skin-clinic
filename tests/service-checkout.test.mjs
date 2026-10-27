@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import ts from 'typescript';
 import {PGlite} from '@electric-sql/pglite';
 async function load(path){const code=ts.transpileModule(readFileSync(new URL(path,import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;return import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));}
+const {RECORDED_RECEIPT_SQL}=await load('../lib/recorded-receipt-sql.ts');
 const {SERVICE_CHECKOUT_SQL,SERVICE_ACCOUNT_SQL}=await load('../lib/service-checkout-sql.ts');
 const {parseServiceCheckout}=await load('../lib/service-checkout.ts');
 const {receiptSummary}=await load('../lib/receipt-summary.ts');
@@ -117,5 +118,42 @@ test('inline recharges and package purchases are recorded once and cannot run af
 
  await settle(db);assert.equal((await db.query(SERVICE_ACCOUNT_SQL,[1,'late-recharge','recharge',10,'Cash',null])).rows.length,0);assert.equal(await balance(db),300);
  const value=(await db.query('SELECT snapshot FROM venux_visit_receipts')).rows[0].snapshot;assert.equal(value.accountTransactions.length,2);assert.equal(value.paidNow,0);
+ }finally{await db.close();}
+});
+
+
+test('missing receipts use actual recorded payments without deducting card funds or package sessions',async()=>{
+ const db=await fixture();try{
+ await db.exec("UPDATE venux_appointments SET status='completed',completed_at=NOW(),membership_balance_deducted_amount=50 WHERE id=1;UPDATE venux_memberships SET balance=50 WHERE client_id=1");
+ const args=[1,'recovered-token',JSON.stringify([{method:'Cash',amount:40},{method:'Card',amount:60}]),''];
+ assert.equal((await db.query(RECORDED_RECEIPT_SQL,[1,'overpayment',JSON.stringify([{method:'Card',amount:101}]),''])).rows.length,0);
+ assert.equal((await db.query(RECORDED_RECEIPT_SQL,args)).rows.length,1);
+ await db.query(RECORDED_RECEIPT_SQL,[1,'another-token',JSON.stringify([{method:'Card',amount:0}]),'']);
+ assert.equal((await db.query(RECORDED_RECEIPT_SQL,[2,'unfinished','[]',''])).rows.length,0);
+ const records=(await db.query('SELECT token,snapshot FROM venux_visit_receipts')).rows;
+ assert.equal(records.length,1);assert.equal(records[0].token,'recovered-token');assert.equal(records[0].snapshot.paidNow,100);
+ assert.deepEqual(receiptSummary(records[0].snapshot),{received:150,balance:0});assert.equal(await balance(db),50);
+ assert.equal((await db.query('SELECT used_sessions FROM venux_client_package_items WHERE id=1')).rows[0].used_sessions,0);
+ }finally{await db.close();}
+});
+
+test('recreating an explicit checkout receipt reuses its saved payments instead of new form amounts',async()=>{
+ const db=await fixture();try{
+ await settle(db,1,checkout({membership:50,payments:[{method:'Card',amount:100}]}));
+ await db.exec('DELETE FROM venux_visit_receipts');
+ assert.equal((await db.query(RECORDED_RECEIPT_SQL,[1,'recreated','[{"method":"Cash","amount":999}]',''])).rows.length,1);
+ const value=(await db.query('SELECT snapshot FROM venux_visit_receipts')).rows[0].snapshot;
+ assert.equal(value.paidNow,100);assert.equal(value.method,'Card');assert.equal(await balance(db),50);
+ }finally{await db.close();}
+});
+
+test('receipt list includes completed appointments without a receipt so staff can recover them',async()=>{
+ const db=await fixture();try{
+ await db.exec("ALTER TABLE venux_clients ADD COLUMN service_sms_consent BOOLEAN DEFAULT TRUE;ALTER TABLE venux_clients ADD COLUMN sms_unsubscribed_at TIMESTAMPTZ;ALTER TABLE venux_appointments ADD COLUMN appointment_sms_enabled BOOLEAN DEFAULT TRUE;ALTER TABLE venux_visit_receipts ADD COLUMN created_at TIMESTAMPTZ DEFAULT NOW();CREATE TABLE venux_sms_outbox(id INT,event_key TEXT,status TEXT,last_error TEXT);UPDATE venux_appointments SET status='completed',completed_at=NOW() WHERE id=1");
+ const source=readFileSync(new URL('../lib/clinic-admin.ts',import.meta.url),'utf8').split('export async function getVisitDeliveries')[1];
+ const query=source.match(/return client\(\)`([\s\S]*?)`;/)[1].replaceAll('${location}','$1');
+ let rows=(await db.query(query,['Top Ryde'])).rows;assert.equal(rows.length,1);assert.equal(rows[0].id,1);assert.equal(rows[0].token,null);
+ await db.query(RECORDED_RECEIPT_SQL,[1,'receipt-recovered','[]','']);
+ rows=(await db.query(query,['Top Ryde'])).rows;assert.equal(rows[0].token,'receipt-recovered');
  }finally{await db.close();}
 });
