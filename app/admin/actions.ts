@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { clearAdminSession, createAdminSession, getAdminRole,isAdminAuthenticated, isOwnerAuthenticated, roleForPassword } from "../../lib/admin-auth";
-import { addTreatmentComment,assignPackageToClient,BookingConflictError,completeFollowup,createBookingRequest,createClientCourse,createClientProfile,createExpense,createPackageTemplate,createSkinAssessment,createStaff,createSupplier,createTreatmentRecord,deleteCancelledAppointment,deletePackageTemplate,findClientIdForPackage,finishAppointment,getAppointmentClientId,getAppointmentClinic,getAppointmentDate,getClientForBooking,getOwnerService,importClientRows,MembershipBalanceError,queueBirthdayMessages,queueAppointmentConfirmation,updateBirthdayPromotion,queueReturnInvite,rechargeMembership,saveClientProfile,saveHealthProfile,sendSmsOutboxMessage,setStaffClockPin,startAppointment,toggleStaffClock,toggleStaffClockWithPin,updateAppointment,updateStaffClockEntry,useClientCourseSession,useClientPackageItem,type AppointmentStatus,type ClientImportRow } from "../../lib/clinic-admin";
+import { issueVisitReceipt,queueVisitReceipt,getVisitDeliveries,addTreatmentComment,assignPackageToClient,BookingConflictError,completeFollowup,createBookingRequest,createClientCourse,createClientProfile,createExpense,createPackageTemplate,createSkinAssessment,createStaff,createSupplier,createTreatmentRecord,deleteCancelledAppointment,deletePackageTemplate,findClientIdForPackage,finishAppointment,getAppointmentClientId,getAppointmentClinic,getAppointmentDate,getClientForBooking,getOwnerService,importClientRows,MembershipBalanceError,queueBirthdayMessages,queueAppointmentConfirmation,updateBirthdayPromotion,queueReturnInvite,rechargeMembership,saveClientProfile,saveHealthProfile,sendSmsOutboxMessage,setStaffClockPin,startAppointment,toggleStaffClock,toggleStaffClockWithPin,updateAppointment,updateStaffClockEntry,useClientCourseSession,useClientPackageItem,type AppointmentStatus,type ClientImportRow } from "../../lib/clinic-admin";
 
 export async function adminLogin(formData: FormData) {
   const role=roleForPassword(String(formData.get("password") ?? ""));
@@ -59,6 +59,8 @@ export async function finishAppointmentAction(formData:FormData){
     if(photo.size>4*1024*1024||!allowed.has(photo.type))redirect(`/admin/bookings?${/^\d{4}-\d{2}-\d{2}$/.test(returnDate)?`date=${returnDate}&`:""}error=after-photo#appointment-${id}`);
     afterPhoto={dataUrl:`data:${photo.type};base64,${Buffer.from(await photo.arrayBuffer()).toString("base64")}`,name:photo.name||`after-${id}.jpg`};
   }
+  const paymentRaw=String(formData.get("paidNow")??"").trim(),paidNow=Number(paymentRaw),paymentMethod=String(formData.get("paymentMethod")??"");
+  if(!/^\d+(\.\d{1,2})?$/.test(paymentRaw)||!Number.isFinite(paidNow)||paidNow<0||!["Cash","Card","Bank transfer","Other","No new payment"].includes(paymentMethod)||(paidNow===0)!==(paymentMethod==="No new payment"))redirect(`/admin/bookings?date=${returnDate}&error=payment#appointment-${id}`);
   let finished=false,clientId:number|null=null;
   try{
     clientId=await getAppointmentClientId(id);
@@ -67,6 +69,13 @@ export async function finishAppointmentAction(formData:FormData){
     console.error("Unable to finish appointment",{appointmentId:id,error:error instanceof Error?error.message:"Unknown error"});
     redirect(`/admin/bookings?${/^\d{4}-\d{2}-\d{2}$/.test(returnDate)?`date=${returnDate}&`:""}error=finish#appointment-${id}`);
   }
+  if(finished){
+    try{await issueVisitReceipt(id,paidNow,paymentMethod);}catch(error){
+      console.error("Receipt could not be issued",{appointmentId:id,error:error instanceof Error?error.message:"Unknown error"});
+      redirect(`/admin/bookings?date=${returnDate}&error=receipt#appointment-${id}`);
+    }
+  }
+  revalidatePath("/admin/receipts");
   revalidatePath("/admin");revalidatePath("/admin/bookings");revalidatePath("/admin/reports");revalidatePath("/admin/payroll");revalidatePath("/admin/follow-ups");if(clientId)revalidatePath(`/admin/clients/${clientId}`);redirect(`/admin/bookings?${/^\d{4}-\d{2}-\d{2}$/.test(returnDate)?`date=${returnDate}&`:""}${finished?"finished=1":"error=finish"}#appointment-${id}`);
 }
 
@@ -299,4 +308,12 @@ export async function sendAppointmentConfirmationAction(formData:FormData){
   const sent=await queueAppointmentConfirmation(id);
   revalidatePath("/admin/messages");
   redirect(`/admin/messages?${sent?'sent=1':'error=send'}`);
+}
+
+export async function retryVisitReceiptAction(formData:FormData){
+  if(!(await isAdminAuthenticated()))redirect("/admin?error=session");
+  const id=Number(formData.get("id")),location=(await getAdminRole())==="staff"?"Top Ryde":"";
+  const row=(await getVisitDeliveries(location)).find(row=>Number(row.id)===id);
+  if(!row||row.sms_disabled||!["failed","queued"].includes(String(row.status))&&row.outbox_id!=null)redirect("/admin/receipts?error=invalid");
+  if(row.outbox_id)await sendSmsOutboxMessage(Number(row.outbox_id));else await queueVisitReceipt(id);revalidatePath("/admin/receipts");redirect("/admin/receipts");
 }
