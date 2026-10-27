@@ -1,9 +1,10 @@
 "use server";
 
+import {moneyInput,parseServiceCheckout} from "../../lib/service-checkout";
 import {revalidatePath} from "next/cache";
 import {redirect} from "next/navigation";
 import {clearOwnerSession,createOwnerSession,isOwnerAuthenticated,ownerPasswordMatches} from "../../lib/owner-auth";
-import {BookingConflictError,createBookingRequest,createCityStaff,createClinicService,finishAppointment,getOwnerService,importClientRows,importClinicServices,startAppointment,updateAppointment,type AppointmentStatus,type ClientImportRow,type ServiceImportRow} from "../../lib/clinic-admin";
+import {finishServiceCheckout,recordServiceAccountEvent,queueVisitReceipt,BookingConflictError,createBookingRequest,createCityStaff,createClinicService,finishAppointment,getOwnerService,importClientRows,importClinicServices,startAppointment,updateAppointment,type AppointmentStatus,type ClientImportRow,type ServiceImportRow} from "../../lib/clinic-admin";
 import {PRICE_LIST_2026_SERVICES} from "../../lib/price-list-services";
 
 const text=(data:FormData,name:string)=>String(data.get(name)??"").trim();
@@ -72,7 +73,7 @@ export async function createCityAppointment(data:FormData){
 export async function settleCityAppointment(data:FormData){
   await requireOwner();const id=Number(data.get("id")),date=ownerDate(data),staffId=Number(data.get("staffId")),amount=Number(data.get("amount")),status=text(data,"status") as AppointmentStatus;
   if(!Number.isInteger(id)||id<=0||!date||!Number.isInteger(staffId)||staffId<=0||!Number.isFinite(amount)||amount<0||!["confirmed","in_progress","completed","cancelled","no_show"].includes(status))redirect(`/owner?date=${date}&error=settlement`);
-  await updateAppointment(id,status,amount,"paid",staffId);revalidatePath("/owner");redirect(`/owner?date=${date}&settled=1`);
+  try{await updateAppointment(id,status,amount,"paid",staffId);}catch{redirect(`/owner?date=${date}&appointment=${id}&error=checkout`);}revalidatePath("/owner");redirect(`/owner?date=${date}&settled=1`);
 }
 
 export async function startCityAppointment(data:FormData){
@@ -88,5 +89,20 @@ export async function startCityAppointment(data:FormData){
 export async function finishCityAppointment(data:FormData){
   await requireOwner();const id=Number(data.get("id")),date=ownerDate(data),staffId=Number(data.get("staffId")),comment=text(data,"comment");
   if(!Number.isInteger(id)||id<=0||!date||!Number.isInteger(staffId)||staffId<=0||!comment)redirect(`/owner?date=${date}&error=finish`);
-  const finished=await finishAppointment(id,staffId,comment);revalidatePath("/owner");revalidatePath("/admin/bookings");revalidatePath("/admin/reports");revalidatePath("/admin/payroll");revalidatePath("/admin/follow-ups");redirect(`/owner?date=${date}&${finished?"finished=1":"error=finish"}`);
+  let finished=false;
+  try{
+    finished=data.get("checkoutVersion")==="1"?await finishServiceCheckout(id,staffId,comment,parseServiceCheckout(data)):await finishAppointment(id,staffId,comment);
+  }catch{redirect(`/owner?date=${date}&appointment=${id}&error=checkout#city-appointment-${id}`);}
+  if(finished&&data.get("checkoutVersion")==="1"){try{await queueVisitReceipt(id);}catch{console.error("Owner receipt delivery needs retry",{appointmentId:id});}}
+  revalidatePath("/owner");revalidatePath("/admin/bookings");revalidatePath("/admin/reports");revalidatePath("/admin/payroll");revalidatePath("/admin/follow-ups");revalidatePath("/admin/receipts");redirect(`/owner?date=${date}&appointment=${id}&${finished?"finished=1":"error=checkout"}#city-appointment-${id}`);
+}
+
+
+export async function recordCityServiceAccount(data:FormData){
+  await requireOwner();const id=Number(data.get("id")),date=ownerDate(data),key=text(data,"accountKey"),kind=text(data,"accountKind"),method=text(data,"accountMethod"),packageId=Number(data.get("accountPackageId")||0);
+  if(!Number.isSafeInteger(id)||id<=0||!date||!/^[-a-zA-Z0-9_]{20,100}$/.test(key))redirect("/owner?error=checkout");
+  let saved=false;
+  try{saved=await recordServiceAccountEvent(id,key,kind,moneyInput(data.get("accountAmount")),method,Number.isSafeInteger(packageId)&&packageId>0?packageId:null);}catch{saved=false;}
+  revalidatePath("/owner");revalidatePath("/admin/bookings");revalidatePath("/admin/client-packages");
+  redirect(`/owner?date=${date}&appointment=${id}&${saved?"accountSaved=1":"error=checkout"}#city-appointment-${id}`);
 }

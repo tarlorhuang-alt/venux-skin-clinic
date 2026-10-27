@@ -86,9 +86,10 @@ test('calendar appointment links open only that beautician appointment and its o
  const {default:Page}=load('app/admin/bookings/page.tsx',{
   'booking-preferences':{BookingPreferencesProvider:({children})=>children,BookingSmsOptions:()=>null},
   '../calendar/day-schedule':{default:()=>jsx.jsx('p',{children:'Full table hidden in focused view'})},
+  './service-account-panel':{default:()=>jsx.jsx('p',{children:'Client card and package controls'})},'./service-checkout-fields':{default:()=>jsx.jsx('p',{children:'Combination payment controls'})},
   'node:crypto':{randomUUID:()=> 'test-key'},
   'admin-auth':{isAdminAuthenticated:async()=>true,getAdminRole:async()=> 'owner'},
-  'clinic-admin':{getAppointments:async()=>rows,getStaff:async()=>[{id:7,full_name:'Dannie',active:true},{id:8,full_name:'Mei',active:true}],getOwnerServices:async()=>[],getClientForBooking:async()=>null},
+  'clinic-admin':{getServiceCheckoutOptions:async()=>[],getActivePackageTemplates:async()=>[],getAppointments:async()=>rows,getStaff:async()=>[{id:7,full_name:'Dannie',active:true},{id:8,full_name:'Mei',active:true}],getOwnerServices:async()=>[],getClientForBooking:async()=>null},
   '../actions':{},'./appointment-client-picker':{AppointmentClientPicker:()=>null},'./treatment-picker':{TreatmentPicker:()=>null},
   'admin-ui':{AdminShell:({children})=>jsx.jsx('main',{children}),statusLabel:value=>String(value).replaceAll('_',' ')}
  });
@@ -214,4 +215,16 @@ test('calendar puts Kary and Tina behind the other beauticians in both portals',
   const names=[...html.matchAll(/aria-label="([^"]+) appointments"/g)].map(match=>match[1].trim());
   assert.deepEqual(names,['Mei','Dannie','KARY','tina']);
  }
+});
+
+test('service account changes reject staff access to a City appointment before recording money',async()=>{
+ let mutated=false;
+ const {recordServiceAccountAction}=load('app/admin/actions.ts',{
+  'service-checkout':load('lib/service-checkout.ts'),
+  'next/navigation':{redirect:url=>{throw Error(url)}},'next/cache':{revalidatePath:()=>{}},
+  'admin-auth':{isAdminAuthenticated:async()=>true,getAdminRole:async()=> 'staff'},
+  'clinic-admin':{getAppointmentClinic:async()=> 'Sydney City · 515 Kent Street',recordServiceAccountEvent:async()=>{mutated=true;return true}}
+ });
+ const form=new FormData();for(const [key,value] of Object.entries({id:'1',date:'2026-10-27',accountKey:'12345678-1234-1234-1234-123456789012',accountKind:'recharge',accountAmount:'100',accountMethod:'Card'}))form.set(key,value);
+ await assert.rejects(()=>recordServiceAccountAction(form),/restricted/);assert.equal(mutated,false);
 });

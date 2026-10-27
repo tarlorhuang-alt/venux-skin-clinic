@@ -1,9 +1,10 @@
 "use server";
 
+import {moneyInput,parseServiceCheckout,type ServiceCheckout} from "../../lib/service-checkout";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { clearAdminSession, createAdminSession, getAdminRole,isAdminAuthenticated, isOwnerAuthenticated, roleForPassword } from "../../lib/admin-auth";
-import { issueVisitReceipt,queueVisitReceipt,getVisitDeliveries,addTreatmentComment,assignPackageToClient,BookingConflictError,completeFollowup,createBookingRequest,createClientCourse,createClientProfile,createExpense,createPackageTemplate,createSkinAssessment,createStaff,createSupplier,createTreatmentRecord,deleteCancelledAppointment,deletePackageTemplate,findClientIdForPackage,finishAppointment,getAppointmentClientId,getAppointmentClinic,getAppointmentDate,getClientForBooking,getOwnerService,importClientRows,MembershipBalanceError,queueBirthdayMessages,queueAppointmentConfirmation,updateBirthdayPromotion,queueReturnInvite,rechargeMembership,saveClientProfile,saveHealthProfile,sendSmsOutboxMessage,setStaffClockPin,startAppointment,toggleStaffClock,toggleStaffClockWithPin,updateAppointment,updateStaffClockEntry,useClientCourseSession,useClientPackageItem,type AppointmentStatus,type ClientImportRow } from "../../lib/clinic-admin";
+import { finishServiceCheckout,recordServiceAccountEvent,issueVisitReceipt,queueVisitReceipt,getVisitDeliveries,addTreatmentComment,assignPackageToClient,BookingConflictError,completeFollowup,createBookingRequest,createClientCourse,createClientProfile,createExpense,createPackageTemplate,createSkinAssessment,createStaff,createSupplier,createTreatmentRecord,deleteCancelledAppointment,deletePackageTemplate,findClientIdForPackage,finishAppointment,getAppointmentClientId,getAppointmentClinic,getAppointmentDate,getClientForBooking,getOwnerService,importClientRows,MembershipBalanceError,queueBirthdayMessages,queueAppointmentConfirmation,updateBirthdayPromotion,queueReturnInvite,rechargeMembership,saveClientProfile,saveHealthProfile,sendSmsOutboxMessage,setStaffClockPin,startAppointment,toggleStaffClock,toggleStaffClockWithPin,updateAppointment,updateStaffClockEntry,useClientCourseSession,useClientPackageItem,type AppointmentStatus,type ClientImportRow } from "../../lib/clinic-admin";
 
 export async function adminLogin(formData: FormData) {
   const role=roleForPassword(String(formData.get("password") ?? ""));
@@ -60,23 +61,26 @@ export async function finishAppointmentAction(formData:FormData){
     afterPhoto={dataUrl:`data:${photo.type};base64,${Buffer.from(await photo.arrayBuffer()).toString("base64")}`,name:photo.name||`after-${id}.jpg`};
   }
   const paymentRaw=String(formData.get("paidNow")??"").trim(),paidNow=Number(paymentRaw),paymentMethod=String(formData.get("paymentMethod")??"");
-  if(!/^\d+(\.\d{1,2})?$/.test(paymentRaw)||!Number.isFinite(paidNow)||paidNow<0||!["Cash","Card","Bank transfer","Other","No new payment"].includes(paymentMethod)||(paidNow===0)!==(paymentMethod==="No new payment"))redirect(`/admin/bookings?date=${returnDate}&error=payment#appointment-${id}`);
+  let checkout:ServiceCheckout|undefined;
+  if(formData.get("checkoutVersion")==="1"){
+    try{checkout=parseServiceCheckout(formData);}catch{redirect(`/admin/bookings?date=${returnDate}&appointment=${id}&error=checkout#appointment-${id}`);}
+  }else if(!/^\d+(\.\d{1,2})?$/.test(paymentRaw)||!Number.isFinite(paidNow)||paidNow<0||!["Cash","Card","Bank transfer","Other","No new payment"].includes(paymentMethod)||(paidNow===0)!==(paymentMethod==="No new payment"))redirect(`/admin/bookings?date=${returnDate}&error=payment#appointment-${id}`);
   let finished=false,clientId:number|null=null;
   try{
     clientId=await getAppointmentClientId(id);
-    finished=await finishAppointment(id,staffId,comment,afterPhoto);
+    finished=checkout?await finishServiceCheckout(id,staffId,comment,checkout,afterPhoto):await finishAppointment(id,staffId,comment,afterPhoto);
   }catch(error){
     console.error("Unable to finish appointment",{appointmentId:id,error:error instanceof Error?error.message:"Unknown error"});
     redirect(`/admin/bookings?${/^\d{4}-\d{2}-\d{2}$/.test(returnDate)?`date=${returnDate}&`:""}error=finish#appointment-${id}`);
   }
   if(finished){
-    try{await issueVisitReceipt(id,paidNow,paymentMethod);}catch(error){
+    try{if(checkout)await queueVisitReceipt(id);else await issueVisitReceipt(id,paidNow,paymentMethod);}catch(error){
       console.error("Receipt could not be issued",{appointmentId:id,error:error instanceof Error?error.message:"Unknown error"});
       redirect(`/admin/bookings?date=${returnDate}&error=receipt#appointment-${id}`);
     }
   }
   revalidatePath("/admin/receipts");
-  revalidatePath("/admin");revalidatePath("/admin/bookings");revalidatePath("/admin/reports");revalidatePath("/admin/payroll");revalidatePath("/admin/follow-ups");if(clientId)revalidatePath(`/admin/clients/${clientId}`);redirect(`/admin/bookings?${/^\d{4}-\d{2}-\d{2}$/.test(returnDate)?`date=${returnDate}&`:""}${finished?"finished=1":"error=finish"}#appointment-${id}`);
+  revalidatePath("/admin");revalidatePath("/admin/bookings");revalidatePath("/admin/reports");revalidatePath("/admin/payroll");revalidatePath("/admin/follow-ups");if(clientId)revalidatePath(`/admin/clients/${clientId}`);redirect(`/admin/bookings?${/^\d{4}-\d{2}-\d{2}$/.test(returnDate)?`date=${returnDate}&`:""}${finished?"finished=1":checkout?"error=checkout":"error=finish"}&appointment=${id}#appointment-${id}`);
 }
 
 export async function deleteCancelledAppointmentAction(formData:FormData){
@@ -316,4 +320,17 @@ export async function retryVisitReceiptAction(formData:FormData){
   const row=(await getVisitDeliveries(location)).find(row=>Number(row.id)===id);
   if(!row||row.sms_disabled||!["failed","queued"].includes(String(row.status))&&row.outbox_id!=null)redirect("/admin/receipts?error=invalid");
   if(row.outbox_id)await sendSmsOutboxMessage(Number(row.outbox_id));else await queueVisitReceipt(id);revalidatePath("/admin/receipts");redirect("/admin/receipts");
+}
+
+
+export async function recordServiceAccountAction(formData:FormData){
+  if(!(await isAdminAuthenticated()))redirect("/admin?error=session");
+  const id=Number(formData.get("id")),date=textValue(formData,"date"),kind=textValue(formData,"accountKind"),key=textValue(formData,"accountKey"),method=textValue(formData,"accountMethod"),packageId=Number(formData.get("accountPackageId")||0);
+  if(!Number.isSafeInteger(id)||id<=0||!/^\d{4}-\d{2}-\d{2}$/.test(date)||!/^[-a-zA-Z0-9_]{20,100}$/.test(key))redirect("/admin/bookings?error=checkout");
+  if(await staffCannotAccessAppointment(id))redirect("/admin?error=restricted");
+  let saved=false;
+  try{const amount=moneyInput(formData.get("accountAmount"));saved=await recordServiceAccountEvent(id,key,kind,amount,method,Number.isSafeInteger(packageId)&&packageId>0?packageId:null);}catch{saved=false;}
+  revalidatePath("/admin/bookings");revalidatePath("/admin/clients");revalidatePath("/admin/client-packages");revalidatePath("/admin/memberships");
+  const clientId=await getAppointmentClientId(id);if(clientId)revalidatePath(`/admin/clients/${clientId}`);
+  redirect(`/admin/bookings?date=${date}&appointment=${id}&${saved?"saved=account":"error=checkout"}#appointment-${id}`);
 }

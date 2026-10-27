@@ -1,4 +1,6 @@
 import "server-only";
+import {SERVICE_CHECKOUT_SQL,SERVICE_ACCOUNT_SQL} from "./service-checkout-sql";
+import type {ServiceCheckout} from "./service-checkout";
 import {IMAGE_SERVICE_NAMES,imageServiceDuration,imageServiceCategory} from "./legacy-image-services";
 import { reminderEventKey, reminderMessage } from "./appointment-communication";
 import { neon } from "@neondatabase/serverless";
@@ -329,6 +331,18 @@ export function ensureClinicTables() {
       await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS staff_wage_amount NUMERIC(10,2) NOT NULL DEFAULT 0 CHECK (staff_wage_amount >= 0)`;
       await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS wage_project_rate NUMERIC(10,2) NOT NULL DEFAULT 0 CHECK (wage_project_rate >= 0)`;
       await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS completion_comment TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS explicit_checkout BOOLEAN NOT NULL DEFAULT FALSE`;
+      await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS service_addons JSONB NOT NULL DEFAULT '[]'::jsonb`;
+      await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS checkout_payments JSONB NOT NULL DEFAULT '[]'::jsonb`;
+      await sql`ALTER TABLE venux_appointments ADD COLUMN IF NOT EXISTS package_credit_amount NUMERIC(10,2) NOT NULL DEFAULT 0`;
+      await sql`CREATE TABLE IF NOT EXISTS venux_service_account_events (
+        id BIGSERIAL PRIMARY KEY,appointment_id BIGINT NOT NULL REFERENCES venux_appointments(id) ON DELETE RESTRICT,
+        client_id BIGINT NOT NULL REFERENCES venux_clients(id) ON DELETE RESTRICT,event_key TEXT NOT NULL UNIQUE,
+        event_type TEXT NOT NULL CHECK(event_type IN ('recharge','package')),amount NUMERIC(10,2) NOT NULL CHECK(amount>=0),
+        payment_method TEXT NOT NULL,package_id BIGINT REFERENCES venux_packages(id) ON DELETE RESTRICT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`;
+
       await sql`UPDATE venux_appointments SET recognised_revenue=total_amount WHERE status='completed' AND recognised_revenue=0 AND total_amount>0`;
     })();
   }
@@ -637,6 +651,7 @@ export async function updateAppointment(id: number, status: AppointmentStatus, t
   const sql=client();
   const before=await sql`SELECT a.*,c.full_name,c.mobile,c.service_sms_consent,COALESCE(v.category,'') AS service_category,COALESCE(v.service_name,a.treatment) AS service_name FROM venux_appointments a JOIN venux_clients c ON c.id=a.client_id LEFT JOIN venux_services v ON v.id=a.service_id OR (a.service_id IS NULL AND LOWER(v.service_name)=LOWER(a.treatment)) WHERE a.id=${id} ORDER BY v.id LIMIT 1`;
   if(!before[0])return;
+  if(before[0].explicit_checkout&&(status!==before[0].status||Number(before[0].total_amount)!==totalAmount||String(before[0].deposit_status)!==depositStatus))throw new MembershipBalanceError("This visit already has a final checkout receipt. Its payment totals are locked.");
   if(status==="completed"&&before[0].status==="completed"&&before[0].membership_balance_deducted_at&&(Number(before[0].total_amount)!==totalAmount||String(before[0].deposit_status)!==depositStatus)){
     const membership=(await sql`SELECT balance FROM venux_memberships WHERE client_id=${before[0].client_id} LIMIT 1`)[0];
     const revisedCharge=Math.max(0,totalAmount-(depositStatus==="paid"?Number(before[0].deposit_amount):0));
@@ -1482,4 +1497,39 @@ export async function getVisitDeliveries(location=""){
     FROM venux_visit_receipts r JOIN venux_appointments a ON a.id=r.appointment_id JOIN venux_clients c ON c.id=a.client_id
     LEFT JOIN venux_sms_outbox o ON o.event_key='visit-receipt:'||a.id::text
     WHERE (${location}='' OR a.clinic ILIKE '%'||${location}||'%') ORDER BY r.created_at DESC LIMIT 100`;
+}
+
+
+export async function getServiceCheckoutOptions(appointmentIds:number[]){
+  await ensureClinicTables();
+  if(!appointmentIds.length)return [];
+  return client()`SELECT a.id,COALESCE(m.balance,0) AS membership_balance,
+    COALESCE((SELECT jsonb_agg(jsonb_build_object('id',i.id,'name',p.package_name,'service',s.service_name,
+      'remaining',i.included_sessions-i.used_sessions) ORDER BY cp.expires_on NULLS LAST,i.id)
+      FROM venux_client_package_items i JOIN venux_client_packages cp ON cp.id=i.client_package_id
+      JOIN venux_packages p ON p.id=cp.package_id JOIN venux_services s ON s.id=i.service_id
+      WHERE cp.client_id=a.client_id AND cp.status='active' AND (cp.expires_on IS NULL OR cp.expires_on>=(NOW() AT TIME ZONE 'Australia/Sydney')::date)
+      AND i.used_sessions<i.included_sessions AND (i.service_id=a.service_id OR (a.service_id IS NULL AND LOWER(s.service_name)=LOWER(a.treatment)))),'[]'::jsonb) AS packages,
+    COALESCE((SELECT jsonb_agg(jsonb_build_object('type',e.event_type,'amount',e.amount,'method',e.payment_method) ORDER BY e.id)
+      FROM venux_service_account_events e WHERE e.appointment_id=a.id),'[]'::jsonb) AS account_events
+    FROM venux_appointments a LEFT JOIN venux_memberships m ON m.client_id=a.client_id AND m.status='active'
+    WHERE a.id=ANY(${appointmentIds}::bigint[])`;
+}
+
+export async function recordServiceAccountEvent(id:number,key:string,kind:string,amount:number,method:string,packageId:number|null){
+  await ensureClinicTables();const sql=client();
+  if(!['recharge','package'].includes(kind)||!['Cash','Card','Bank transfer','Other'].includes(method)||!Number.isFinite(amount)||amount<0||Math.abs(Math.round(amount*100)-amount*100)>0.000001)return false;
+  const result=await sql.query(SERVICE_ACCOUNT_SQL,[id,key,kind,amount,method,packageId]);
+  if(result.length)return true;
+  return (await sql`SELECT id FROM venux_service_account_events WHERE appointment_id=${id} AND event_key=${key}`).length>0;
+}
+
+export async function finishServiceCheckout(id:number,staffId:number,comment:string,checkout:ServiceCheckout,photo?:{dataUrl:string;name:string}){
+  await ensureClinicTables();const sql=client();
+  const result=await sql.query(SERVICE_CHECKOUT_SQL,[id,staffId,comment,checkout.membership,checkout.packageItemId,
+    JSON.stringify(checkout.addOns),JSON.stringify(checkout.payments),photo?.dataUrl??null,photo?.name??null,randomBytes(24).toString('hex'),process.env.CLINIC_ABN||'']);
+  if(result.length)return true;
+  // A replay may only deliver the already-issued receipt; it cannot charge again.
+  return (await sql`SELECT a.id FROM venux_appointments a JOIN venux_visit_receipts r ON r.appointment_id=a.id
+    WHERE a.id=${id} AND a.staff_id=${staffId} AND a.status='completed'`).length>0;
 }
