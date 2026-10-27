@@ -115,6 +115,7 @@ test('client record assigns packages inline and shows all comment updates withou
  assert.match(html,/Add package to this client/);assert.match(html,/Facial course/);assert.match(html,/name="clientId" value="1"/);
  const treatments=html.split('id="treatments"')[1].split('id="courses"')[0];
  for(const text of ['Original completion note','First update','Second update','Dannie','Mei','Add comment update'])assert.ok(treatments.includes(text),text);
+ for(const field of ['Device parameters','Batch number','Operator signature','Products used','Sign &amp; save treatment','name="parameters"'])assert.ok(!treatments.includes(field),field);
  assert.ok(!html.includes('Health &amp; contraindications'));assert.ok(!html.includes('href="#health"'));
 });
 
