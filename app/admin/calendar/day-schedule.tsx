@@ -15,6 +15,8 @@ export default function DaySchedule({rows,staff,date,entry="admin"}:{rows:Row[];
     if(id&&!columns.some(person=>person.id===id))columns.push({id,name:String(row.staff_name||`Beautician #${id}`)});
   }
   if(visibleRows.some(row=>!row.staff_id)||!columns.length)columns.push({id:0,name:"Unassigned"});
+  const columnPriority=(name:string)=>{const words=name.trim().toLowerCase().split(/\s+/);return words.includes("kary")?1:words.includes("tina")?2:0;};
+  columns.sort((a,b)=>columnPriority(a.name)-columnPriority(b.name));
   const earliest=Math.min(540,...visibleRows.map(row=>calendarTimeMinutes(String(row.requested_time))).filter(time=>time<1440));
   const latest=Math.min(1425,Math.max(1260,...visibleRows.map(row=>calendarTimeMinutes(String(row.requested_time))+Number(row.duration_minutes??60)).filter(time=>time<1440)));
   const slots=quarterHourSlots(Math.floor(earliest/15)*15,Math.ceil(latest/15)*15);

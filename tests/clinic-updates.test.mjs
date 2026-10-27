@@ -112,6 +112,7 @@ test('client record assigns packages inline and shows all comment updates withou
   'admin-ui':{AdminShell:({children})=>jsx.jsx('main',{children}),statusLabel:String}
  });
  const html=renderToStaticMarkup(await Page({params:Promise.resolve({id:'1'}),searchParams:Promise.resolve({})}));
+ assert.match(html,/href="\/admin\/bookings\?client=1#booking"/);assert.match(html,/Book appointment/);
  assert.match(html,/Add package to this client/);assert.match(html,/Facial course/);assert.match(html,/name="clientId" value="1"/);
  const treatments=html.split('id="treatments"')[1].split('id="courses"')[0];
  for(const text of ['Original completion note','First update','Second update','Dannie','Mei','Add comment update'])assert.ok(treatments.includes(text),text);
@@ -202,4 +203,15 @@ test('calendar opens on its own without workspace navigation or retention functi
  assert.match(html,/calendar-only/);assert.match(html,/Beautician day grid/);assert.match(html,/name="date"/);
  assert.ok(!html.includes('clinic-sidebar'));assert.ok(!html.includes('Retention'));assert.ok(!html.includes('Dashboard'));
  assert.equal(location,'Top Ryde');
+});
+
+
+test('calendar puts Kary and Tina behind the other beauticians in both portals',()=>{
+ const {default:Schedule}=load('app/admin/calendar/day-schedule.tsx');
+ const staff=[{id:1,full_name:' tina ',active:true},{id:2,full_name:'KARY',active:true},{id:3,full_name:'Mei',active:true},{id:4,full_name:'Dannie',active:true}];
+ for(const entry of ['admin','owner']){
+  const html=renderToStaticMarkup(Schedule({rows:[],staff,date:'2026-10-27',entry}));
+  const names=[...html.matchAll(/aria-label="([^"]+) appointments"/g)].map(match=>match[1].trim());
+  assert.deepEqual(names,['Mei','Dannie','KARY','tina']);
+ }
 });
