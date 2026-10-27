@@ -13,3 +13,9 @@ export function carePath(treatment: string, stage: "pre" | "after"): string | nu
   const slug = careSlug(treatment);
   return slug ? `/care/${slug}/${stage}` : null;
 }
+
+/** Include every recognised component of a combination visit. */
+export function careSlugs(treatment:string):string[]{
+  const parts=treatment.split(/\s*(?:\+|&|,|;|\band\b)\s*/i);
+  return [...new Set(parts.map(part=>careSlug(part)||"general"))];
+}

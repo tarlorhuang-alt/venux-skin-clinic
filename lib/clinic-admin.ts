@@ -225,6 +225,10 @@ export function ensureClinicTables() {
       )`;
       await sql`CREATE INDEX IF NOT EXISTS venux_followups_due_idx ON venux_followups (status,due_date)`;
       await sql`CREATE INDEX IF NOT EXISTS venux_treatment_client_idx ON venux_treatment_records (client_id,treated_at DESC)`;
+      await sql`CREATE TABLE IF NOT EXISTS venux_visit_receipts (
+        id BIGSERIAL PRIMARY KEY, appointment_id BIGINT NOT NULL UNIQUE REFERENCES venux_appointments(id) ON DELETE RESTRICT,
+        token TEXT NOT NULL UNIQUE, snapshot JSONB NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`;
       await sql`CREATE TABLE IF NOT EXISTS venux_sms_outbox (
         id BIGSERIAL PRIMARY KEY, client_id BIGINT REFERENCES venux_clients(id) ON DELETE SET NULL,
         appointment_id BIGINT REFERENCES venux_appointments(id) ON DELETE SET NULL,
@@ -996,6 +1000,12 @@ export async function sendSmsOutboxMessage(id:number){
   await ensureClinicTables();const sql=client();
   const rows=await sql`SELECT id,client_id,message_type,recipient,message_body,status FROM venux_sms_outbox WHERE id=${id} LIMIT 1`;
   const row=rows[0];if(!row||row.status==='sent')return Boolean(row);
+  if(row.message_type==='visit_receipt'){
+    const permitted=(await sql`SELECT a.id FROM venux_appointments a JOIN venux_clients c ON c.id=a.client_id
+      JOIN venux_sms_outbox o ON o.appointment_id=a.id WHERE o.id=${id} AND a.status='completed'
+      AND c.service_sms_consent=TRUE AND c.sms_unsubscribed_at IS NULL AND a.appointment_sms_enabled=TRUE`)[0];
+    if(!permitted){await sql`UPDATE venux_sms_outbox SET status='cancelled',last_error='Service SMS is disabled or appointment is no longer completed.' WHERE id=${id} AND status IN ('queued','failed')`;return false;}
+  }
   if(["birthday","return_invite"].includes(String(row.message_type))){
     const recipient=(await sql`SELECT marketing_sms_consent,marketing_sms_enabled,sms_unsubscribed_at FROM venux_clients WHERE id=${row.client_id}`)[0];
     if(!recipient?.marketing_sms_consent||recipient.marketing_sms_enabled===false||recipient.sms_unsubscribed_at){
@@ -1424,4 +1434,52 @@ export async function getCityDay(date:string){
       GROUP BY s.id,s.full_name ORDER BY s.full_name`,
   ]);
   return {appointments,settlement};
+}
+
+/** Immutable visit receipt. The receipt link is separate from the care-only QR link. */
+export async function issueVisitReceipt(id:number,amount:number,method:string){
+  if(!Number.isFinite(amount)||amount<0||Math.abs(Math.round(amount*100)-amount*100)>0.000001||!["Cash","Card","Bank transfer","Other","No new payment"].includes(method)||(amount>0&&method==="No new payment")||(amount===0&&method!=="No new payment"))throw new Error("Check payment amount and method.");
+  await ensureClinicTables();const sql=client();
+  await sql`INSERT INTO venux_visit_receipts (appointment_id,token,snapshot)
+    SELECT a.id,${randomBytes(24).toString('hex')},jsonb_build_object(
+      'name',c.full_name,'treatment',a.treatment,'clinic',a.clinic,'completedAt',a.completed_at,
+      'total',a.total_amount,'deposit',CASE WHEN a.deposit_status='paid' THEN a.deposit_amount ELSE 0 END,
+      'membership',a.membership_balance_deducted_amount,'packageUsed',a.package_session_deducted_at IS NOT NULL,
+      'packageRemaining',CASE WHEN a.package_session_deducted_at IS NOT NULL THEN pi.included_sessions-pi.used_sessions ELSE NULL END,
+      'paidNow',${amount}::numeric,'method',${method}::text,'abn',${process.env.CLINIC_ABN||""}::text)
+    FROM venux_appointments a JOIN venux_clients c ON c.id=a.client_id
+    LEFT JOIN venux_client_package_items pi ON pi.id=a.client_package_item_id
+    WHERE a.id=${id} AND a.status='completed' ON CONFLICT (appointment_id) DO NOTHING`;
+  const receipt=(await sql`SELECT id FROM venux_visit_receipts WHERE appointment_id=${id}`)[0];
+  if(!receipt)throw new Error("Complete the service before issuing a receipt.");
+  await queueVisitReceipt(id);
+}
+
+export async function queueVisitReceipt(id:number){
+  await ensureClinicTables();const sql=client();
+  const row=(await sql`SELECT r.token,a.id,a.client_id,c.mobile FROM venux_visit_receipts r
+    JOIN venux_appointments a ON a.id=r.appointment_id JOIN venux_clients c ON c.id=a.client_id
+    WHERE a.id=${id} AND a.status='completed' AND c.service_sms_consent=TRUE AND c.sms_unsubscribed_at IS NULL AND a.appointment_sms_enabled=TRUE`)[0];
+  if(!row)return false;
+  const base=(process.env.NEXT_PUBLIC_SITE_URL||"https://venux-three.vercel.app").replace(/\/$/,"");
+  const body=`ISA Skin Clinic & Aesthetics: Thank you for visiting. Your receipt and after-care instructions: ${base}/booking/receipt/${row.token}`;
+  await sql`INSERT INTO venux_sms_outbox (client_id,appointment_id,event_key,message_type,recipient,message_body)
+    VALUES (${row.client_id},${id},${`visit-receipt:${id}`},'visit_receipt',${row.mobile},${body}) ON CONFLICT (event_key) DO NOTHING`;
+  const pending=(await sql`SELECT id FROM venux_sms_outbox WHERE event_key=${`visit-receipt:${id}`} AND status='queued'`)[0];
+  return pending?sendSmsOutboxMessage(Number(pending.id)):false;
+}
+
+export async function getVisitReceipt(token:string){
+  if(!/^[a-f0-9]{48}$/.test(token))return null;
+  await ensureClinicTables();
+  return (await client()`SELECT r.id,r.snapshot,r.created_at FROM venux_visit_receipts r JOIN venux_appointments a ON a.id=r.appointment_id WHERE r.token=${token} AND a.status='completed' LIMIT 1`)[0]??null;
+}
+
+export async function getVisitDeliveries(location=""){
+  await ensureClinicTables();
+  return client()`SELECT a.id,a.client_id,c.full_name,a.clinic,r.token,o.id AS outbox_id,o.status,o.last_error,
+    CASE WHEN NOT c.service_sms_consent OR c.sms_unsubscribed_at IS NOT NULL OR NOT a.appointment_sms_enabled THEN TRUE ELSE FALSE END AS sms_disabled
+    FROM venux_visit_receipts r JOIN venux_appointments a ON a.id=r.appointment_id JOIN venux_clients c ON c.id=a.client_id
+    LEFT JOIN venux_sms_outbox o ON o.event_key='visit-receipt:'||a.id::text
+    WHERE (${location}='' OR a.clinic ILIKE '%'||${location}||'%') ORDER BY r.created_at DESC LIMIT 100`;
 }
