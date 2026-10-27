@@ -1,9 +1,8 @@
 import type {Metadata} from "next";
 import DaySchedule from "./day-schedule";
 import {getAdminRole,isAdminAuthenticated} from "../../../lib/admin-auth";
-import {queueReturnInviteAction} from "../actions";
-import {getAppointments,getStaff,getDormantClients} from "../../../lib/clinic-admin";
-import {AdminLogin,AdminShell,statusLabel} from "../admin-ui";
+import {getAppointments,getStaff} from "../../../lib/clinic-admin";
+import {AdminLogin} from "../admin-ui";
 import "../admin.css";
 import "../bookings/bookings.css";
 import "../bookings/bookings-updates.css";
@@ -19,16 +18,14 @@ export default async function CalendarPage({searchParams}:{searchParams:Promise<
   const role=await getAdminRole(),location=role==="staff"?"Top Ryde":"";
   const date=/^\d{4}-\d{2}-\d{2}$/.test(params.date??"")?String(params.date):todaySydney();
   const year=Number(date.slice(0,4));
-  const [rows,staff,dormantClients]=await Promise.all([getAppointments(date,location),getStaff(),getDormantClients(120)]);
+  const [rows,staff]=await Promise.all([getAppointments(date,location),getStaff()]);
   const visibleRows=rows.filter(row=>["confirmed","in_progress","completed"].includes(String(row.status)));
-  const dayCount=visibleRows.length;
-  const reminderClients=dormantClients.filter(client=>role==="owner"||String(client.clinic_location)==="Top Ryde").slice(0,6);
   const months=Array.from({length:12},(_,index)=>{
     const first=new Date(Date.UTC(year,index,1));
     return {index,label:first.toLocaleDateString("en-AU",{month:"long",year:"numeric",timeZone:"UTC"}),leading:first.getUTCDay(),days:new Date(Date.UTC(year,index+1,0)).getUTCDate()};
   });
-  return <AdminShell active="Calendar">
-    <header className="clinic-admin-head"><div><p>Beautician day planner</p><h1>Appointment calendar</h1></div><a className="calendar-new-booking" href={`/admin/bookings?date=${date}#booking`}>+ New appointment</a></header>
+  return <main className="clinic-admin calendar-only"><div className="clinic-admin-main">
+    <header className="clinic-admin-head"><h1>Appointment calendar</h1></header>
     <form method="get" className="day-picker calendar-date-picker"><label>Selected date<input name="date" type="date" defaultValue={date}/></label><button>Show day</button><a href={`/admin/calendar?date=${todaySydney()}`}>Today</a></form>
     <div className="reference-calendar-layout">
       <aside className="mini-calendar-sidebar" aria-label="Choose appointment date">
@@ -46,6 +43,5 @@ export default async function CalendarPage({searchParams}:{searchParams:Promise<
         <DaySchedule rows={rows} staff={staff} date={date}/>
       </section>
     </div>
-    {dayCount<3?<details className="compact-retention"><summary>Retention suggestions · {reminderClients.length} clients</summary><section className="low-booking-reminder"><header><div><small>Automatic low-booking reminder</small><h2>Only {dayCount} confirmed appointment{dayCount===1?"":"s"} on this day</h2></div><a href="/admin/retention">Open full retention list →</a></header><p>Consider contacting clients who have not completed a visit for at least 120 days. Marketing SMS is only available where consent is recorded.</p><div>{reminderClients.map(client=><article key={String(client.id)}><strong>{String(client.full_name)}</strong><small>{client.last_visit?`Last visit ${new Date(String(client.last_visit)).toLocaleDateString("en-AU")}`:"No completed visit"}</small><span><a href={`/admin/clients/${client.id}`}>Profile</a><a href={`/admin/bookings?date=${date}&client=${client.id}#booking`}>Book</a></span>{client.marketing_sms_consent&&!client.sms_unsubscribed_at?<form action={queueReturnInviteAction}><input type="hidden" name="clientId" value={String(client.id)}/><input type="hidden" name="returnTo" value={`/admin/calendar?date=${date}`}/><button>Invite</button></form>:<em>Call only</em>}</article>)}</div></section></details>:null}
-  </AdminShell>;
+  </div></main>;
 }

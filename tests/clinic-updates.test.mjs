@@ -181,11 +181,24 @@ test('booking API accepts a missing email and still validates a supplied address
  assert.equal(saved.length,1);
 });
 
-test('calendar only time labels and existing appointments navigate, not blank cells or headings',()=>{
+test('calendar supports navigation from time labels, empty slots and beautician headings',()=>{
  const {default:Schedule}=load('app/admin/calendar/day-schedule.tsx');
  const html=renderToStaticMarkup(Schedule({rows:[],staff:[{id:1,full_name:'Dannie',active:true}],date:'2026-10-27'}));
- assert.match(html,/<header class="reference-beautician-heading"/);
- assert.match(html,/<span class="reference-empty-slot" aria-hidden="true"/);
- assert.ok(!html.includes('<a class="reference-empty-slot"'));
+ assert.match(html,/<a class="reference-beautician-heading" href="[^"]*staff=1/);
+ assert.match(html,/<a class="reference-empty-slot" href="[^"]*time=9%3A15%20AM/);
  assert.match(html,/<a class="reference-time-label" href="[^\"]*time=9%3A15%20AM/);
+});
+
+test('calendar opens on its own without workspace navigation or retention functions',async()=>{
+ let location;
+ const {default:Page}=load('app/admin/calendar/page.tsx',{
+  './day-schedule':{default:()=>jsx.jsx('div',{children:'Beautician day grid'})},
+  'admin-auth':{isAdminAuthenticated:async()=>true,getAdminRole:async()=> 'staff'},
+  'clinic-admin':{getAppointments:async(date,clinic)=>{location=clinic;return []},getStaff:async()=>[]},
+  'admin-ui':{AdminLogin:()=>null}
+ });
+ const html=renderToStaticMarkup(await Page({searchParams:Promise.resolve({date:'2026-10-27'})}));
+ assert.match(html,/calendar-only/);assert.match(html,/Beautician day grid/);assert.match(html,/name="date"/);
+ assert.ok(!html.includes('clinic-sidebar'));assert.ok(!html.includes('Retention'));assert.ok(!html.includes('Dashboard'));
+ assert.equal(location,'Top Ryde');
 });
