@@ -4,7 +4,7 @@ import {calendarTimeMinutes,calendarTimeLabel,beauticianColour,quarterHourSlots}
 import "./calendar.css";
 type Row=Record<string,unknown>;
 export default function DaySchedule({rows,staff,date,entry="admin"}:{rows:Row[];staff:Row[];date:string;entry?:"admin"|"owner"}){
-  const ROW_HEIGHT="var(--schedule-row-height,30px)";
+  const ROW_HEIGHT="var(--schedule-row-height,48px)";
   const visibleRows=rows.filter(row=>["confirmed","in_progress","completed"].includes(String(row.status)));
   const statusLabel=(status:unknown)=>String(status).replaceAll('_',' ');
   const appointmentUrl=(id:unknown)=>entry==="owner"?`/owner?date=${date}&appointment=${id}#city-appointment-${id}`:`/admin/bookings?date=${date}&appointment=${id}#appointment-${id}`;
@@ -49,7 +49,7 @@ export default function DaySchedule({rows,staff,date,entry="admin"}:{rows:Row[];
                 {slots.map((minutes,index)=>{
                   const occupied=appointments.find(row=>calendarTimeMinutes(String(row.requested_time))<=minutes&&calendarTimeMinutes(String(row.requested_time))+Number(row.duration_minutes??60)>minutes);
                   const href=occupied?appointmentUrl(occupied.id):bookingUrl(minutes);
-                  return <div className={`reference-quarter-row ${minutes%60===0?"hour-start":""}`} key={minutes} style={{top:`calc(${index} * ${ROW_HEIGHT})`,height:ROW_HEIGHT}}><a className="reference-time-label" href={href} aria-label={`${person.name}, ${calendarTimeLabel(minutes)}${occupied?', manage appointment':', new appointment'}`}>{minutes%60===0?calendarTimeLabel(minutes):String(minutes%60)}</a><a className="reference-empty-slot" href={href} aria-label={`${occupied?'Manage appointment':'Book'} with ${person.name} at ${calendarTimeLabel(minutes)}`}/></div>;
+                  return <div className={`reference-quarter-row ${minutes%60===0?"hour-start":""}`} key={minutes} style={{top:`calc(${index} * ${ROW_HEIGHT})`,height:ROW_HEIGHT}}><a className="reference-time-label" href={href} aria-label={`${person.name}, ${calendarTimeLabel(minutes)}${occupied?', manage appointment':', new appointment'}`}><span className="schedule-full-time">{calendarTimeLabel(minutes)}</span><span className="schedule-quarter-time">{minutes%60===0?calendarTimeLabel(minutes):String(minutes%60)}</span></a><a className="reference-empty-slot" href={href} aria-label={`${occupied?'Manage appointment':'Book'} with ${person.name} at ${calendarTimeLabel(minutes)}`}/></div>;
                 })}
                 {positioned.map(({row,minutes,lane})=><a title={`${person.name} · ${row.full_name} · ${row.requested_time} · ${row.treatment}`} className={`reference-booking-block${Number(row.duration_minutes??60)<=30?" short-booking":""}`} href={appointmentUrl(row.id)} key={String(row.id)} style={{top:`calc(${(minutes-start)/15} * ${ROW_HEIGHT})`,height:`max(${ROW_HEIGHT},calc(${Number(row.duration_minutes??60)/15} * ${ROW_HEIGHT} - 1px))`,left:`calc(var(--schedule-time-width,68px) + (100% - var(--schedule-time-width,68px)) * ${lane/lanes})`,width:`calc((100% - var(--schedule-time-width,68px)) / ${lanes} - 4px)`}}><strong>{String(row.full_name)}</strong><span>{String(row.treatment)}</span><small>{String(row.requested_time)} · {Number(row.duration_minutes??60)} min</small><small>{statusLabel(row.status)}</small></a>)}
               </div>

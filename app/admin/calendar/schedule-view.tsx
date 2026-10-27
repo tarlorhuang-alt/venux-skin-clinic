@@ -1,7 +1,7 @@
 "use client";
 import {useEffect,useRef,useState,type CSSProperties,type ReactNode} from "react";
-export default function ScheduleView({children,slotCount=61}:{children:ReactNode;slotCount?:number}){
- const [fit,setFit]=useState(true),[expanded,setExpanded]=useState(false);
+export default function ScheduleView({children,slotCount=49}:{children:ReactNode;slotCount?:number}){
+ const [fit,setFit]=useState(false),[expanded,setExpanded]=useState(false);
  const root=useRef<HTMLDivElement>(null);
  const [rowHeight,setRowHeight]=useState<number|null>(null);
  const restoreFocus=useRef<HTMLButtonElement>(null);
@@ -24,8 +24,8 @@ export default function ScheduleView({children,slotCount=61}:{children:ReactNode
   document.addEventListener('keydown',close);
   return()=>{document.body.style.overflow=previous;document.removeEventListener('keydown',close);};
  },[expanded]);
- return <div ref={root} style={{"--schedule-row-height":fit&&rowHeight?`${rowHeight}px`:"30px"} as CSSProperties} className={`schedule-view${fit?' schedule-fit-columns schedule-fit-day':''}${expanded?' schedule-expanded':''}`}>
-  <div className="schedule-view-toolbar"><span>Daily appointment table</span><div><button type="button" aria-pressed={fit} onClick={()=>setFit(!fit)}>{fit?'✓ Whole day · no scrolling':'Fit whole day'}</button><button type="button" ref={restoreFocus} aria-expanded={expanded} onClick={()=>setExpanded(!expanded)}>{expanded?'Close enlarged view':'Enlarge table'}</button></div></div>
+ return <div ref={root} style={{"--schedule-row-height":fit&&rowHeight?`${rowHeight}px`:"48px"} as CSSProperties} className={`schedule-view${fit?' schedule-fit-columns schedule-fit-day':' schedule-comfortable'}${expanded?' schedule-expanded':''}`}>
+  <div className="schedule-view-toolbar"><span>Daily appointment table</span><div><button type="button" aria-pressed={!fit} onClick={()=>setFit(false)}>Comfortable selection</button><button type="button" aria-pressed={fit} onClick={()=>setFit(true)}>Whole-day overview</button><button type="button" ref={restoreFocus} aria-expanded={expanded} onClick={()=>{if(!expanded)setFit(false);setExpanded(!expanded);}}>{expanded?'Close enlarged view':'Enlarge table'}</button></div></div>
   {children}
  </div>;
 }
