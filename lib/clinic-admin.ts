@@ -937,14 +937,14 @@ export async function getTodayBirthdayClients(location=""){
       AND (${location}='' OR clinic_location=${location}) ORDER BY full_name`;
 }
 
-export async function queueBirthdayMessages(location=""){
+export async function queueBirthdayMessages(location="",clientId?:number){
   await ensureClinicTables();const sql=client();
   const now=new Date(),parts=new Intl.DateTimeFormat("en-AU",{timeZone:"Australia/Sydney",month:"2-digit",day:"2-digit",year:"numeric"}).formatToParts(now);
   const part=(type:string)=>parts.find(item=>item.type===type)?.value??"";const today=`${part("month")}-${part("day")}`,year=part("year");
-  const rows=await sql`SELECT id,full_name,mobile FROM venux_clients WHERE dob IS NOT NULL AND TO_CHAR(dob,'MM-DD')=${today} AND marketing_sms_consent=TRUE AND marketing_sms_enabled=TRUE AND sms_unsubscribed_at IS NULL AND (${location}='' OR clinic_location=${location})`;
+  const rows=await sql`SELECT id,full_name,mobile FROM venux_clients WHERE dob IS NOT NULL AND TO_CHAR(dob,'MM-DD')=${today} AND marketing_sms_consent=TRUE AND marketing_sms_enabled=TRUE AND sms_unsubscribed_at IS NULL AND (${location}='' OR clinic_location=${location}) AND (${clientId??null}::bigint IS NULL OR id=${clientId??null})`;
   let queued=0;
   let sent=0;
-  for(const row of rows){const eventKey=`birthday:${year}:${row.id}`,first=String(row.full_name).trim().split(/\s+/)[0];const result=await sql`INSERT INTO venux_sms_outbox (client_id,event_key,message_type,recipient,message_body) VALUES (${row.id},${eventKey},'birthday',${row.mobile},${`Happy birthday ${first}! ISA Skin Clinic & Aesthetics wishes you a beautiful day. Contact the clinic to ask about birthday offers. Reply STOP to opt out.`}) ON CONFLICT (event_key) DO NOTHING RETURNING id`;if(result[0])queued++;}
+  for(const row of rows){const eventKey=`birthday:${year}:${row.id}`,first=String(row.full_name).trim().split(/\s+/)[0];const result=await sql`INSERT INTO venux_sms_outbox (client_id,event_key,message_type,recipient,message_body) VALUES (${row.id},${eventKey},'birthday',${row.mobile},${`Happy birthday ${first}! ISA Skin Clinic & Aesthetics wishes you a beautiful day. Contact the clinic to ask about birthday offers. Reply STOP to opt out.`}) ON CONFLICT (event_key) DO UPDATE SET status='queued',last_error=NULL,recipient=EXCLUDED.recipient WHERE venux_sms_outbox.status='cancelled' RETURNING id`;if(result[0])queued++;}
   return {eligible:rows.length,queued,sent};
 }
 
@@ -1552,4 +1552,15 @@ export async function issueRecordedVisitReceipt(id:number,payments:PaymentPart[]
   const saved=await sql.query(RECORDED_RECEIPT_SQL,[id,randomBytes(24).toString('hex'),JSON.stringify(payments),process.env.CLINIC_ABN||'']);
   if(saved[0])return String(saved[0].token);
   return String((await getReceiptAppointment(id))?.receipt_token??'');
+}
+
+
+export async function recordBirthdayMarketingPermission(clientId:number,location=""){
+  await ensureClinicTables();
+  const changed=await client()`UPDATE venux_clients SET marketing_sms_consent=TRUE,marketing_sms_enabled=TRUE,
+    marketing_consent_at=COALESCE(marketing_consent_at,NOW()),updated_at=NOW()
+    WHERE id=${clientId} AND sms_unsubscribed_at IS NULL AND (${location}='' OR clinic_location=${location}) RETURNING id`;
+  if(!changed[0])return false;
+  await audit('marketing_permission_recorded','client',clientId,'Staff confirmed the client explicitly agreed to promotional SMS; birthday promotions enabled.');
+  return true;
 }

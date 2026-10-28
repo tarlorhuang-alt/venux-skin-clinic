@@ -258,3 +258,40 @@ test('missing receipt recovery cannot disclose patient details without authentic
  const html=renderToStaticMarkup(await Page({params:Promise.resolve({id:'1'}),searchParams:Promise.resolve({})}));
  assert.match(html,/Password required/);assert.equal(queried,false);
 });
+
+test('birthday clients without drafts have a preparation button, and missing permission is explicit and unchecked',async()=>{
+ const {default:Page}=load('app/admin/messages/page.tsx',{
+  'admin-auth':{isAdminAuthenticated:async()=>true,getAdminRole:async()=> 'owner'},
+  'clinic-admin':{getTodayBirthdayMessages:async()=>[],isClickSendConfigured:()=>true,getTodayBirthdayClients:async()=>[
+   {id:1,full_name:'Ready birthday',mobile:'0400000001',marketing_sms_consent:true,marketing_sms_enabled:true},
+   {id:2,full_name:'Needs permission',mobile:'0400000002',marketing_sms_consent:false,marketing_sms_enabled:true},
+   {id:3,full_name:'Opted out',mobile:'0400000003',marketing_sms_consent:true,marketing_sms_enabled:true,sms_unsubscribed_at:'2026-10-28'}
+  ]},'../actions':{},'admin-ui':{AdminShell:({children})=>jsx.jsx('main',{children}),statusLabel:String}
+ });
+ const html=renderToStaticMarkup(await Page({searchParams:Promise.resolve({})}));
+ assert.match(html,/Prepare birthday promotion/);assert.match(html,/Record permission &amp; prepare promotion/);assert.match(html,/name="clientAgreed"/);
+ assert.ok(!html.includes('checked=""'));
+ const unsubscribed=html.split('id="birthday-client-3"')[1].split('</article>')[0];assert.match(unsubscribed,/unsubscribed/);assert.ok(!unsubscribed.includes('<form'));
+});
+
+test('preparing a promotion cannot record permission without the client-agreed checkbox',async()=>{
+ let changed=false;
+ const {prepareBirthdayPromotionAction}=load('app/admin/actions.ts',{
+  'service-checkout':load('lib/service-checkout.ts'),
+  'next/navigation':{redirect:url=>{throw Error(url)}},'next/cache':{revalidatePath:()=>{}},
+  'admin-auth':{isAdminAuthenticated:async()=>true,getAdminRole:async()=> 'staff'},
+  'clinic-admin':{recordBirthdayMarketingPermission:async()=>{changed=true;return true},queueBirthdayMessages:async()=>{throw Error('Must not queue')}}
+ });
+ const form=new FormData();form.set('clientId','1');form.set('recordPermission','yes');
+ await assert.rejects(()=>prepareBirthdayPromotionAction(form),/error=permission/);assert.equal(changed,false);
+});
+
+test('recording marketing permission preserves unsubscribe and clinic boundaries',async()=>{
+ const db=new PGlite();try{
+ await db.exec("CREATE TABLE venux_clients(id INT,marketing_sms_consent BOOLEAN,marketing_sms_enabled BOOLEAN,marketing_consent_at TIMESTAMPTZ,updated_at TIMESTAMPTZ,sms_unsubscribed_at TIMESTAMPTZ,clinic_location TEXT);INSERT INTO venux_clients VALUES(1,FALSE,FALSE,NULL,NOW(),NULL,'Top Ryde'),(2,FALSE,FALSE,NULL,NOW(),NOW(),'Top Ryde'),(3,FALSE,FALSE,NULL,NOW(),NULL,'City')");
+ const sql=read('lib/clinic-admin.ts').match(/const changed=await client\(\)`(UPDATE venux_clients SET marketing_sms_consent=TRUE[\s\S]*?)`;/)[1].replaceAll('${clientId}','$1').replaceAll('${location}','$2');
+ assert.equal((await db.query(sql,[1,'Top Ryde'])).rows.length,1);assert.equal((await db.query(sql,[2,'Top Ryde'])).rows.length,0);assert.equal((await db.query(sql,[3,'Top Ryde'])).rows.length,0);
+ const rows=(await db.query('SELECT id,marketing_sms_consent,marketing_sms_enabled,sms_unsubscribed_at IS NOT NULL AS unsubscribed FROM venux_clients ORDER BY id')).rows;
+ assert.equal(rows[0].marketing_sms_consent,true);assert.equal(rows[0].marketing_sms_enabled,true);assert.equal(rows[1].marketing_sms_consent,false);assert.equal(rows[1].unsubscribed,true);assert.equal(rows[2].marketing_sms_consent,false);
+ }finally{await db.close();}
+});

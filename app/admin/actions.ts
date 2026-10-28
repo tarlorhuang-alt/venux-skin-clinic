@@ -4,7 +4,7 @@ import {moneyInput,parseServiceCheckout,type ServiceCheckout} from "../../lib/se
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { clearAdminSession, createAdminSession, getAdminRole,isAdminAuthenticated, isOwnerAuthenticated, roleForPassword } from "../../lib/admin-auth";
-import { issueRecordedVisitReceipt,finishServiceCheckout,recordServiceAccountEvent,issueVisitReceipt,queueVisitReceipt,getVisitDeliveries,addTreatmentComment,assignPackageToClient,BookingConflictError,completeFollowup,createBookingRequest,createClientCourse,createClientProfile,createExpense,createPackageTemplate,createSkinAssessment,createStaff,createSupplier,createTreatmentRecord,deleteCancelledAppointment,deletePackageTemplate,findClientIdForPackage,finishAppointment,getAppointmentClientId,getAppointmentClinic,getAppointmentDate,getClientForBooking,getOwnerService,importClientRows,MembershipBalanceError,queueBirthdayMessages,queueAppointmentConfirmation,updateBirthdayPromotion,queueReturnInvite,rechargeMembership,saveClientProfile,saveHealthProfile,sendSmsOutboxMessage,setStaffClockPin,startAppointment,toggleStaffClock,toggleStaffClockWithPin,updateAppointment,updateStaffClockEntry,useClientCourseSession,useClientPackageItem,type AppointmentStatus,type ClientImportRow } from "../../lib/clinic-admin";
+import { recordBirthdayMarketingPermission,issueRecordedVisitReceipt,finishServiceCheckout,recordServiceAccountEvent,issueVisitReceipt,queueVisitReceipt,getVisitDeliveries,addTreatmentComment,assignPackageToClient,BookingConflictError,completeFollowup,createBookingRequest,createClientCourse,createClientProfile,createExpense,createPackageTemplate,createSkinAssessment,createStaff,createSupplier,createTreatmentRecord,deleteCancelledAppointment,deletePackageTemplate,findClientIdForPackage,finishAppointment,getAppointmentClientId,getAppointmentClinic,getAppointmentDate,getClientForBooking,getOwnerService,importClientRows,MembershipBalanceError,queueBirthdayMessages,queueAppointmentConfirmation,updateBirthdayPromotion,queueReturnInvite,rechargeMembership,saveClientProfile,saveHealthProfile,sendSmsOutboxMessage,setStaffClockPin,startAppointment,toggleStaffClock,toggleStaffClockWithPin,updateAppointment,updateStaffClockEntry,useClientCourseSession,useClientPackageItem,type AppointmentStatus,type ClientImportRow } from "../../lib/clinic-admin";
 
 export async function adminLogin(formData: FormData) {
   const role=roleForPassword(String(formData.get("password") ?? ""));
@@ -343,4 +343,18 @@ export async function issueMissingReceiptAction(formData:FormData){
   let token='';try{token=await issueRecordedVisitReceipt(id,parseServiceCheckout(formData).payments);}catch{token='';}
   if(!token)redirect(`/admin/receipts/${id}?error=amount`);
   revalidatePath('/admin/receipts');revalidatePath('/admin/bookings');redirect(`/booking/receipt/${token}`);
+}
+
+
+export async function prepareBirthdayPromotionAction(formData:FormData){
+  if(!(await isAdminAuthenticated()))redirect('/admin?error=session');
+  const clientId=Number(formData.get('clientId')),location=(await getAdminRole())==='staff'?'Top Ryde':'';
+  if(!Number.isSafeInteger(clientId)||clientId<=0)redirect('/admin/messages?error=invalid');
+  if(formData.get('recordPermission')==='yes'){
+    if(formData.get('clientAgreed')!=='yes')redirect('/admin/messages?error=permission');
+    if(!(await recordBirthdayMarketingPermission(clientId,location)))redirect('/admin/messages?error=permission');
+  }
+  const result=await queueBirthdayMessages(location,clientId);
+  revalidatePath('/admin/messages');revalidatePath(`/admin/clients/${clientId}`);
+  redirect(`/admin/messages?birthdays=${result.queued}#birthday-client-${clientId}`);
 }
