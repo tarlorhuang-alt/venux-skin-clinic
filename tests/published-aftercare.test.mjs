@@ -6,7 +6,7 @@ import vm from 'node:vm';
 import * as jsx from 'react/jsx-runtime';
 import {renderToStaticMarkup} from 'react-dom/server';
 const read=path=>readFileSync(new URL('../'+path,import.meta.url),'utf8');
-function load(path,mocks={}){const exports={};vm.runInNewContext(ts.transpileModule(read(path),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText,{exports,Promise,Set,require:id=>{if(id.endsWith('.css'))return {};if(id==='react/jsx-runtime')return jsx;if(id==='next/link')return {default:({href,children})=>jsx.jsx('a',{href,children})};if(id.includes('published-aftercare'))return load('lib/published-aftercare.ts');for(const [match,value]of Object.entries(mocks))if(id.includes(match))return value;throw Error(id)}});return exports;}
+function load(path,mocks={}){const exports={};vm.runInNewContext(ts.transpileModule(read(path),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText,{exports,Promise,Set,require:id=>{if(id.endsWith('.css'))return {};if(id==='react/jsx-runtime')return jsx;if(id==='next/link')return {default:({href,children})=>jsx.jsx('a',{href,children})};if(id==='./print-guide-button')return {default:()=>jsx.jsx('button',{children:'Print / Save PDF'})};if(id.includes('published-aftercare'))return load('lib/published-aftercare.ts');for(const [match,value]of Object.entries(mocks))if(id.includes(match))return value;throw Error(id)}});return exports;}
 const {careSlug,careSlugs}=load('lib/care-guides.ts');
 const {publishedAftercare}=load('lib/published-aftercare.ts');
 test('approved phased guides map to their procedures without conflating mechanical needling, Venus Viva or unrelated lasers',()=>{
@@ -18,11 +18,12 @@ test('published patient pages contain approved recovery phases, common care and 
  const {default:Content}=load('app/care/aftercare-content.tsx');
  for(const key of ['laser','rf-microneedling','skin-booster','botox','filler']){
   const html=renderToStaticMarkup(Content({guide:publishedAftercare[key]}));
-  assert.ok(html.includes(publishedAftercare[key].english));for(const phase of publishedAftercare[key].phases)assert.ok(html.includes(phase.time));
-  assert.match(html,/所有治疗通用注意事项/);assert.match(html,/异常症状与紧急求助/);assert.match(html,/不替代治疗医生/);
+  assert.ok(html.includes(publishedAftercare[key].title));for(const phase of publishedAftercare[key].phases)assert.ok(html.includes(phase.time));
+  assert.ok(!/[\u3400-\u9fff]/u.test(html),'Patient guide must be entirely in English');
+  assert.match(html,/The essentials, for every treatment/);assert.match(html,/Know the warning signs/);assert.match(html,/does not replace your treating clinician/);
  }
- const filler=renderToStaticMarkup(Content({guide:publishedAftercare.filler}));assert.match(filler,/000/);assert.match(filler,/视力模糊/);
- const embedded=renderToStaticMarkup(Content({guide:publishedAftercare.botox,showUniversal:false}));assert.ok(!embedded.includes('所有治疗通用注意事项'));
+ const filler=renderToStaticMarkup(Content({guide:publishedAftercare.filler}));assert.match(filler,/000/);assert.match(filler,/blurred, reduced or lost vision/);
+ const embedded=renderToStaticMarkup(Content({guide:publishedAftercare.botox,showUniversal:false}));assert.ok(!embedded.includes('The essentials, for every treatment'));
 });
 test('care-only appointment QR renders all booked/add-on procedures, with common guidance once',async()=>{
  const {default:Page}=load('app/booking/aftercare/[token]/page.tsx',{
@@ -32,4 +33,13 @@ test('care-only appointment QR renders all booked/add-on procedures, with common
  });
  const html=renderToStaticMarkup(await Page({params:Promise.resolve({token:'a'.repeat(32)})}));
  assert.equal((html.match(/class="common-guidance"/g)||[]).length,1);assert.equal((html.match(/class="treatment-guidance"/g)||[]).length,2);
+});
+
+
+test('existing facial and IPL aftercare use the same English handout layout',async()=>{
+ const {default:Guide}=load('app/care/treatment-guide.tsx',{'./aftercare-content':{default:({guide})=>jsx.jsx('section',{className:'new-care-layout',children:guide.title})}});
+ for(const treatment of ['facial','ipl','hifu','dmk','prp','general','microneedling']){
+  const html=renderToStaticMarkup(await Guide({params:Promise.resolve({treatment,stage:'after'})}));
+  assert.match(html,/new-care-layout/);assert.match(html,/Aftercare/);assert.ok(!/[\u3400-\u9fff]/u.test(html));
+ }
 });
