@@ -6,7 +6,7 @@ const source=readFileSync(new URL('../lib/clinic-admin.ts',import.meta.url),'utf
 const reminderSql=source.match(/const rows=await sql`(WITH scheduled AS [\s\S]*?)`;/)[1];
 const db=new PGlite();
 await db.exec(`CREATE TABLE venux_clients(id INT PRIMARY KEY,full_name TEXT,mobile TEXT,service_sms_consent BOOLEAN,sms_unsubscribed_at TIMESTAMPTZ);
-CREATE TABLE venux_appointments(id INT PRIMARY KEY,client_id INT,requested_date DATE,requested_time TEXT,start_minute INT,status TEXT,customer_confirmation_status TEXT,treatment TEXT,aftercare_token TEXT,completed_at TIMESTAMPTZ,appointment_sms_enabled BOOLEAN DEFAULT TRUE);
+CREATE TABLE venux_appointments(id INT PRIMARY KEY,client_id INT,requested_date DATE,requested_time TEXT,start_minute INT,status TEXT,customer_confirmation_status TEXT,treatment TEXT,aftercare_token TEXT,completed_at TIMESTAMPTZ,service_addons JSONB DEFAULT '[]'::jsonb,appointment_sms_enabled BOOLEAN DEFAULT TRUE);
 INSERT INTO venux_clients(id,full_name,mobile,service_sms_consent) VALUES (1,'Test','0400000000',TRUE),(2,'No consent','0400000001',FALSE);`);
 async function eligible(now,rows,mode="24h",appointmentId=null){
  await db.exec('DELETE FROM venux_appointments');
@@ -43,10 +43,12 @@ test('aftercare token retrieves only completed treatment and no personal health 
  const token='a'.repeat(32);
  await db.exec('DELETE FROM venux_appointments');
  await db.query('INSERT INTO venux_appointments(id,status,treatment,aftercare_token) VALUES (1,$1,$2,$3)',['in_progress','Facial',token]);
- const sql=source.match(/SELECT treatment,completed_at FROM venux_appointments WHERE aftercare_token=\$\{token\} AND status='completed' LIMIT 1/)[0].replace('${token}','$1');
+ const sql=source.split('export async function getAftercareByToken')[1].match(/client\(\)`([\s\S]*?)`/)[1].replace('${token}','$1');
  assert.equal((await db.query(sql,[token])).rows.length,0);
  await db.exec("UPDATE venux_appointments SET status='completed'");
  assert.deepEqual(Object.keys((await db.query(sql,[token])).rows[0]).sort(),['completed_at','treatment']);
+ await db.exec("UPDATE venux_appointments SET service_addons='[{\"name\":\"Skin Booster\",\"amount\":50}]'");
+ assert.equal((await db.query(sql,[token])).rows[0].treatment,'Facial + Skin Booster');
  assert.equal((await db.query(sql,['b'.repeat(32)])).rows.length,0);
 });
 test('atomic sending claim prevents concurrent sends for the same queued message',async()=>{

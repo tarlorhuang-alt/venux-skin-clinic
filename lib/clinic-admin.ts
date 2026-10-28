@@ -982,7 +982,7 @@ export async function queueAppointmentReminders(mode:"24h"|"previous-day"="24h",
 export async function getAftercareByToken(token:string){
   if(!/^[a-f0-9]{32}$/.test(token))return null;
   await ensureClinicTables();
-  return (await client()`SELECT treatment,completed_at FROM venux_appointments WHERE aftercare_token=${token} AND status='completed' LIMIT 1`)[0]??null;
+  return (await client()`SELECT treatment||COALESCE((SELECT ' + '||string_agg(item->>'name',' + ') FROM jsonb_array_elements(service_addons) AS item),'') AS treatment,completed_at FROM venux_appointments WHERE aftercare_token=${token} AND status='completed' LIMIT 1`)[0]??null;
 }
 
 export async function updateBirthdayPromotion(id:number,body:string){

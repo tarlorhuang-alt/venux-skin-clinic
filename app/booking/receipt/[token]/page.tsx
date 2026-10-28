@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { getVisitReceipt } from "../../../../lib/clinic-admin";
 import { receiptSummary,type ReceiptSnapshot } from "../../../../lib/receipt-summary";
 import { careSlugs } from "../../../../lib/care-guides";
-import CareGuide from "../../../care/[treatment]/[stage]/page";
+import CareGuide from "../../../care/treatment-guide";
 import PrintButton from "./print-button";
 import "./receipt.css";
 export const dynamic="force-dynamic";
@@ -25,5 +25,5 @@ export default async function ReceiptPage({params}:{params:Promise<{token:string
     {value.accountTransactions?.length?<><h2>Card recharge & package purchases</h2><dl>{value.accountTransactions.map((item,index)=><div key={index}><dt>{item.type==='recharge'?'Card recharge':'Package purchase'} · {item.method}</dt><dd>{money(item.amount)}</dd></div>)}</dl><p>These account purchases are separate from the treatment payments above.</p></>:null}
     <p>Package sessions and membership credit are shown separately from new payments. This document records the visit and payments entered by the clinic; it is not a tax invoice. Contact the clinic for corrections or a tax invoice.</p>
     <PrintButton/><p className="receipt-private">Keep this private link secure. Anyone with the link can view this receipt.</p>
-  </section><section aria-label="After-care instructions">{careSlugs(value.treatment).map(treatment=><CareGuide key={treatment} params={Promise.resolve({treatment,stage:"after"})}/>)}</section></div>;
+  </section><section aria-label="After-care instructions">{careSlugs(value.treatment).map((treatment,index)=><CareGuide key={treatment} params={Promise.resolve({treatment,stage:"after"})} showUniversal={index===careSlugs(value.treatment).length-1}/>)}</section></div>;
 }

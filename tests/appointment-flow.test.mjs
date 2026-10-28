@@ -22,7 +22,7 @@ test('confirmation SMS carries one appointment link and all preparation steps',(
  assert.equal((message.match(/https:\/\//g)||[]).length,1);
 });
 test('care mapping covers known treatments and offers clinician-directed fallback',()=>{
- for(const [name,slug] of [['Facial treatments','facial'],['IPL','ipl'],['DMK enzyme','dmk'],['Ultherapy','hifu'],['RF Microneedling','rf-microneedling'],['PRP','prp'],['Rejuran','general'],['Unknown service','general']]){
+ for(const [name,slug] of [['Facial treatments','facial'],['IPL','ipl'],['DMK enzyme','dmk'],['Ultherapy','hifu'],['RF Microneedling','rf-microneedling'],['PRP','prp'],['Rejuran','skin-booster'],['Unknown service','general']]){
   assert.equal(careSlug(name),slug);
   assert.equal(carePath(name,'pre'),`/care/${slug}/pre`);
   assert.equal(carePath(name,'after'),`/care/${slug}/after`);

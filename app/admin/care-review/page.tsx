@@ -8,7 +8,7 @@ export const metadata:Metadata={title:"After-care drafts · review only | ISA",r
 export default async function CareReview(){
  if(!(await isAdminAuthenticated()))return <AdminLogin/>;
  return <main style={{maxWidth:920,margin:'24px auto',padding:'0 20px 48px',font:'16px/1.8 Arial,sans-serif',color:'#173d39'}}>
-  <p>ISA SKIN CLINIC & AESTHETICS · 27 October 2026</p><h1>After-care 待审核草稿</h1>
+  <p>ISA SKIN CLINIC & AESTHETICS · 27 October 2026</p><h1>After-care 原审核稿存档</h1><p>正式护理页面已采用你提供的分阶段文案。<a href="/care">查看正式护理指南 →</a>。以下为旧审核稿存档。</p>
   <div className="clinic-alert"><strong>仅供审核，尚未用于客人的二维码、短信或护理页面。</strong><p>请由负责治疗的合资格医师确认产品、设备、恢复时限和应急流程，再批准对客使用。以下不替代个人化医疗建议。</p></div>
   <p>待填写：诊所日间电话、治疗医师姓名、非营业时间紧急联系方式、各项目复诊安排。严重急症请拨澳洲 000。</p>
   <nav style={{display:'flex',flexWrap:'wrap',gap:16}}>{aftercareReviewDrafts.map(guide=><a key={guide.id} href={`#${guide.id}`}>{guide.title}</a>)}</nav>
