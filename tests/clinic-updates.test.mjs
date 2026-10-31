@@ -261,6 +261,7 @@ test('missing receipt recovery cannot disclose patient details without authentic
 
 test('birthday clients without drafts have a preparation button, and missing permission is explicit and unchecked',async()=>{
  const {default:Page}=load('app/admin/messages/page.tsx',{
+  'birthday-promotion-editor':{BirthdayPromotionEditor:()=>null},
   'admin-auth':{isAdminAuthenticated:async()=>true,getAdminRole:async()=> 'owner'},
   'clinic-admin':{getTodayBirthdayMessages:async()=>[],isClickSendConfigured:()=>true,getTodayBirthdayClients:async()=>[
    {id:1,full_name:'Ready birthday',mobile:'0400000001',marketing_sms_consent:true,marketing_sms_enabled:true},
