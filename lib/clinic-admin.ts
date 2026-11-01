@@ -930,6 +930,21 @@ export async function respondToBooking(token:string,response:"confirmed"|"change
   return Boolean(rows[0]);
 }
 
+export async function getUpcomingConfirmationAppointments(location=""){
+  await ensureClinicTables();
+  return client()`SELECT a.id,a.client_id,a.requested_date::text,a.requested_time,a.treatment,a.clinic,
+    a.customer_confirmation_status,a.appointment_sms_enabled,c.full_name,c.mobile,c.service_sms_consent,c.sms_unsubscribed_at,
+    s.full_name AS staff_name,
+    EXISTS(SELECT 1 FROM venux_sms_outbox o WHERE o.event_key='appointment-confirmation:'||a.id AND o.status='sent') AS confirmation_sent
+    FROM venux_appointments a JOIN venux_clients c ON c.id=a.client_id
+    LEFT JOIN venux_staff s ON s.id=a.staff_id
+    WHERE a.status='confirmed'
+      AND a.requested_date BETWEEN (NOW() AT TIME ZONE 'Australia/Sydney')::date AND (NOW() AT TIME ZONE 'Australia/Sydney')::date+7
+      AND (a.requested_date+make_interval(mins=>COALESCE(a.start_minute,0))) AT TIME ZONE 'Australia/Sydney'>NOW()
+      AND (${location}='' OR a.clinic ILIKE CASE WHEN ${location}='City' THEN '%City%' ELSE '%Top Ryde%' END)
+    ORDER BY a.requested_date,a.start_minute,a.id`;
+}
+
 export async function getTodayBirthdayClients(location=""){
   await ensureClinicTables();
   return client()`SELECT id,full_name,mobile,marketing_sms_consent,marketing_sms_enabled,sms_unsubscribed_at FROM venux_clients

@@ -1,6 +1,6 @@
 import type {Metadata} from "next";
 import DaySchedule from "./day-schedule";
-import {getAdminRole,isAdminAuthenticated} from "../../../lib/admin-auth";
+import {isAdminAuthenticated} from "../../../lib/admin-auth";
 import {getAppointments,getStaff} from "../../../lib/clinic-admin";
 import {AdminLogin} from "../admin-ui";
 import "../admin.css";
@@ -15,17 +15,17 @@ const todaySydney=()=>new Intl.DateTimeFormat("en-CA",{timeZone:"Australia/Sydne
 export default async function CalendarPage({searchParams}:{searchParams:Promise<{date?:string}>}){
   const params=await searchParams;
   if(!(await isAdminAuthenticated()))return <AdminLogin/>;
-  const role=await getAdminRole(),location=role==="staff"?"Top Ryde":"";
+
   const date=/^\d{4}-\d{2}-\d{2}$/.test(params.date??"")?String(params.date):todaySydney();
   const year=Number(date.slice(0,4));
-  const [rows,staff]=await Promise.all([getAppointments(date,location),getStaff()]);
+  const [rows,staff]=await Promise.all([getAppointments(date,""),getStaff()]);
   const visibleRows=rows.filter(row=>["confirmed","in_progress","completed"].includes(String(row.status)));
   const months=Array.from({length:12},(_,index)=>{
     const first=new Date(Date.UTC(year,index,1));
     return {index,label:first.toLocaleDateString("en-AU",{month:"long",year:"numeric",timeZone:"UTC"}),leading:first.getUTCDay(),days:new Date(Date.UTC(year,index+1,0)).getUTCDate()};
   });
   return <main className="clinic-admin calendar-only"><div className="clinic-admin-main">
-    <header className="clinic-admin-head"><h1>Appointment calendar</h1></header>
+    <header className="clinic-admin-head"><div><h1>Appointment calendar</h1><p>All beauticians · Top Ryde &amp; Sydney City</p></div></header>
     <form method="get" className="day-picker calendar-date-picker"><label>Selected date<input name="date" type="date" defaultValue={date}/></label><button>Show day</button><a href={`/admin/calendar?date=${todaySydney()}`}>Today</a></form>
     <div className="reference-calendar-layout">
       <aside className="mini-calendar-sidebar" aria-label="Choose appointment date">

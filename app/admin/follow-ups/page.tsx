@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { getAdminRole,isAdminAuthenticated } from "../../../lib/admin-auth";
-import {getFollowups} from "../../../lib/clinic-admin";
-import {completeFollowupAction} from "../actions";
+import {getFollowups,getUpcomingConfirmationAppointments} from "../../../lib/clinic-admin";
+import {completeFollowupAction,sendAppointmentConfirmationAction} from "../actions";
 import { AdminLogin,AdminShell } from "../admin-ui";
 import "../admin.css";
 import "../operations.css";
@@ -10,13 +10,25 @@ import "./followups.css";
 export const dynamic="force-dynamic";
 export const metadata:Metadata={title:"Follow-ups | ISA Clinic OS",robots:{index:false,follow:false}};
 
-export default async function FollowupsPage({searchParams}:{searchParams:Promise<{error?:string;saved?:string}>}){
+export default async function FollowupsPage({searchParams}:{searchParams:Promise<{error?:string;saved?:string;sent?:string}>}){
   const params=await searchParams;
   if(!(await isAdminAuthenticated()))return <AdminLogin error={params.error}/>;
   const role=await getAdminRole();
   const rows=(await getFollowups()).filter(row=>role==="owner"||String(row.clinic_location)==="Top Ryde");
+  const upcoming=await getUpcomingConfirmationAppointments(role==="staff"?"Top Ryde":"");
   return <AdminShell active="Follow-ups"><header className="clinic-admin-head"><div><p>Two-week care check</p><h1>Clients awaiting follow-up</h1></div><span>{rows.length} pending</span></header>
     {params.saved?<div className="clinic-alert">Follow-up completed and saved to the client history.</div>:null}
+    {params.sent?<div className="clinic-alert">Confirmation SMS accepted by ClickSend (or already sent).</div>:null}
+    {params.error?<div className="clinic-alert error">Confirmation could not be sent. Check SMS permission, appointment status and ClickSend configuration.</div>:null}
+    <section className="ops-card upcoming-confirmations"><h2>Upcoming appointments · Send confirmation</h2><p>未来 7 天 · Australia/Sydney · 点击按钮后发送预约确认链接。</p>
+      {upcoming.length?upcoming.map(row=>{
+        const blocked=!row.service_sms_consent||row.sms_unsubscribed_at||row.appointment_sms_enabled===false||row.customer_confirmation_status==="change_requested";
+        return <article key={String(row.id)}><div><strong><a href={`/admin/clients/${row.client_id}`}>{String(row.full_name)}</a></strong><p>{String(row.requested_date)} · {String(row.requested_time)} · {String(row.treatment)}</p><small>{String(row.staff_name||"Unassigned")} · {String(row.clinic)} · {String(row.mobile)}</small>
+          <p>{row.confirmation_sent?"Confirmation already sent":blocked?"SMS disabled, permission missing, or client requested a change":row.customer_confirmation_status==="confirmed"?"Client has confirmed":"Awaiting confirmation"}</p></div>
+          <form action={sendAppointmentConfirmationAction}><input type="hidden" name="id" value={String(row.id)}/><input type="hidden" name="returnTo" value="follow-ups"/><button disabled={Boolean(blocked||row.confirmation_sent)}>Send confirmation</button></form>
+        </article>;
+      }):<p>No upcoming appointments in the next 7 days.</p>}
+    </section>
     <section className="followup-table"><div className="followup-table-head"><span>Due</span><span>Client</span><span>Treatment</span><span>Completion comment</span><span>Action</span></div>{rows.length?rows.map(row=><article className={Number(row.days_until_due)<0?"overdue":""} key={String(row.id)}><strong>{new Date(`${String(row.due_date).slice(0,10)}T00:00:00Z`).toLocaleDateString("en-AU",{day:"2-digit",month:"short",timeZone:"UTC"})}<small>{Number(row.days_until_due)<0?`${Math.abs(Number(row.days_until_due))} days overdue`:Number(row.days_until_due)===0?"Due today":`In ${Number(row.days_until_due)} days`}</small></strong><span><a href={`/admin/clients/${row.client_id}`}>{String(row.full_name)}</a><small>{String(row.mobile)}</small></span><span>{String(row.treatment||"Treatment")}<small>{String(row.staff_name||"Staff not recorded")}</small></span><span>{String(row.completion_comment||"No completion comment")}</span><form action={completeFollowupAction}><input type="hidden" name="id" value={String(row.id)}/><input name="notes" placeholder="Recovery / client response" aria-label={`Follow-up note for ${row.full_name}`}/><button>Complete</button></form></article>):<div className="empty-admin">No clients are due for follow-up. Clients appear 14 days after treatment if their follow-up is still incomplete.</div>}</section>
   </AdminShell>;
 }

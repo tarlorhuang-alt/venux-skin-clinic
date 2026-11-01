@@ -4,7 +4,7 @@ import {moneyInput,parseServiceCheckout,type ServiceCheckout} from "../../lib/se
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { clearAdminSession, createAdminSession, getAdminRole,isAdminAuthenticated, isOwnerAuthenticated, roleForPassword } from "../../lib/admin-auth";
-import { recordBirthdayMarketingPermission,issueRecordedVisitReceipt,finishServiceCheckout,recordServiceAccountEvent,issueVisitReceipt,queueVisitReceipt,getVisitDeliveries,addTreatmentComment,assignPackageToClient,BookingConflictError,completeFollowup,createBookingRequest,createClientCourse,createClientProfile,createExpense,createPackageTemplate,createSkinAssessment,createStaff,createSupplier,createTreatmentRecord,deleteCancelledAppointment,deletePackageTemplate,findClientIdForPackage,finishAppointment,getAppointmentClientId,getAppointmentClinic,getAppointmentDate,getClientForBooking,getOwnerService,importClientRows,MembershipBalanceError,queueBirthdayMessages,queueAppointmentConfirmation,updateBirthdayPromotion,queueReturnInvite,rechargeMembership,saveClientProfile,saveHealthProfile,sendSmsOutboxMessage,setStaffClockPin,startAppointment,toggleStaffClock,toggleStaffClockWithPin,updateAppointment,updateStaffClockEntry,useClientCourseSession,useClientPackageItem,type AppointmentStatus,type ClientImportRow } from "../../lib/clinic-admin";
+import { getUpcomingConfirmationAppointments,recordBirthdayMarketingPermission,issueRecordedVisitReceipt,finishServiceCheckout,recordServiceAccountEvent,issueVisitReceipt,queueVisitReceipt,getVisitDeliveries,addTreatmentComment,assignPackageToClient,BookingConflictError,completeFollowup,createBookingRequest,createClientCourse,createClientProfile,createExpense,createPackageTemplate,createSkinAssessment,createStaff,createSupplier,createTreatmentRecord,deleteCancelledAppointment,deletePackageTemplate,findClientIdForPackage,finishAppointment,getAppointmentClientId,getAppointmentClinic,getAppointmentDate,getClientForBooking,getOwnerService,importClientRows,MembershipBalanceError,queueBirthdayMessages,queueAppointmentConfirmation,updateBirthdayPromotion,queueReturnInvite,rechargeMembership,saveClientProfile,saveHealthProfile,sendSmsOutboxMessage,setStaffClockPin,startAppointment,toggleStaffClock,toggleStaffClockWithPin,updateAppointment,updateStaffClockEntry,useClientCourseSession,useClientPackageItem,type AppointmentStatus,type ClientImportRow } from "../../lib/clinic-admin";
 
 export async function adminLogin(formData: FormData) {
   const role=roleForPassword(String(formData.get("password") ?? ""));
@@ -307,11 +307,17 @@ export async function useClientCourseSessionAction(formData:FormData){
 
 export async function sendAppointmentConfirmationAction(formData:FormData){
   if(!(await isAdminAuthenticated()))redirect("/admin?error=session");
+  const target=formData.get("returnTo")==="follow-ups"?"/admin/follow-ups":"/admin/messages";
   const id=Number(formData.get("id"));
-  if(!Number.isInteger(id)||id<=0)redirect("/admin/messages?error=invalid");
-  const sent=await queueAppointmentConfirmation(id);
-  revalidatePath("/admin/messages");
-  redirect(`/admin/messages?${sent?'sent=1':'error=send'}`);
+  if(!Number.isInteger(id)||id<=0)redirect(`${target}?error=invalid`);
+  if(await staffCannotAccessAppointment(id))redirect("/admin?error=restricted");
+  let sent=false;
+  try{
+    if(target==="/admin/follow-ups"&&!(await getUpcomingConfirmationAppointments((await getAdminRole())==="staff"?"Top Ryde":"")).some(row=>Number(row.id)===id))sent=false;
+    else sent=await queueAppointmentConfirmation(id);
+  }catch{sent=false;}
+  revalidatePath("/admin/follow-ups");revalidatePath("/admin/bookings");revalidatePath("/admin/messages");
+  redirect(`${target}?${sent?'sent=1':'error=send'}`);
 }
 
 export async function retryVisitReceiptAction(formData:FormData){

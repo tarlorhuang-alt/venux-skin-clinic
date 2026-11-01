@@ -193,7 +193,7 @@ test('calendar supports navigation from time labels, empty slots and beautician 
  assert.match(html,/<a class="reference-time-label" href="[^\"]*time=9%3A15%20AM/);
 });
 
-test('calendar opens on its own without workspace navigation or retention functions',async()=>{
+test('calendar opens on its own and includes both clinics for all beauticians',async()=>{
  let location;
  const {default:Page}=load('app/admin/calendar/page.tsx',{
   './day-schedule':{default:()=>jsx.jsx('div',{children:'Beautician day grid'})},
@@ -204,7 +204,7 @@ test('calendar opens on its own without workspace navigation or retention functi
  const html=renderToStaticMarkup(await Page({searchParams:Promise.resolve({date:'2026-10-27'})}));
  assert.match(html,/calendar-only/);assert.match(html,/Beautician day grid/);assert.match(html,/name="date"/);
  assert.ok(!html.includes('clinic-sidebar'));assert.ok(!html.includes('Retention'));assert.ok(!html.includes('Dashboard'));
- assert.equal(location,'Top Ryde');
+ assert.equal(location,'');assert.match(html,/All beauticians/);assert.match(html,/Sydney City/);
 });
 
 
