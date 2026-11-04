@@ -2,7 +2,7 @@ import type {Metadata} from "next";
 import DaySchedule from "./day-schedule";
 import {isAdminAuthenticated} from "../../../lib/admin-auth";
 import {getAppointments,getStaff} from "../../../lib/clinic-admin";
-import {AdminLogin} from "../admin-ui";
+import {AdminLogin,AdminShell} from "../admin-ui";
 import "../admin.css";
 import "../bookings/bookings.css";
 import "../bookings/bookings-updates.css";
@@ -20,16 +20,18 @@ export default async function CalendarPage({searchParams}:{searchParams:Promise<
   const year=Number(date.slice(0,4));
   const [rows,staff]=await Promise.all([getAppointments(date,""),getStaff()]);
   const visibleRows=rows.filter(row=>["confirmed","in_progress","completed"].includes(String(row.status)));
-  const months=Array.from({length:12},(_,index)=>{
+  const monthIndex=Number(date.slice(5,7))-1;
+  const monthLink=(offset:number)=>new Date(Date.UTC(year,monthIndex+offset,1)).toISOString().slice(0,10);
+  const months=[monthIndex].map(index=>{
     const first=new Date(Date.UTC(year,index,1));
     return {index,label:first.toLocaleDateString("en-AU",{month:"long",year:"numeric",timeZone:"UTC"}),leading:first.getUTCDay(),days:new Date(Date.UTC(year,index+1,0)).getUTCDate()};
   });
-  return <main className="clinic-admin calendar-only"><div className="clinic-admin-main">
+  return <AdminShell active="Calendar"><div className="calendar-only">
     <header className="clinic-admin-head"><div><h1>Appointment calendar</h1><p>All beauticians · Top Ryde &amp; Sydney City</p></div></header>
     <form method="get" className="day-picker calendar-date-picker"><label>Selected date<input name="date" type="date" defaultValue={date}/></label><button>Show day</button><a href={`/admin/calendar?date=${todaySydney()}`}>Today</a></form>
     <div className="reference-calendar-layout">
       <aside className="mini-calendar-sidebar" aria-label="Choose appointment date">
-        <nav className="mini-year-nav"><a href={`/admin/calendar?date=${year-1}-01-01`} aria-label="Previous year">←</a><strong>{year}</strong><a href={`/admin/calendar?date=${year+1}-01-01`} aria-label="Next year">→</a></nav>
+        <nav className="mini-year-nav"><a href={`/admin/calendar?date=${monthLink(-1)}`} aria-label="Previous month">←</a><strong>{year}</strong><a href={`/admin/calendar?date=${monthLink(1)}`} aria-label="Next month">→</a></nav>
         {months.map(month=><section className="mini-month" key={month.index} aria-label={month.label}>
           <h2>{month.label}</h2><div className="mini-weekdays">{["Su","Mo","Tu","We","Th","Fr","Sa"].map(day=><span key={day}>{day}</span>)}</div>
           <div className="mini-month-days">{Array.from({length:month.leading},(_,index)=><span key={`blank-${index}`}/>)}{Array.from({length:month.days},(_,index)=>{
@@ -43,5 +45,5 @@ export default async function CalendarPage({searchParams}:{searchParams:Promise<
         <DaySchedule rows={rows} staff={staff} date={date}/>
       </section>
     </div>
-  </div></main>;
+  </div></AdminShell>;
 }

@@ -193,17 +193,17 @@ test('calendar supports navigation from time labels, empty slots and beautician 
  assert.match(html,/<a class="reference-time-label" href="[^\"]*time=9%3A15%20AM/);
 });
 
-test('calendar opens on its own and includes both clinics for all beauticians',async()=>{
+test('calendar uses shared navigation, one selected month and both clinics',async()=>{
  let location;
  const {default:Page}=load('app/admin/calendar/page.tsx',{
   './day-schedule':{default:()=>jsx.jsx('div',{children:'Beautician day grid'})},
   'admin-auth':{isAdminAuthenticated:async()=>true,getAdminRole:async()=> 'staff'},
   'clinic-admin':{getAppointments:async(date,clinic)=>{location=clinic;return []},getStaff:async()=>[]},
-  'admin-ui':{AdminLogin:()=>null}
+  'admin-ui':{AdminLogin:()=>null,AdminShell:({children})=>jsx.jsx('main',{className:'shared-navigation',children})}
  });
  const html=renderToStaticMarkup(await Page({searchParams:Promise.resolve({date:'2026-10-27'})}));
  assert.match(html,/calendar-only/);assert.match(html,/Beautician day grid/);assert.match(html,/name="date"/);
- assert.ok(!html.includes('clinic-sidebar'));assert.ok(!html.includes('Retention'));assert.ok(!html.includes('Dashboard'));
+ assert.match(html,/shared-navigation/);assert.equal((html.match(/class="mini-month"/g)||[]).length,1);assert.match(html,/Previous month/);assert.match(html,/2026-09-01/);assert.match(html,/2026-11-01/);
  assert.equal(location,'');assert.match(html,/All beauticians/);assert.match(html,/Sydney City/);
 });
 
