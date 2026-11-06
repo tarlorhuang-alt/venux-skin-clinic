@@ -310,3 +310,14 @@ test('profile checkout keeps each visit linked to its appointment and shows paym
  const completed=renderToStaticMarkup(Visit({row:{...row,status:'completed'},date:'2026-11-07',packageTemplates:[],activeServices:[]}));
  assert.match(completed,/Receipt and aftercare/);assert.ok(!completed.includes('Split payment fields'));
 });
+
+test('owner client checkout redirects unauthenticated visitors before loading any client data',async()=>{
+ let loaded=false;
+ const {default:Page}=load('app/owner/clients/[id]/page.tsx',{
+  'next/navigation':{redirect:()=>{throw Error('OWNER_LOGIN_REQUIRED')},notFound:()=>{throw Error('NOT_FOUND')}},
+  'owner-auth':{isOwnerAuthenticated:async()=>false},
+  'clinic-admin':{getClientClinicalRecord:async()=>{loaded=true}},
+  'profile-visit':{default:()=>null}
+ });
+ await assert.rejects(()=>Page({params:Promise.resolve({id:'1'}),searchParams:Promise.resolve({})}),/OWNER_LOGIN_REQUIRED/);assert.equal(loaded,false);
+});

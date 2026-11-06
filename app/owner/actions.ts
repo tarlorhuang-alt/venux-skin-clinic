@@ -4,7 +4,7 @@ import {moneyInput,parseServiceCheckout} from "../../lib/service-checkout";
 import {revalidatePath} from "next/cache";
 import {redirect} from "next/navigation";
 import {clearOwnerSession,createOwnerSession,isOwnerAuthenticated,ownerPasswordMatches} from "../../lib/owner-auth";
-import {issueRecordedVisitReceipt,finishServiceCheckout,recordServiceAccountEvent,queueVisitReceipt,BookingConflictError,createBookingRequest,createCityStaff,createClinicService,finishAppointment,getOwnerService,importClientRows,importClinicServices,startAppointment,updateAppointment,type AppointmentStatus,type ClientImportRow,type ServiceImportRow} from "../../lib/clinic-admin";
+import {getAppointmentClientId,issueRecordedVisitReceipt,finishServiceCheckout,recordServiceAccountEvent,queueVisitReceipt,BookingConflictError,createBookingRequest,createCityStaff,createClinicService,finishAppointment,getOwnerService,importClientRows,importClinicServices,startAppointment,updateAppointment,type AppointmentStatus,type ClientImportRow,type ServiceImportRow} from "../../lib/clinic-admin";
 import {PRICE_LIST_2026_SERVICES} from "../../lib/price-list-services";
 
 const text=(data:FormData,name:string)=>String(data.get(name)??"").trim();
@@ -78,23 +78,23 @@ export async function settleCityAppointment(data:FormData){
 
 export async function startCityAppointment(data:FormData){
   await requireOwner();const id=Number(data.get("id")),date=ownerDate(data),staffId=Number(data.get("staffId")),photo=data.get("beforePhoto");
-  if(!Number.isInteger(id)||id<=0||!date||!Number.isInteger(staffId)||staffId<=0)redirect(`/owner?date=${date}&error=start`);
+  if(!Number.isInteger(id)||id<=0||!date||!Number.isInteger(staffId)||staffId<=0)await ownerServiceRedirect(data,`/owner?date=${date}&error=start`);
   const allowed=new Set(["image/jpeg","image/png","image/webp","image/heic","image/heif"]);
-  if(!(photo instanceof File)||photo.size===0||photo.size>4_000_000||!allowed.has(photo.type))redirect(`/owner?date=${date}&error=photo`);
+  if(!(photo instanceof File)||photo.size===0||photo.size>4_000_000||!allowed.has(photo.type))return await ownerServiceRedirect(data,`/owner?date=${date}&error=photo`);
   const beforePhoto={dataUrl:`data:${photo.type};base64,${Buffer.from(await photo.arrayBuffer()).toString("base64")}`,name:photo.name||"before-photo"};
-  if(data.get("heidiRecording")!=="yes")redirect(`/owner?date=${date}&error=start`);
-  const started=await startAppointment(id,staffId,beforePhoto,true);revalidatePath("/owner");revalidatePath("/admin/bookings");revalidatePath("/admin/reports");redirect(`/owner?date=${date}&${started?"started=1":"error=start"}`);
+  if(data.get("heidiRecording")!=="yes")await ownerServiceRedirect(data,`/owner?date=${date}&error=start`);
+  const started=await startAppointment(id,staffId,beforePhoto,true);revalidatePath("/owner");revalidatePath("/admin/bookings");revalidatePath("/admin/reports");await ownerServiceRedirect(data,`/owner?date=${date}&${started?"started=1":"error=start"}`);
 }
 
 export async function finishCityAppointment(data:FormData){
   await requireOwner();const id=Number(data.get("id")),date=ownerDate(data),staffId=Number(data.get("staffId")),comment=text(data,"comment");
-  if(!Number.isInteger(id)||id<=0||!date||!Number.isInteger(staffId)||staffId<=0||!comment)redirect(`/owner?date=${date}&error=finish`);
+  if(!Number.isInteger(id)||id<=0||!date||!Number.isInteger(staffId)||staffId<=0||!comment)await ownerServiceRedirect(data,`/owner?date=${date}&error=finish`);
   let finished=false;
   try{
     finished=data.get("checkoutVersion")==="1"?await finishServiceCheckout(id,staffId,comment,parseServiceCheckout(data)):await finishAppointment(id,staffId,comment);
-  }catch{redirect(`/owner?date=${date}&appointment=${id}&error=checkout#city-appointment-${id}`);}
+  }catch{await ownerServiceRedirect(data,`/owner?date=${date}&appointment=${id}&error=checkout#city-appointment-${id}`);}
   if(finished&&data.get("checkoutVersion")==="1"){try{await queueVisitReceipt(id);}catch{console.error("Owner receipt delivery needs retry",{appointmentId:id});}}
-  revalidatePath("/owner");revalidatePath("/admin/bookings");revalidatePath("/admin/reports");revalidatePath("/admin/payroll");revalidatePath("/admin/follow-ups");revalidatePath("/admin/receipts");redirect(`/owner?date=${date}&appointment=${id}&${finished?"finished=1":"error=checkout"}#city-appointment-${id}`);
+  revalidatePath("/owner");revalidatePath("/admin/bookings");revalidatePath("/admin/reports");revalidatePath("/admin/payroll");revalidatePath("/admin/follow-ups");revalidatePath("/admin/receipts");await ownerServiceRedirect(data,`/owner?date=${date}&appointment=${id}&${finished?"finished=1":"error=checkout"}#city-appointment-${id}`);
 }
 
 
@@ -104,7 +104,7 @@ export async function recordCityServiceAccount(data:FormData){
   let saved=false;
   try{saved=await recordServiceAccountEvent(id,key,kind,moneyInput(data.get("accountAmount")),method,Number.isSafeInteger(packageId)&&packageId>0?packageId:null);}catch{saved=false;}
   revalidatePath("/owner");revalidatePath("/admin/bookings");revalidatePath("/admin/client-packages");
-  redirect(`/owner?date=${date}&appointment=${id}&${saved?"accountSaved=1":"error=checkout"}#city-appointment-${id}`);
+  await ownerServiceRedirect(data,`/owner?date=${date}&appointment=${id}&${saved?"accountSaved=1":"error=checkout"}#city-appointment-${id}`);
 }
 
 
@@ -113,4 +113,11 @@ export async function issueMissingCityReceipt(data:FormData){
   let token='';try{token=await issueRecordedVisitReceipt(id,parseServiceCheckout(data).payments);}catch{token='';}
   if(!token)redirect(`/owner/receipts/${id}?error=amount`);
   revalidatePath('/owner');revalidatePath('/admin/receipts');redirect(`/booking/receipt/${token}`);
+}
+
+async function ownerServiceRedirect(data:FormData,url:string):Promise<never>{
+ if(data.get("returnTo")==="profile"){
+  const id=Number(data.get("id"));if(Number.isSafeInteger(id)&&id>0){const clientId=await getAppointmentClientId(id);if(clientId){revalidatePath(`/owner/clients/${clientId}`);const query=new URL(url,"https://clinic.local").searchParams;redirect(`/owner/clients/${clientId}?${query}#checkout`);}}
+ }
+ redirect(url);
 }
