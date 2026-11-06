@@ -1,3 +1,5 @@
+import HomeEnquiry from "./home-enquiry";
+import "./home-enquiry.css";
 import { Footer, Header } from "./site-chrome";
 import { getPriceMap, resolvePrice } from "../lib/pricing";
 
@@ -45,7 +47,7 @@ export default async function Home() {
   return (
     <main>
       <Header />
-      <section className="poster-hero">
+      <section className="home-consultation-hero">
         <div className="poster-copy">
           <p className="kicker premium-kicker"><strong>ISA Premium</strong> Skin &amp; Aesthetic Clinic</p>
           <h1>Natural Beauty,<br /><span className="title-accent">Refined by Science.</span></h1>
@@ -55,8 +57,7 @@ export default async function Home() {
             <a className="button outline-button" href="/treatments">View treatments</a>
           </div>
         </div>
-        <div className="hero-promotion"><span>INTRODUCTORY OFFER</span><strong>50% OFF</strong><small>Selected first treatments · consultation and conditions apply</small><a href="/book?offer=50-percent">Claim offer ↗</a></div>
-        <span className="poster-caption">Personalised care · Professional standards · Considered results</span>
+        <HomeEnquiry />
       </section>
 
       <section className="principles"><span>01 · Personalised plans</span><span>02 · Considered care</span><span>03 · Natural-looking results</span></section>

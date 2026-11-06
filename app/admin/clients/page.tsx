@@ -1,3 +1,4 @@
+import {getWebsiteEnquiries} from "../../../lib/website-enquiries";
 import type { Metadata } from "next";
 import { getAdminRole,isAdminAuthenticated } from "../../../lib/admin-auth";
 import { getClientInitialStats,getClientLocationStats,getClients } from "../../../lib/clinic-admin";
@@ -28,6 +29,7 @@ export default async function ClientsAdmin({searchParams}:{searchParams:Promise<
   const role=await getAdminRole(),search=(params.q??"").trim(),location=role==="staff"?"Top Ryde":["City","Top Ryde"].includes(params.location??"")?String(params.location):"";
   const requestedPage=Number(params.page??"1"),page=Number.isInteger(requestedPage)&&requestedPage>0?requestedPage:1;
   const [clients,locationStats,initialStats]=await loadClientPage(search,location,page);
+  const enquiries=await getWebsiteEnquiries(location);
   const total=Number(clients[0]?.filtered_count??0),totalPages=Math.max(1,Math.ceil(total/50));
   const groupedClients=new Map<string,typeof clients>();for(const client of clients){const first=String(client.full_name??"").trim().charAt(0).toUpperCase(),initial=/^[A-Z]$/.test(first)?first:"#";groupedClients.set(initial,[...(groupedClients.get(initial)??[]),client]);}
   return <AdminShell active="Clients">
@@ -51,5 +53,5 @@ export default async function ClientsAdmin({searchParams}:{searchParams:Promise<
       <strong>Page {page} of {totalPages}</strong>
       {page<totalPages?<a href={pageHref(page+1,search,location)}>Next →</a>:<span/>}
     </nav>:null}
-  </AdminShell>;
+  <section className="clinical-section" id="website-enquiries"><h2>Website enquiries</h2><p>Email and phone enquiries from the homepage. These are not confirmed appointments or marketing subscriptions.</p><div className="record-list">{enquiries.length?enquiries.map(enquiry=><article key={String(enquiry.id)}><strong>{String(enquiry.email)}</strong><p><a href={`tel:${enquiry.mobile}`}>{String(enquiry.mobile)}</a> · {String(enquiry.clinic_location)}</p><small>{new Date(String(enquiry.created_at)).toLocaleString("en-AU",{timeZone:"Australia/Sydney"})}</small></article>):<p>No website enquiries yet.</p>}</div></section></AdminShell>;
 }

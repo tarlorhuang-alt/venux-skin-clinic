@@ -95,7 +95,7 @@ test('calendar appointment links open only that beautician appointment and its o
   'admin-ui':{AdminShell:({children})=>jsx.jsx('main',{children}),statusLabel:value=>String(value).replaceAll('_',' ')}
  });
  const html=renderToStaticMarkup(await Page({searchParams:Promise.resolve({date:'2026-10-21',appointment:'7'})}));
- assert.match(html,/Selected client/);assert.match(html,/End service/);assert.match(html,/Dannie/);
+ assert.match(html,/Selected client/);assert.match(html,/Open profile &amp; checkout/);assert.ok(!html.includes("Combination payment controls"));assert.match(html,/Dannie/);
  assert.ok(!html.includes('Other client hidden'));assert.ok(!html.includes('Full table hidden in focused view'));assert.ok(!html.includes('Create appointment'));
 });
 
@@ -109,7 +109,8 @@ test('client record assigns packages inline and shows all comment updates withou
  const {default:Page}=load('app/admin/clients/[id]/page.tsx',{
   'next/navigation':{notFound:()=>{throw Error('Unexpected notFound')}},
   'admin-auth':{isAdminAuthenticated:async()=>true,getAdminRole:async()=> 'owner'},
-  'clinic-admin':{getClientClinicalRecord:async()=>({client:{id:1,full_name:'Test client',mobile:'0400000001'},appointments:[{id:7,treatment:'Facial',staff_name:'Dannie',completion_comment:'Original completion note',completed_at:'2026-10-10T00:00Z'}],comments:[{id:1,appointment_id:7,staff_name:'Mei',comment:'First update',created_at:'2026-10-11T00:00Z'},{id:2,appointment_id:7,staff_name:'Dannie',comment:'Second update',created_at:'2026-10-12T00:00Z'}],packageItems:[],treatments:[],assessments:[],courses:[],audits:[]}),getActivePackageTemplates:async()=>[{id:3,package_name:'Facial course',package_price:500}],getStaff:async()=>[{id:1,full_name:'Dannie',active:true}]},
+  'clinic-admin':{getAppointments:async()=>[],getServiceCheckoutOptions:async()=>[],getOwnerServices:async()=>[],getClientClinicalRecord:async()=>({client:{id:1,full_name:'Test client',mobile:'0400000001'},appointments:[{id:7,treatment:'Facial',staff_name:'Dannie',completion_comment:'Original completion note',completed_at:'2026-10-10T00:00Z'}],comments:[{id:1,appointment_id:7,staff_name:'Mei',comment:'First update',created_at:'2026-10-11T00:00Z'},{id:2,appointment_id:7,staff_name:'Dannie',comment:'Second update',created_at:'2026-10-12T00:00Z'}],packageItems:[],treatments:[],assessments:[],courses:[],audits:[]}),getActivePackageTemplates:async()=>[{id:3,package_name:'Facial course',package_price:500}],getStaff:async()=>[{id:1,full_name:'Dannie',active:true}]},
+  'profile-visit':{default:()=>jsx.jsx('p',{children:'Profile checkout controls'})},
   '../../actions':{},'membership-balance-form':{MembershipBalanceForm:()=>null},
   'admin-ui':{AdminShell:({children})=>jsx.jsx('main',{children}),statusLabel:String}
  });
@@ -144,8 +145,8 @@ test('follow-up list shows due and overdue clients, and migrates only incomplete
  CREATE TABLE venux_appointments(id INT,staff_id INT,treatment TEXT,requested_date DATE,completion_comment TEXT,completed_at TIMESTAMPTZ);
  CREATE TABLE venux_followups(id INT,client_id INT,appointment_id INT,due_date DATE,followup_type TEXT,status TEXT);
  INSERT INTO venux_clients VALUES(1,'Due','','Top Ryde');
- INSERT INTO venux_appointments VALUES(1,NULL,'Facial',CURRENT_DATE,'Note',NOW()-INTERVAL '14 days');
- INSERT INTO venux_followups VALUES(1,1,1,CURRENT_DATE-7,'One-week treatment follow-up','pending'),(2,1,NULL,CURRENT_DATE-1,'Two-week treatment follow-up','pending'),(3,1,NULL,CURRENT_DATE+1,'Two-week treatment follow-up','pending'),(4,1,1,CURRENT_DATE-7,'One-week treatment follow-up','completed');`);
+ INSERT INTO venux_appointments VALUES(1,NULL,'Facial',CURRENT_DATE,'Note',((NOW() AT TIME ZONE 'Australia/Sydney')::date-14)::timestamp AT TIME ZONE 'Australia/Sydney');
+ INSERT INTO venux_followups VALUES(1,1,1,(NOW() AT TIME ZONE 'Australia/Sydney')::date-7,'One-week treatment follow-up','pending'),(2,1,NULL,(NOW() AT TIME ZONE 'Australia/Sydney')::date-1,'Two-week treatment follow-up','pending'),(3,1,NULL,(NOW() AT TIME ZONE 'Australia/Sydney')::date+1,'Two-week treatment follow-up','pending'),(4,1,1,(NOW() AT TIME ZONE 'Australia/Sydney')::date-7,'One-week treatment follow-up','completed');`);
  const migration=source.match(/await client\(\)`(UPDATE venux_followups f SET due_date=[\s\S]*?)`;/)[1];
  await db.exec(migration);
  assert.equal((await db.query('SELECT followup_type FROM venux_followups WHERE id=1')).rows[0].followup_type,'Two-week treatment follow-up');
@@ -295,4 +296,17 @@ test('recording marketing permission preserves unsubscribe and clinic boundaries
  const rows=(await db.query('SELECT id,marketing_sms_consent,marketing_sms_enabled,sms_unsubscribed_at IS NOT NULL AS unsubscribed FROM venux_clients ORDER BY id')).rows;
  assert.equal(rows[0].marketing_sms_consent,true);assert.equal(rows[0].marketing_sms_enabled,true);assert.equal(rows[1].marketing_sms_consent,false);assert.equal(rows[1].unsubscribed,true);assert.equal(rows[2].marketing_sms_consent,false);
  }finally{await db.close();}
+});
+
+test('profile checkout keeps each visit linked to its appointment and shows payments only while in progress',()=>{
+ const {default:Visit}=load('app/admin/bookings/profile-visit.tsx',{
+  './service-account-panel':{default:({id,returnTo})=>jsx.jsx('p',{children:`Account for ${id}, return to ${returnTo}`})},
+  './service-checkout-fields':{default:()=>jsx.jsx('p',{children:'Split payment fields'})},
+  './visit-documents':{default:()=>jsx.jsx('p',{children:'Receipt and aftercare'})},'../actions':{}
+ });
+ const row={id:7,staff_id:3,full_name:'Client',status:'in_progress',total_amount:100};
+ const html=renderToStaticMarkup(Visit({row,date:'2026-11-07',packageTemplates:[],activeServices:[]}));
+ assert.match(html,/End service &amp; send receipt/);assert.match(html,/name="id" value="7"/);assert.match(html,/name="returnTo" value="profile"/);assert.match(html,/Split payment fields/);
+ const completed=renderToStaticMarkup(Visit({row:{...row,status:'completed'},date:'2026-11-07',packageTemplates:[],activeServices:[]}));
+ assert.match(completed,/Receipt and aftercare/);assert.ok(!completed.includes('Split payment fields'));
 });

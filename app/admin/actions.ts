@@ -36,17 +36,17 @@ export async function startAppointmentAction(formData:FormData){
   if(await staffCannotAccessAppointment(id))redirect("/admin?error=restricted");
   const photo=formData.get("beforePhoto"),returnDate=String(formData.get("returnDate")??"");
   const recordingConfirmed=formData.get("heidiRecording")==="yes";
-  if(!recordingConfirmed)redirect(`/admin/bookings?${/^\d{4}-\d{2}-\d{2}$/.test(returnDate)?`date=${returnDate}&`:""}error=recording#appointment-${id}`);
+  if(!recordingConfirmed)await serviceRedirect(formData,`/admin/bookings?${/^\d{4}-\d{2}-\d{2}$/.test(returnDate)?`date=${returnDate}&`:""}error=recording#appointment-${id}`);
   const allowed=new Set(["image/jpeg","image/png","image/webp","image/heic","image/heif"]);
   let beforePhoto:{dataUrl:string;name:string}|undefined;
   if(photo instanceof File&&photo.size>0){
-    if(photo.size>4*1024*1024||!allowed.has(photo.type))redirect(`/admin/bookings?${/^\d{4}-\d{2}-\d{2}$/.test(returnDate)?`date=${returnDate}&`:""}error=photo#appointment-${id}`);
+    if(photo.size>4*1024*1024||!allowed.has(photo.type))await serviceRedirect(formData,`/admin/bookings?${/^\d{4}-\d{2}-\d{2}$/.test(returnDate)?`date=${returnDate}&`:""}error=photo#appointment-${id}`);
     beforePhoto={dataUrl:`data:${photo.type};base64,${Buffer.from(await photo.arrayBuffer()).toString("base64")}`,name:photo.name||`before-${id}.jpg`};
   }
   const clientId=await getAppointmentClientId(id);
   const started=await startAppointment(id,staffId,beforePhoto,recordingConfirmed);revalidatePath("/admin");revalidatePath("/admin/bookings");revalidatePath("/admin/reports");
-  if(started&&clientId){revalidatePath(`/admin/clients/${clientId}`);redirect(`/admin/clients/${clientId}?started=1&appointment=${id}#treatments`);}
-  redirect(`/admin/bookings?${/^\d{4}-\d{2}-\d{2}$/.test(returnDate)?`date=${returnDate}&`:""}error=start#appointment-${id}`);
+  if(started&&clientId){revalidatePath(`/admin/clients/${clientId}`);redirect(`/admin/clients/${clientId}?started=1&appointment=${id}#checkout`);}
+  await serviceRedirect(formData,`/admin/bookings?${/^\d{4}-\d{2}-\d{2}$/.test(returnDate)?`date=${returnDate}&`:""}error=start#appointment-${id}`);
 }
 
 export async function finishAppointmentAction(formData:FormData){
@@ -57,30 +57,30 @@ export async function finishAppointmentAction(formData:FormData){
   const allowed=new Set(["image/jpeg","image/png","image/webp","image/heic","image/heif"]);
   let afterPhoto:{dataUrl:string;name:string}|undefined;
   if(photo instanceof File&&photo.size>0){
-    if(photo.size>4*1024*1024||!allowed.has(photo.type))redirect(`/admin/bookings?${/^\d{4}-\d{2}-\d{2}$/.test(returnDate)?`date=${returnDate}&`:""}error=after-photo#appointment-${id}`);
+    if(photo.size>4*1024*1024||!allowed.has(photo.type))await serviceRedirect(formData,`/admin/bookings?${/^\d{4}-\d{2}-\d{2}$/.test(returnDate)?`date=${returnDate}&`:""}error=after-photo#appointment-${id}`);
     afterPhoto={dataUrl:`data:${photo.type};base64,${Buffer.from(await photo.arrayBuffer()).toString("base64")}`,name:photo.name||`after-${id}.jpg`};
   }
   const paymentRaw=String(formData.get("paidNow")??"").trim(),paidNow=Number(paymentRaw),paymentMethod=String(formData.get("paymentMethod")??"");
   let checkout:ServiceCheckout|undefined;
   if(formData.get("checkoutVersion")==="1"){
-    try{checkout=parseServiceCheckout(formData);}catch{redirect(`/admin/bookings?date=${returnDate}&appointment=${id}&error=checkout#appointment-${id}`);}
-  }else if(!/^\d+(\.\d{1,2})?$/.test(paymentRaw)||!Number.isFinite(paidNow)||paidNow<0||!["Cash","Card","Bank transfer","Other","No new payment"].includes(paymentMethod)||(paidNow===0)!==(paymentMethod==="No new payment"))redirect(`/admin/bookings?date=${returnDate}&error=payment#appointment-${id}`);
+    try{checkout=parseServiceCheckout(formData);}catch{await serviceRedirect(formData,`/admin/bookings?date=${returnDate}&appointment=${id}&error=checkout#appointment-${id}`);}
+  }else if(!/^\d+(\.\d{1,2})?$/.test(paymentRaw)||!Number.isFinite(paidNow)||paidNow<0||!["Cash","Card","Bank transfer","Other","No new payment"].includes(paymentMethod)||(paidNow===0)!==(paymentMethod==="No new payment"))await serviceRedirect(formData,`/admin/bookings?date=${returnDate}&error=payment#appointment-${id}`);
   let finished=false,clientId:number|null=null;
   try{
     clientId=await getAppointmentClientId(id);
     finished=checkout?await finishServiceCheckout(id,staffId,comment,checkout,afterPhoto):await finishAppointment(id,staffId,comment,afterPhoto);
   }catch(error){
     console.error("Unable to finish appointment",{appointmentId:id,error:error instanceof Error?error.message:"Unknown error"});
-    redirect(`/admin/bookings?${/^\d{4}-\d{2}-\d{2}$/.test(returnDate)?`date=${returnDate}&`:""}error=finish#appointment-${id}`);
+    await serviceRedirect(formData,`/admin/bookings?${/^\d{4}-\d{2}-\d{2}$/.test(returnDate)?`date=${returnDate}&`:""}error=finish#appointment-${id}`);
   }
   if(finished){
     try{if(checkout)await queueVisitReceipt(id);else await issueVisitReceipt(id,paidNow,paymentMethod);}catch(error){
       console.error("Receipt could not be issued",{appointmentId:id,error:error instanceof Error?error.message:"Unknown error"});
-      redirect(`/admin/bookings?date=${returnDate}&error=receipt#appointment-${id}`);
+      await serviceRedirect(formData,`/admin/bookings?date=${returnDate}&error=receipt#appointment-${id}`);
     }
   }
   revalidatePath("/admin/receipts");
-  revalidatePath("/admin");revalidatePath("/admin/bookings");revalidatePath("/admin/reports");revalidatePath("/admin/payroll");revalidatePath("/admin/follow-ups");if(clientId)revalidatePath(`/admin/clients/${clientId}`);redirect(`/admin/bookings?${/^\d{4}-\d{2}-\d{2}$/.test(returnDate)?`date=${returnDate}&`:""}${finished?"finished=1":checkout?"error=checkout":"error=finish"}&appointment=${id}#appointment-${id}`);
+  revalidatePath("/admin");revalidatePath("/admin/bookings");revalidatePath("/admin/reports");revalidatePath("/admin/payroll");revalidatePath("/admin/follow-ups");if(clientId)revalidatePath(`/admin/clients/${clientId}`);await serviceRedirect(formData,`/admin/bookings?${/^\d{4}-\d{2}-\d{2}$/.test(returnDate)?`date=${returnDate}&`:""}${finished?"finished=1":checkout?"error=checkout":"error=finish"}&appointment=${id}#appointment-${id}`);
 }
 
 export async function deleteCancelledAppointmentAction(formData:FormData){
@@ -338,7 +338,7 @@ export async function recordServiceAccountAction(formData:FormData){
   try{const amount=moneyInput(formData.get("accountAmount"));saved=await recordServiceAccountEvent(id,key,kind,amount,method,Number.isSafeInteger(packageId)&&packageId>0?packageId:null);}catch{saved=false;}
   revalidatePath("/admin/bookings");revalidatePath("/admin/clients");revalidatePath("/admin/client-packages");revalidatePath("/admin/memberships");
   const clientId=await getAppointmentClientId(id);if(clientId)revalidatePath(`/admin/clients/${clientId}`);
-  redirect(`/admin/bookings?date=${date}&appointment=${id}&${saved?"saved=account":"error=checkout"}#appointment-${id}`);
+  await serviceRedirect(formData,`/admin/bookings?date=${date}&appointment=${id}&${saved?"saved=account":"error=checkout"}#appointment-${id}`);
 }
 
 
@@ -363,4 +363,16 @@ export async function prepareBirthdayPromotionAction(formData:FormData){
   const result=await queueBirthdayMessages(location,clientId);
   revalidatePath('/admin/messages');revalidatePath(`/admin/clients/${clientId}`);
   redirect(`/admin/messages?birthdays=${result.queued}#birthday-client-${clientId}`);
+}
+
+async function serviceRedirect(formData:FormData,url:string):Promise<never>{
+  if(formData.get("returnTo")==="profile"){
+    const id=Number(formData.get("id"));
+    if(Number.isSafeInteger(id)&&id>0){
+      if(await staffCannotAccessAppointment(id))redirect("/admin?error=restricted");
+      const clientId=await getAppointmentClientId(id);
+      if(clientId){const query=new URL(url,"https://clinic.local").searchParams;query.set("appointment",String(id));if(query.has("finished"))query.set("saved","checkout");redirect(`/admin/clients/${clientId}?${query}#checkout`);}
+    }
+  }
+  redirect(url);
 }

@@ -447,14 +447,14 @@ export async function getClinicDashboard(location="") {
   };
 }
 
-export async function getAppointments(date = "",location="") {
+export async function getAppointments(date = "",location="",clientId=0) {
   await ensureClinicTables();
   return client()`SELECT a.*,a.requested_date::text AS requested_date,c.full_name,c.mobile,c.email,c.clinic_location,c.service_sms_consent,s.full_name AS staff_name,r.token AS receipt_token,
     (m.client_id IS NOT NULL OR EXISTS(SELECT 1 FROM venux_client_packages cp JOIN venux_client_package_items cpi ON cpi.client_package_id=cp.id WHERE cp.client_id=c.id AND cp.status='active' AND (cp.expires_on IS NULL OR cp.expires_on>=CURRENT_DATE) AND cpi.used_sessions<cpi.included_sessions)) AS is_premium
     FROM venux_appointments a JOIN venux_clients c ON c.id=a.client_id
     LEFT JOIN venux_staff s ON s.id=a.staff_id LEFT JOIN venux_memberships m ON m.client_id=c.id
     LEFT JOIN venux_visit_receipts r ON r.appointment_id=a.id
-    WHERE (${date}='' OR a.requested_date=${date || null}) AND (${location}='' OR a.clinic ILIKE ${`%${location}%`})
+    WHERE (${date}='' OR a.requested_date=${date || null}) AND (${location}='' OR a.clinic ILIKE ${`%${location}%`}) AND (${clientId}=0 OR a.client_id=${clientId})
     ORDER BY a.requested_date DESC,a.requested_time DESC LIMIT 500`;
 }
 
