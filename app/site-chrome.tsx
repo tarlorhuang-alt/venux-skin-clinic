@@ -9,6 +9,8 @@ const navigation = [
       ["CO₂ Laser", "/treatments/laser-facial"],
       ["Lutronic Picosecond", "/treatments/lutronic-picosecond"],
       ["IPL Photorejuvenation", "/treatments/ipl"],
+      ["Lumenis M22", "/technology/m22"],
+      ["InMode Morpheus8", "/technology/morpheus8"],
       ["Ultherapy®", "/treatments/hifu-ultherapy"],
       ["HIFU Focused Ultrasound", "/treatments/hifu-focused-ultrasound"],
       ["RF Microneedling", "/treatments/rf-microneedling"],

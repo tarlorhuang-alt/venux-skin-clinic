@@ -1,3 +1,4 @@
+import TechnologyCards from "./technology/technology-cards";
 import HomeEnquiry from "./home-enquiry";
 import "./home-enquiry.css";
 import { Footer, Header } from "./site-chrome";
@@ -88,6 +89,7 @@ export default async function Home() {
         <p className="popular-price-note">All prices are in AUD. Member pricing is labelled on each treatment. Ultherapy line counts are indicative planning guides; anatomy, coverage, actual lines, suitability and final quotation are confirmed after assessment.</p>
       </section>
 
+    <TechnologyCards />
       <section className="concerns">
         <div className="concerns-heading"><p className="kicker light">Main concerns</p><h2>Start with what<br /><span className="title-accent">matters to you.</span></h2><p>Explore common skin concerns, then book a consultation for a personalised recommendation.</p></div>
         <div className="concern-list">

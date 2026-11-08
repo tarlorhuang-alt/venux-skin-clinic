@@ -1,3 +1,4 @@
+import TechnologyCards from "../technology/technology-cards";
 import { Footer, Header, PageHero } from "../site-chrome";
 import { services } from "../site-data";
 
@@ -65,6 +66,7 @@ export default function Treatments() {
       </article>)}
     </section>
 
+    <TechnologyCards />
     <section className="brand-proof" id="brands">
       <div className="brand-proof-visual">
         <img src="/scientific-hero.png" alt="Scientific skincare concept in ISA aqua tones" />
