@@ -1,3 +1,4 @@
+import "./retail-home.css";
 import TechnologyCards from "./technology/technology-cards";
 import HomeEnquiry from "./home-enquiry";
 import "./home-enquiry.css";
@@ -46,13 +47,13 @@ export default async function Home() {
     ["Full face + upper neck · approx. 700 lines", 2700, 2160],
   ].map(([name, regular, member]) => resolvePrice(prices, "Ultherapy", String(name), Number(regular), Number(member)));
   return (
-    <main>
+    <main className="isa-public-home">
       <Header />
       <section className="home-consultation-hero">
         <div className="poster-copy">
-          <p className="kicker premium-kicker"><strong>ISA Premium</strong> Skin &amp; Aesthetic Clinic</p>
-          <h1>Natural Beauty,<br /><span className="title-accent">Refined by Science.</span></h1>
-          <p>ISA brings thoughtful skin care and aesthetic precision together through personalised, consultation-led treatment plans.</p>
+          <p className="campaign-eyebrow">SKIN · LASER · AESTHETICS</p>
+          <h1>YOUR SKIN.<br /><span>YOUR<br />CONFIDENCE.</span></h1>
+          <p>Your next chapter in skin starts here. Explore personalised treatments, clear pricing and professional care at our two Sydney clinics.</p>
           <div className="hero-actions">
             <a className="button dark" href="/book">Book a consultation</a>
             <a className="button outline-button" href="/treatments">View treatments</a>
@@ -61,11 +62,13 @@ export default async function Home() {
         <HomeEnquiry />
       </section>
 
+      <nav className="treatment-shortcuts" aria-label="Explore treatments"><a href="/treatments/facial-treatments"><span>01</span>SKIN TREATMENTS <b>→</b></a><a href="/treatments/hair-removal"><span>02</span>HAIR REMOVAL <b>→</b></a><a href="/technology/m22"><span>03</span>LASER & LIGHT <b>→</b></a><a href="/technology/morpheus8"><span>04</span>RF MICRONEEDLING <b>→</b></a></nav>
+      <section className="home-pricing-banner"><p>YOUR NEXT TREATMENT, MADE SIMPLE.</p><a href="/pricing">Explore prices & membership →</a></section>
       <section className="principles"><span>01 · Personalised plans</span><span>02 · Considered care</span><span>03 · Natural-looking results</span></section>
 
       <section className="popular" id="popular">
         <div className="section-heading">
-          <div><p className="kicker">Most requested</p><h2>Popular treatments.</h2></div>
+          <div><p className="kicker">Explore ISA</p><h2>FIND YOUR NEXT TREATMENT.</h2></div>
           <p>Ultherapy, Rejuran and professional waxing with clear single-session starting prices. Final suitability, treatment area and quotation are confirmed after assessment.</p>
         </div>
         <div className="popular-grid popular-photo-grid">
@@ -91,7 +94,7 @@ export default async function Home() {
 
     <TechnologyCards />
       <section className="concerns">
-        <div className="concerns-heading"><p className="kicker light">Main concerns</p><h2>Start with what<br /><span className="title-accent">matters to you.</span></h2><p>Explore common skin concerns, then book a consultation for a personalised recommendation.</p></div>
+        <div className="concerns-heading"><p className="kicker light">Main concerns</p><h2>YOUR SKIN.<br /><span className="title-accent">YOUR GOALS.</span></h2><p>Explore common skin concerns, then book a consultation for a personalised recommendation.</p></div>
         <div className="concern-list">
           {["Dehydration & barrier support","Acne & congestion","Sensitivity & redness","Pigmentation & uneven tone","Fine lines & texture","Eye-area hydration"].map((item,index) =>
             <a href="/treatments" key={item}><span>0{index+1}</span><strong>{item}</strong><em>↗</em></a>)}
@@ -99,11 +102,11 @@ export default async function Home() {
       </section>
 
       <section className="locations-section" id="locations">
-        <div className="locations-heading"><p className="kicker">Visit ISA</p><h2>Two locations.<br /><span className="title-accent">One standard of care.</span></h2><p>Choose the clinic that is most convenient for your consultation or treatment.</p></div>
+        <div className="locations-heading"><p className="kicker">Visit ISA</p><h2>TWO SYDNEY CLINICS.<br /><span className="title-accent">ONE ISA EXPERIENCE.</span></h2><p>Choose the clinic that is most convenient for your consultation or treatment.</p></div>
         <div className="location-grid environment-grid">
           {locations.map((location) => <article className="location-card environment-card" key={location.number}>
-            <div className={`location-visual ${location.visual}`} role="img" aria-label={`${location.name} clinic environment photo placeholder`}>
-              <span>Inside ISA</span><strong>{location.name}</strong><small>Real clinic photography to be added</small>
+            <div className={`location-visual ${location.visual}`} role="img" aria-label={`${location.name} clinic location`}>
+              <span>Visit ISA</span><strong>{location.name}</strong><small>Personalised skin & aesthetic care</small>
             </div>
             <div className="location-copy">
               <span>{location.number}</span><p>{location.label}</p><h3>{location.name}</h3><address>{location.address}</address>

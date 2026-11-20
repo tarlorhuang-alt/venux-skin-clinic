@@ -1,3 +1,4 @@
+import "./public-brand.css";
 const navigation = [
   {
     label: "Skin",
@@ -65,7 +66,7 @@ const navigation = [
 
 export function Header() {
   return (
-    <header className="site-header category-header">
+    <><div className="isa-announcement"><span>ISA SKIN CLINIC &amp; AESTHETICS</span><a href="/#locations">TOP RYDE + SYDNEY CBD →</a></div><header className="site-header category-header isa-retail-header">
       <a className="brand" href="/" aria-label="ISA Skin Clinic & Aesthetics home">
         <span className="brand-mark">I</span>
         <span className="brand-name"><span className="brand-spark" aria-hidden="true">✦</span> ISA <span className="brand-subtitle">Skin Clinic &amp; Aesthetics</span> <span className="brand-spark brand-spark-tail" aria-hidden="true">✧ ✦</span></span>
@@ -86,13 +87,13 @@ export function Header() {
       </nav>
 
       <a className="header-cta" href="/book">Book now</a>
-    </header>
+    </header></>
   );
 }
 
 export function Footer() {
   return (
-    <footer className="site-footer">
+    <footer className="site-footer isa-retail-footer">
       <div className="footer-identity">
         <a className="footer-star-brand" href="/" aria-label="ISA Skin Clinic & Aesthetics home">
           <span className="star-mark" aria-hidden="true"><span>✦</span><b>I</b><span>✦</span></span>
@@ -132,7 +133,7 @@ export function Footer() {
 
 export function PageHero({ kicker, title, italic, intro }: { kicker: string; title: string; italic: string; intro: string }) {
   return (
-    <section className="page-hero">
+    <section className="page-hero isa-retail-page-hero">
       <p className="kicker">{kicker}</p>
       <h1>{title}<br /><span className="title-accent">{italic}</span></h1>
       <p>{intro}</p>
