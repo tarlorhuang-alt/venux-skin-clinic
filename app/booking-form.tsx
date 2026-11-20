@@ -1,8 +1,10 @@
 "use client";
 
-import { FormEvent, useRef, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 
 export function BookingForm() {
+  const [firstTry,setFirstTry]=useState(false);
+  useEffect(()=>{setFirstTry(new URLSearchParams(window.location.search).get("offer")==="first-try-99");},[]);
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [reference, setReference] = useState("");
@@ -26,6 +28,7 @@ export function BookingForm() {
   }
   return (
     <form onSubmit={submitBooking}>
+      {firstTry?<><input type="hidden" name="offer" value="first-try-99"/><p className="full" role="status">First Try · AUD $99 enquiry. The clinic will confirm the eligible treatment, availability and suitability with you.</p></>:null}
       <label>Full name<input required name="name" autoComplete="name" placeholder="Your name" /></label>
       <label>Mobile<input required name="mobile" inputMode="tel" autoComplete="tel" placeholder="04XX XXX XXX" /></label>
       <label>Email (optional)<input name="email" type="email" autoComplete="email" placeholder="you@example.com" /></label>

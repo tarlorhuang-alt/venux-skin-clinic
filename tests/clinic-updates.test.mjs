@@ -184,6 +184,8 @@ test('booking API accepts a missing email and still validates a supplied address
  assert.equal((await POST({json:async()=>body})).status,200);assert.equal(saved[0].email,'');
  assert.equal((await POST({json:async()=>({...body,email:'invalid'})})).status,400);
  assert.equal(saved.length,1);
+ assert.equal((await POST({json:async()=>({...body,offer:'first-try-99',message:'My skin goals'})})).status,200);
+ assert.match(saved[1].notes,/First Try AUD \$99/);assert.match(saved[1].notes,/My skin goals/);assert.equal(saved[1].totalAmount,undefined);
 });
 
 test('calendar supports navigation from time labels, empty slots and beautician headings',()=>{

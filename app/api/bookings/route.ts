@@ -15,7 +15,7 @@ export async function POST(request: Request) {
       clinic: String(body.clinic ?? "").trim().slice(0,120),
       date: String(body.date ?? "").trim(),
       time: String(body.time ?? "").trim().slice(0,30),
-      notes: String(body.message ?? "").trim().slice(0,2000),
+      notes: [body.offer==="first-try-99"?"Website offer enquiry: First Try AUD $99. Confirm eligible treatment, availability and suitability.":"",String(body.message ?? "").trim().slice(0,1800)].filter(Boolean).join("\n"),
       source:"website" as const,
       serviceSmsConsent:body.serviceSmsConsent==="yes",
       marketingSmsConsent:body.marketingSmsConsent==="yes",

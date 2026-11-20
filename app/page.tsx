@@ -1,6 +1,6 @@
 import "./retail-home.css";
 import TechnologyCards from "./technology/technology-cards";
-import HomeEnquiry from "./home-enquiry";
+import EnquiryPopup from "./enquiry-popup";
 import "./home-enquiry.css";
 import { Footer, Header } from "./site-chrome";
 import { getPriceMap, resolvePrice } from "../lib/pricing";
@@ -48,6 +48,7 @@ export default async function Home() {
   ].map(([name, regular, member]) => resolvePrice(prices, "Ultherapy", String(name), Number(regular), Number(member)));
   return (
     <main className="isa-public-home">
+      <a className="first-try-banner" href="/book?offer=first-try-99"><span>FIRST TRY</span><span className="first-try-price">$99</span><span>Start your ISA experience <span aria-hidden="true">→</span></span></a>
       <Header />
       <section className="home-consultation-hero">
         <div className="poster-copy">
@@ -55,11 +56,11 @@ export default async function Home() {
           <h1>YOUR SKIN.<br /><span>YOUR<br />CONFIDENCE.</span></h1>
           <p>Your next chapter in skin starts here. Explore personalised treatments, clear pricing and professional care at our two Sydney clinics.</p>
           <div className="hero-actions">
-            <a className="button dark" href="/book">Book a consultation</a>
+            <EnquiryPopup />
             <a className="button outline-button" href="/treatments">View treatments</a>
           </div>
         </div>
-        <HomeEnquiry />
+        <aside className="first-try-feature"><p className="kicker">Your first visit</p><h2>First Try<br/><span>$99</span></h2><p>Discover your next step in skin care.</p><a className="button dark" href="/book?offer=first-try-99">Enquire about First Try $99</a><small>Ask our team about eligible treatments and availability. Suitability is assessed before treatment.</small></aside>
       </section>
 
       <nav className="treatment-shortcuts" aria-label="Explore treatments"><a href="/treatments/facial-treatments"><span>01</span>SKIN TREATMENTS <b>→</b></a><a href="/treatments/hair-removal"><span>02</span>HAIR REMOVAL <b>→</b></a><a href="/technology/m22"><span>03</span>LASER & LIGHT <b>→</b></a><a href="/technology/morpheus8"><span>04</span>RF MICRONEEDLING <b>→</b></a></nav>
@@ -100,6 +101,8 @@ export default async function Home() {
             <a href="/treatments" key={item}><span>0{index+1}</span><strong>{item}</strong><em>↗</em></a>)}
         </div>
       </section>
+
+      <section className="care-team-section" id="medical-team"><div><p className="kicker">Your medical & care team</p><h2>Get to know<br/>your practitioner.</h2></div><div><p>Personalised care starts with knowing who is looking after you. Ask our team about your practitioner’s role, qualifications and experience with your chosen treatment.</p><p>Before you proceed, discuss your goals, treatment suitability, recovery and follow-up with the practitioner providing your care.</p><a className="button dark" href="/book">Ask about our team</a></div></section>
 
       <section className="locations-section" id="locations">
         <div className="locations-heading"><p className="kicker">Visit ISA</p><h2>TWO SYDNEY CLINICS.<br /><span className="title-accent">ONE ISA EXPERIENCE.</span></h2><p>Choose the clinic that is most convenient for your consultation or treatment.</p></div>
